@@ -252,3 +252,34 @@ test('колесо мыши в полноэкранной программе с 
   await page.mouse.wheel(0, 120);
   await waitFor(page, '^[[B^[[B^[[B');
 });
+
+test('окно вставки: текст можно править, вставляется отредактированное', async ({ page }) => {
+  await openTerminal(page);
+  await paste(page, 'echo keep-1\necho DANGEROUS-LINE\necho keep-2\n');
+  const ta = page.getByTestId('paste-text');
+  await expect(ta).toBeVisible();
+  await expect(ta).toBeFocused();
+  await expect(ta).toHaveValue('echo keep-1\necho DANGEROUS-LINE\necho keep-2\n');
+  // правка: заголовок и счётчик следуют за текстом, опасная строка убрана, одна исправлена
+  await ta.fill('echo keep-1\necho fixed-$((6*7))\n');
+  await expect(page.getByTestId('paste-confirm')).toContainText('Вставить 3 строк');
+  await page.screenshot({ path: 'screenshots/68-paste-edit.png' });
+  await page.getByTestId('paste-ok').click();
+  await page.keyboard.press('Enter');
+  await waitFor(page, /^fixed-42$/m);
+  expect(await buffer(page)).not.toMatch(/^DANGEROUS-LINE$/m);
+
+  // Ctrl+Enter вставляет прямо из поля
+  await paste(page, 'echo ctrl-enter-1\necho ctrl-enter-2\n');
+  await page.getByTestId('paste-text').press('Control+Enter');
+  await expect(page.getByTestId('paste-confirm')).toHaveCount(0);
+  await page.keyboard.press('Enter');
+  await waitFor(page, /^ctrl-enter-2$/m);
+
+  // пустой текст после правки = отмена, ничего не вставляется
+  await paste(page, 'echo never-1\necho never-2\n');
+  await page.getByTestId('paste-text').fill('');
+  await page.getByTestId('paste-ok').click();
+  await page.waitForTimeout(400);
+  expect(await buffer(page)).not.toContain('echo never-1');
+});

@@ -326,3 +326,7 @@ h4 { margin: 10px 0 2px; font-size: 12px; color: var(--muted); text-transform: u
 .tm-peak { color: var(--muted); }
 
 .tm-rate-custom { display: flex; gap: 6px; align-items: center; margin-top: 6px; } .tm-rate-custom input { width: 90px; } .tm-rate-err { color: var(--danger); min-height: 1em; margin-top: 2px; }
+
+.paste-edit { width: 100%; box-sizing: border-box; font-family: 'Cascadia Mono', Consolas, monospace; font-size: 12.5px; line-height: 1.45; background: #0c0c0c; color: #e6e6e6; border: 1px solid var(--line); border-radius: var(--r-s); padding: 8px 10px; resize: vertical; min-height: 110px; max-height: 60vh; white-space: pre; overflow: auto; }
+.paste-edit:focus { outline: 1px solid var(--accent); }
+.paste-hint { margin-right: auto; }

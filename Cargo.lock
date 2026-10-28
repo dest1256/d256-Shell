@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "d256shell"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "d256shell-core",
  "drag",
@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "d256shell-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "argon2",
  "base64ct",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "d256shell-devbridge"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "base64ct",
  "d256shell-core",

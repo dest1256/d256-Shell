@@ -86,18 +86,18 @@ d256 Shell объединяет всё, что нужно для работы с
 
 ### Ubuntu / Debian
 ```bash
-sudo apt install ./d256shell_1.0.0_amd64.deb
+sudo apt install ./d256shell_1.0.1_amd64.deb
 ```
 
 ### Arch Linux
-Положите `PKGBUILD`, `d256shell-1.0.0-linux-x86_64.tar.gz`, `d256shell.desktop` и `COPYRIGHT` в одну папку:
+Положите `PKGBUILD`, `d256shell-1.0.1-linux-x86_64.tar.gz`, `d256shell.desktop` и `COPYRIGHT` в одну папку:
 ```bash
 makepkg -si
 ```
 
 ### Портативно (любой Linux)
 ```bash
-tar xzf d256shell-1.0.0-linux-x86_64.tar.gz && ./d256shell/d256shell
+tar xzf d256shell-1.0.1-linux-x86_64.tar.gz && ./d256shell/d256shell
 ```
 
 Нужны WebKitGTK 4.1, GTK 3 и OpenSSH. Бинарник собран на Ubuntu 22.04 (glibc ≥ 2.34) и проверен установкой в чистые Ubuntu 22.04, 24.04 и Arch.

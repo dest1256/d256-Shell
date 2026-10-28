@@ -46,26 +46,44 @@ export async function copyText(text: string): Promise<void> {
   }
 }
 
-/** Confirmation for multi-line / very large pastes: they may execute as commands. */
-async function confirmPaste(text: string, lines: number): Promise<boolean> {
-  const preview = text.split(/\r\n|\r|\n/).slice(0, 6).map((l) => (l.length > 90 ? l.slice(0, 90) + '…' : l)).join('\n');
-  const size = text.length > 1024 ? `${(text.length / 1024).toFixed(1)} КБ` : `${text.length} симв.`;
-  const r = await modal<boolean>((close) =>
-    h(
+/**
+ * Confirmation for multi-line / very large pastes: they may execute as commands. The text is shown in an editable
+ * box (remove a dangerous line, fix a command) and what is left is what gets pasted. null = cancelled.
+ */
+async function confirmPaste(text: string, lines: number): Promise<string | null> {
+  const count = (t: string) => {
+    const n = t.split(/\r\n|\r|\n/).length;
+    const size = t.length > 1024 ? `${(t.length / 1024).toFixed(1)} КБ` : `${t.length} симв.`;
+    return { n, size };
+  };
+  const r = await modal<string | null>((close) => {
+    const ta = h('textarea', { class: 'paste-edit', 'data-testid': 'paste-text', spellcheck: 'false', rows: String(Math.min(14, Math.max(5, lines + 1))), wrap: 'off', 'aria-label': 'Вставляемый текст' }) as HTMLTextAreaElement;
+    ta.value = text;
+    const title = h('h3', {}, lines > 1 ? `Вставить ${lines} строк?` : 'Вставить большой фрагмент?');
+    const warn = h('p', { class: 'warn', 'data-testid': 'paste-warning' }, `Вставленный текст может выполниться как команды (${count(text).size}). Его можно отредактировать.`);
+    const done = () => close(ta.value.length ? ta.value : null);
+    ta.addEventListener('input', () => {
+      const c = count(ta.value);
+      title.textContent = c.n > 1 ? `Вставить ${c.n} строк?` : 'Вставить текст?';
+      warn.textContent = `Вставленный текст может выполниться как команды (${c.size}). Его можно отредактировать.`;
+    });
+    ta.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.preventDefault(), done());
+    });
+    queueMicrotask(() => {
+      ta.focus();
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    });
+    return h(
       'div',
-      { role: 'alertdialog', 'data-testid': 'paste-confirm' },
-      h('h3', {}, lines > 1 ? `Вставить ${lines} строк?` : 'Вставить большой фрагмент?'),
-      h('p', { class: 'warn', 'data-testid': 'paste-warning' }, `Вставленный текст может выполниться как команды (${size}).`),
-      h('pre', { class: 'detail', style: 'display:block' }, preview + (lines > 6 ? '\n…' : '')),
-      h(
-        'div',
-        { class: 'row end' },
-        h('button', { onclick: () => close(false), 'data-testid': 'paste-cancel' }, 'Отмена'),
-        h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'paste-ok' }, 'Вставить'),
-      ),
-    ),
-  );
-  return r === true;
+      { role: 'alertdialog', class: 'wide', 'data-testid': 'paste-confirm' },
+      title,
+      warn,
+      ta,
+      h('div', { class: 'row end wrap' }, h('span', { class: 'muted small paste-hint' }, 'Ctrl+Enter — вставить'), h('button', { onclick: () => close(null), 'data-testid': 'paste-cancel' }, 'Отмена'), h('button', { class: 'primary', onclick: done, 'data-testid': 'paste-ok' }, 'Вставить')),
+    );
+  });
+  return r;
 }
 
 export class TerminalView {
@@ -407,9 +425,13 @@ export class TerminalView {
     if (!text || this.exited) return;
     const s = getSettings();
     const lines = text.split(/\r\n|\r|\n/).length;
-    if ((lines >= s.paste_warn_lines || text.length > s.paste_warn_bytes) && !(await confirmPaste(text, lines))) {
-      this.term.focus();
-      return;
+    if (lines >= s.paste_warn_lines || text.length > s.paste_warn_bytes) {
+      const edited = await confirmPaste(text, lines);
+      if (edited === null) {
+        this.term.focus();
+        return;
+      }
+      text = edited; // the user may have changed it
     }
     this.lastUserInput = performance.now();
     this.term.paste(text); // honours bracketed paste mode

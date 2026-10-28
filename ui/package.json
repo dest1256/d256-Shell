@@ -1,7 +1,7 @@
 {
   "name": "d256shell-ui",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.0.1",
   "author": "dest1256",
   "license": "UNLICENSED",
   "type": "module",

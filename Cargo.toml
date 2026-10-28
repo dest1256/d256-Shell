@@ -3,7 +3,7 @@ resolver = "2"
 members = ["crates/core", "crates/devbridge", "src-tauri"]
 
 [workspace.package]
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 authors = ["dest1256"]
 publish = false
