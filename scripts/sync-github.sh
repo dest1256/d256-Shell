@@ -21,6 +21,7 @@ mkdir -p "$G/releases"
 [ -f dist/d256Shell.zip ] && cp dist/d256Shell.zip "$G/releases/" && cp dist/SHA256SUMS.txt "$G/releases/SHA256SUMS-windows.txt"
 if [ -d dist/linux ]; then
   cp dist/linux/d256shell-$VER-linux-x86_64.tar.gz dist/linux/d256shell_${VER}_amd64.deb dist/linux/PKGBUILD "$G/releases/"
+  cp dist/linux/d256shell.desktop dist/linux/COPYRIGHT "$G/releases/"   # the PKGBUILD builds from these files
   cp dist/linux/SHA256SUMS.txt "$G/releases/SHA256SUMS-linux.txt"
 fi
 echo "github/ is ready for version $VER:"; ls "$G" "$G/releases"
