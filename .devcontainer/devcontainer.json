@@ -1,0 +1,12 @@
+{
+  "name": "d256 Shell dev",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "dev",
+  "workspaceFolder": "/workspaces/shellport",
+  "remoteUser": "dev",
+  "customizations": {
+    "vscode": {
+      "extensions": ["rust-lang.rust-analyzer", "anthropic.claude-code", "tamasfe.even-better-toml"]
+    }
+  }
+}

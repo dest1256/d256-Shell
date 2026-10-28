@@ -1,0 +1,91 @@
+# CI is optional: the main path is Docker (see README). Actions are pinned by commit SHA, permissions are minimal.
+name: build
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: 1.99.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+
+      - name: Frontend
+        working-directory: ui
+        run: |
+          npm ci
+          npm run build
+          npm audit --omit=dev --audit-level=moderate
+
+      - name: Lint
+        run: |
+          cargo fmt --all --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+
+      - name: Unit tests
+        run: cargo test --locked -p d256shell-core --lib
+
+      # Integration / terminal / e2e tests need the sshd containers: they run in the Docker dev container
+      # (scripts/check-all.sh). Windows-specific checks of the built exe: dist/win-tests/run-win-tests.ps1.
+
+      - name: Supply chain
+        run: |
+          cargo install --locked cargo-deny cargo-audit
+          cargo deny check
+          cargo audit
+
+      - name: Build exe
+        run: |
+          cargo install --locked tauri-cli --version "^2"
+          cargo tauri build --no-bundle -- --locked
+
+      # Code signing is off by default (a certificate is paid). Enable with a certificate in repository secrets.
+      - name: Sign (disabled)
+        if: ${{ false }}
+        run: signtool sign /fd SHA256 /f cert.pfx /p ${{ secrets.SIGN_PASSWORD }} target\release\d256shell.exe
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist/d256Shell/data | Out-Null
+          Copy-Item target/release/d256shell.exe dist/d256Shell/d256Shell.exe
+          Copy-Item scripts/run-win-tests.ps1 dist/ -Force
+          (Get-FileHash dist/d256Shell/d256Shell.exe -Algorithm SHA256).Hash | Out-File dist/SHA256.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: d256 Shell
+          path: dist
+
+  linux:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: 1.99.1
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@2201cc584a476d1b508be977bbe4b7d1c7a52e9c # v2.9.3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: System libraries
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev dpkg-dev
+      - name: Build packages (tar.gz, deb, PKGBUILD)
+        run: bash scripts/build-linux.sh
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: d256Shell-linux
+          path: dist/linux

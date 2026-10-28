@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=d256 Shell
+GenericName=SSH client
+Comment=Portable SSH client: terminal, SFTP explorer and editor
+Comment[ru]=SSH-клиент: терминал, файловый проводник SFTP и редактор
+Exec=d256shell
+Icon=d256shell
+Terminal=false
+Categories=Network;RemoteAccess;System;
+Keywords=ssh;sftp;terminal;remote;
+StartupWMClass=d256shell

@@ -1,0 +1,99 @@
+services:
+  dev:
+    build: { context: ., dockerfile: Dockerfile }
+    command: sleep infinity
+    init: true
+    volumes:
+      - ..:/workspaces/shellport
+      - cargo-home:/home/dev/.cargo
+      - cargo-target:/build
+      - xwin-cache:/home/dev/.cache/cargo-xwin
+      - pw-cache:/home/dev/.cache/ms-playwright
+      - node-modules:/workspaces/shellport/ui/node_modules
+      - sshlogs:/sshlogs:ro
+      - testkeys:/testkeys:ro
+    environment:
+      XWIN_ACCEPT_LICENSE: ${XWIN_ACCEPT_LICENSE:-}
+      # Integration tests run against these containers (never against real servers).
+      D256SHELL_TEST_SSH: "1"
+      D256SHELL_TEST_LOGS: /sshlogs
+    depends_on: [sshd-password, sshd-kbdint, sshd-2fa, sshd-otherkey, sshd-nosftp, sshd-key]
+
+  sshd-password:
+    build: { context: ../test-server }
+    environment: { MODE: password, LOG_NAME: sshd-password }
+    ports: ["127.0.0.1:2221:22"]
+    volumes: ["sshlogs:/var/log/sshtest"]
+  sshd-kbdint:
+    build: { context: ../test-server }
+    environment: { MODE: kbdint, LOG_NAME: sshd-kbdint }
+    ports: ["127.0.0.1:2222:22"]
+    volumes: ["sshlogs:/var/log/sshtest"]
+  sshd-2fa:
+    build: { context: ../test-server }
+    environment: { MODE: 2fa, LOG_NAME: sshd-2fa }
+    ports: ["127.0.0.1:2223:22"]
+    volumes: ["sshlogs:/var/log/sshtest"]
+  sshd-nosftp:
+    build: { context: ../test-server }
+    environment: { MODE: nosftp, LOG_NAME: sshd-nosftp }
+    ports: ["127.0.0.1:2225:22"]
+    volumes: ["sshlogs:/var/log/sshtest"]
+  sshd-otherkey:
+    build: { context: ../test-server }
+    environment: { MODE: password, LOG_NAME: sshd-otherkey }
+    ports: ["127.0.0.1:2224:22"]
+    volumes: ["sshlogs:/var/log/sshtest"]
+
+  # Linux build (Ubuntu 22.04 base): docker compose run --rm linux bash scripts/build-linux.sh
+  linux:
+    profiles: ["linux"]
+    build: { context: ., dockerfile: Dockerfile.linux }
+    init: true
+    volumes:
+      - ..:/workspaces/shellport
+      - cargo-home-linux:/home/dev/.cargo
+      - cargo-target-linux:/build-linux
+      - node-modules:/workspaces/shellport/ui/node_modules
+
+  # Clean-distro checks of the Linux packages: docker compose --profile linux-test run --rm test-ubuntu2204
+  test-ubuntu2204:
+    profiles: ["linux-test"]
+    image: ubuntu:22.04
+    command: bash /test.sh ubuntu-22.04
+    volumes: &pkgvols
+      - ../dist/linux:/pkg:ro
+      - ../e2e/screenshots:/out
+      - ../scripts/linux-smoke-run.sh:/smoke.sh:ro
+      - ../scripts/linux-pkg-test-ubuntu.sh:/test.sh:ro
+  test-ubuntu2404:
+    profiles: ["linux-test"]
+    image: ubuntu:24.04
+    command: bash /test.sh ubuntu-24.04
+    volumes: *pkgvols
+  test-arch:
+    profiles: ["linux-test"]
+    image: archlinux:latest
+    command: bash /test.sh arch
+    volumes:
+      - ../dist/linux:/pkg:ro
+      - ../e2e/screenshots:/out
+      - ../scripts/linux-smoke-run.sh:/smoke.sh:ro
+      - ../scripts/linux-pkg-test-arch.sh:/test.sh:ro
+
+  sshd-key:
+    build: { context: ../test-server }
+    environment: { MODE: key, LOG_NAME: sshd-key }
+    ports: ["127.0.0.1:2226:22"]
+    volumes: ["sshlogs:/var/log/sshtest", "testkeys:/testkeys"]
+
+volumes:
+  testkeys:
+  cargo-home-linux:
+  cargo-target-linux:
+  cargo-home:
+  cargo-target:
+  xwin-cache:
+  pw-cache:
+  node-modules:
+  sshlogs:

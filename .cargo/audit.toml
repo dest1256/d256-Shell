@@ -1,0 +1,8 @@
+# cargo-audit policy. Every ignore needs a written justification (see NOTES.md / DEPENDENCIES.md).
+[advisories]
+ignore = [
+  # rsa "Marvin attack": timing side channel in RSA *private key* operations (decrypt/sign).
+  # d256 Shell never performs RSA private-key operations (password login only; host keys are only
+  # verified with the server's PUBLIC key). No fixed release exists. Comes in via russh -> ssh-key.
+  "RUSTSEC-2023-0071",
+]

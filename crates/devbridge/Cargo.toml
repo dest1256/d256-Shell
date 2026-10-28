@@ -1,0 +1,18 @@
+[package]
+name = "d256shell-devbridge"
+description = "DEV ONLY: exposes d256shell-core over local HTTP and serves the built UI, for Playwright e2e tests"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+publish.workspace = true
+
+[dependencies]
+d256shell-core = { path = "../core" }
+serde_json = "1.0.154"
+
+# Integration tests (terminal against the docker sshd containers) share helpers with core's tests.
+[dev-dependencies]
+base64ct = { version = "1.8.3", features = ["alloc"] }
+getrandom = "0.4.3"
+hmac = "0.13.0"
+sha1 = "0.11.0"

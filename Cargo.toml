@@ -1,0 +1,16 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/devbridge", "src-tauri"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2021"
+authors = ["dest1256"]
+publish = false
+
+[profile.release]
+lto = true
+codegen-units = 1
+opt-level = "s"
+strip = true
+panic = "unwind"

@@ -1,0 +1,35 @@
+# syntax=docker/dockerfile:1
+# Linux build of d256 Shell. Built on Ubuntu 22.04 on purpose: the binary then needs only glibc 2.35 and
+# WebKitGTK 4.1, so it runs on Ubuntu 22.04+, Debian 12+ and Arch (which are newer). Official images only,
+# pinned by digest; the Rust and Node toolchains are copied from the official images used by the main dev image.
+FROM node:22.23.4-bookworm@sha256:63538dfe497cc29dfafdda25ada09b46db68a3f4cc205abf1f5d6bf0913f3384 AS node
+FROM rust:1.99.1-bookworm@sha256:48b7f435b8fc6378ce43b44f15e3a47fd8919b2825f835c39bd4bd3da50af5b8 AS rust
+
+FROM ubuntu:22.04@sha256:e0f80c829509ef4df9e76bd8944eb7b8ec25cbb379b112a7f9448b2c77a77c9b
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential pkg-config ca-certificates curl git file dpkg-dev fakeroot \
+      libwebkit2gtk-4.1-dev libgtk-3-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev librsvg2-dev \
+      openssh-client \
+      # smoke test of the GUI binary: virtual display, screenshots, window inspection
+      xvfb xauth x11-utils xdotool imagemagick dbus-x11 libgl1-mesa-dri fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=rust /usr/local/rustup /usr/local/rustup
+COPY --from=rust /usr/local/cargo /usr/local/cargo
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
+RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
+ && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+RUN useradd -m -s /bin/bash -u 1000 dev \
+ && mkdir -p /build-linux /home/dev/.cargo /workspaces/shellport && chown -R dev:dev /build-linux /home/dev /workspaces
+
+ENV RUSTUP_HOME=/usr/local/rustup \
+    CARGO_HOME=/home/dev/.cargo \
+    CARGO_TARGET_DIR=/build-linux/target \
+    PATH=/usr/local/cargo/bin:/home/dev/.cargo/bin:$PATH
+RUN rustup component add clippy rustfmt
+USER dev
+WORKDIR /workspaces/shellport

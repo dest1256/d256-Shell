@@ -1,0 +1,7 @@
+node_modules/
+dist/
+target/
+/data/
+
+# Готовые сборки загружаются в GitHub Releases, а не коммитятся
+/releases/
