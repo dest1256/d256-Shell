@@ -53,19 +53,19 @@ export async function copyText(text: string): Promise<void> {
 async function confirmPaste(text: string, lines: number): Promise<string | null> {
   const count = (t: string) => {
     const n = t.split(/\r\n|\r|\n/).length;
-    const size = t.length > 1024 ? `${(t.length / 1024).toFixed(1)} КБ` : `${t.length} симв.`;
+    const size = t.length > 1024 ? `${(t.length / 1024).toFixed(1)} KB` : `${t.length} chars`;
     return { n, size };
   };
   const r = await modal<string | null>((close) => {
-    const ta = h('textarea', { class: 'paste-edit', 'data-testid': 'paste-text', spellcheck: 'false', rows: String(Math.min(14, Math.max(5, lines + 1))), wrap: 'off', 'aria-label': 'Вставляемый текст' }) as HTMLTextAreaElement;
+    const ta = h('textarea', { class: 'paste-edit', 'data-testid': 'paste-text', spellcheck: 'false', rows: String(Math.min(14, Math.max(5, lines + 1))), wrap: 'off', 'aria-label': 'Pasted text' }) as HTMLTextAreaElement;
     ta.value = text;
-    const title = h('h3', {}, lines > 1 ? `Вставить ${lines} строк?` : 'Вставить большой фрагмент?');
-    const warn = h('p', { class: 'warn', 'data-testid': 'paste-warning' }, `Вставленный текст может выполниться как команды (${count(text).size}). Его можно отредактировать.`);
+    const title = h('h3', {}, lines > 1 ? `Paste ${lines} lines?` : 'Paste a large fragment?');
+    const warn = h('p', { class: 'warn', 'data-testid': 'paste-warning' }, `The pasted text may run as commands (${count(text).size}). It can be edited.`);
     const done = () => close(ta.value.length ? ta.value : null);
     ta.addEventListener('input', () => {
       const c = count(ta.value);
-      title.textContent = c.n > 1 ? `Вставить ${c.n} строк?` : 'Вставить текст?';
-      warn.textContent = `Вставленный текст может выполниться как команды (${c.size}). Его можно отредактировать.`;
+      title.textContent = c.n > 1 ? `Paste ${c.n} lines?` : 'Paste text?';
+      warn.textContent = `The pasted text may run as commands (${c.size}). It can be edited.`;
     });
     ta.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.preventDefault(), done());
@@ -80,7 +80,7 @@ async function confirmPaste(text: string, lines: number): Promise<string | null>
       title,
       warn,
       ta,
-      h('div', { class: 'row end wrap' }, h('span', { class: 'muted small paste-hint' }, 'Ctrl+Enter — вставить'), h('button', { onclick: () => close(null), 'data-testid': 'paste-cancel' }, 'Отмена'), h('button', { class: 'primary', onclick: done, 'data-testid': 'paste-ok' }, 'Вставить')),
+      h('div', { class: 'row end wrap' }, h('span', { class: 'muted small paste-hint' }, 'Ctrl+Enter pastes'), h('button', { onclick: () => close(null), 'data-testid': 'paste-cancel' }, 'Cancel'), h('button', { class: 'primary', onclick: done, 'data-testid': 'paste-ok' }, 'Paste')),
     );
   });
   return r;
@@ -150,14 +150,14 @@ export class TerminalView {
     this.term.unicode.activeVersion = '11';
     this.term.loadAddon(new WebLinksAddon((_e, uri) => void openLink(uri)));
 
-    this.searchInput = h('input', { type: 'text', placeholder: 'Поиск в выводе', 'data-testid': 'term-search-input', spellcheck: 'false' }) as HTMLInputElement;
+    this.searchInput = h('input', { type: 'text', placeholder: 'Search in the output', 'data-testid': 'term-search-input', spellcheck: 'false' }) as HTMLInputElement;
     this.searchBar = h(
       'div',
       { class: 'term-search', 'data-testid': 'term-search' },
       this.searchInput,
-      h('button', { class: 'icon-btn', title: 'Предыдущее (Shift+Enter)', onclick: () => this.search.findPrevious(this.searchInput.value) }, icon('up', 14)),
-      h('button', { class: 'icon-btn', title: 'Следующее (Enter)', onclick: () => this.search.findNext(this.searchInput.value) }, icon('down', 14)),
-      h('button', { class: 'icon-btn', title: 'Закрыть (Esc)', onclick: () => this.toggleSearch(false) }, icon('close', 12)),
+      h('button', { class: 'icon-btn', title: 'Previous (Shift+Enter)', onclick: () => this.search.findPrevious(this.searchInput.value) }, icon('up', 14)),
+      h('button', { class: 'icon-btn', title: 'Next (Enter)', onclick: () => this.search.findNext(this.searchInput.value) }, icon('down', 14)),
+      h('button', { class: 'icon-btn', title: 'Close (Esc)', onclick: () => this.toggleSearch(false) }, icon('close', 12)),
     );
     this.searchBar.style.display = 'none';
     this.searchInput.addEventListener('keydown', (e) => {
@@ -207,7 +207,7 @@ export class TerminalView {
         void copyText(sel);
         this.term.clearSelection();
       } else {
-        void navigator.clipboard.readText().then((t) => this.paste(t)).catch(() => toast('Не удалось прочитать буфер обмена.'));
+        void navigator.clipboard.readText().then((t) => this.paste(t)).catch(() => toast('Could not read the clipboard.'));
       }
     });
     this.host.addEventListener(
@@ -275,7 +275,7 @@ export class TerminalView {
       this.exited = true;
       this.hooks.onState('off');
       const msg = e instanceof ApiError ? e.message : String(e);
-      this.term.write(`\r\n\x1b[31m${msg}\x1b[0m\r\n\x1b[90m[Enter — повторить, Esc — закрыть вкладку]\x1b[0m\r\n`);
+      this.term.write(`\r\n\x1b[31m${msg}\x1b[0m\r\n\x1b[90m[Enter retries, Esc closes the tab]\x1b[0m\r\n`);
     } finally {
       this.starting = false;
     }
@@ -286,7 +286,7 @@ export class TerminalView {
     this.stopPrompts?.();
     this.stopPrompts = null;
     this.hooks.onState('off');
-    this.term.write(`\r\n\x1b[90m[Сеанс завершён, код ${code}. Enter — переподключиться, Esc — закрыть вкладку]\x1b[0m\r\n`);
+    this.term.write(`\r\n\x1b[90m[Session ended, code ${code}. Enter reconnects, Esc closes the tab]\x1b[0m\r\n`);
   }
 
   /** The tab became visible: refit and focus. */
@@ -449,7 +449,7 @@ export class TerminalView {
         return false;
       }
       if (k === 'v') {
-        void navigator.clipboard.readText().then((t) => this.paste(t)).catch(() => toast('Не удалось прочитать буфер обмена.'));
+        void navigator.clipboard.readText().then((t) => this.paste(t)).catch(() => toast('Could not read the clipboard.'));
         return false;
       }
       if (k === 'f') {

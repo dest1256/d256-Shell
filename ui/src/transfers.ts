@@ -5,8 +5,8 @@ import { clear, h, modal, toast } from './dom';
 import { icon } from './icons';
 
 function fmtSize(n: number): string {
-  if (n < 1024) return `${n} Б`;
-  const u = ['КБ', 'МБ', 'ГБ', 'ТБ'];
+  if (n < 1024) return `${n} B`;
+  const u = ['KB', 'MB', 'GB', 'TB'];
   let v = n / 1024;
   let i = 0;
   while (v >= 1024 && i < u.length - 1) {
@@ -25,11 +25,11 @@ function askConflict(name: string, isDir: boolean, where: string): Promise<{ act
     return h(
       'div',
       { role: 'dialog', 'data-testid': 'conflict-dialog' },
-      h('h3', {}, isDir ? 'Папка уже существует' : 'Файл уже существует'),
-      h('p', {}, `«${name}» уже есть ${where}.`),
-      isDir ? h('p', { class: 'muted' }, 'Содержимое папок будет объединено; для файлов с одинаковыми именами действует выбранное действие.') : null,
-      h('label', { class: 'check' }, all, ' Применить ко всем'),
-      h('div', { class: 'row end wrap' }, b('Отмена', 'cancel'), b('Пропустить', 'skip'), b('Оставить оба', 'rename'), b(isDir ? 'Объединить и заменить' : 'Заменить', 'replace', 'primary')),
+      h('h3', {}, isDir ? 'The folder already exists' : 'The file already exists'),
+      h('p', {}, `“${name}” already exists ${where}.`),
+      isDir ? h('p', { class: 'muted' }, 'The contents of the folders will be merged; for files with the same name the chosen action applies.') : null,
+      h('label', { class: 'check' }, all, ' Apply to all'),
+      h('div', { class: 'row end wrap' }, b('Cancel', 'cancel'), b('Skip', 'skip'), b('Keep both', 'rename'), b(isDir ? 'Merge and replace' : 'Replace', 'replace', 'primary')),
     );
   }).then((v) => v ?? { action: 'cancel', all: false });
 }
@@ -51,7 +51,7 @@ export async function startTransfer(sessionId: string, kind: 'upload' | 'downloa
     if (it.exists) {
       if (remembered) action = remembered;
       else {
-        const r = await askConflict(it.name, it.is_dir, kind === 'upload' ? 'на сервере' : 'в выбранной папке');
+        const r = await askConflict(it.name, it.is_dir, kind === 'upload' ? 'on the server' : 'in the selected folder');
         if (r.action === 'cancel') return null;
         action = r.action;
         if (r.all) remembered = action;
@@ -61,7 +61,7 @@ export async function startTransfer(sessionId: string, kind: 'upload' | 'downloa
     items.push({ path: it.path, action });
   }
   if (!items.length) {
-    toast('Всё пропущено: нечего передавать.');
+    toast('Everything was skipped: nothing to transfer.');
     return null;
   }
   try {
@@ -130,14 +130,14 @@ export class TransferPanel {
       h(
         'div',
         { role: 'dialog', 'data-testid': 'foreign-dialog' },
-        h('h3', {}, 'Файл принадлежит другому пользователю'),
-        h('p', {}, `«${t.label}»: при обычной (атомарной) замене владелец файла изменится на вас. Можно записать прямо в существующий файл (не атомарно: при обрыве файл может повредиться) или заменить файл и сменить владельца.`),
+        h('h3', {}, 'The file belongs to another user'),
+        h('p', {}, `“${t.label}”: with a normal (atomic) replacement the file owner will change to you. You can write straight into the existing file (not atomic: the file may be damaged if the connection drops) or replace the file and change its owner.`),
         h(
           'div',
           { class: 'row end wrap' },
-          h('button', { type: 'button', onclick: () => close('cancel'), 'data-testid': 'foreign-cancel' }, 'Отмена'),
-          h('button', { type: 'button', onclick: () => close('replace'), 'data-testid': 'foreign-replace' }, 'Заменить'),
-          h('button', { type: 'button', class: 'primary', onclick: () => close('in_place'), 'data-testid': 'foreign-inplace' }, 'Записать на месте'),
+          h('button', { type: 'button', onclick: () => close('cancel'), 'data-testid': 'foreign-cancel' }, 'Cancel'),
+          h('button', { type: 'button', onclick: () => close('replace'), 'data-testid': 'foreign-replace' }, 'Replace'),
+          h('button', { type: 'button', class: 'primary', onclick: () => close('in_place'), 'data-testid': 'foreign-inplace' }, 'Write in place'),
         ),
       ),
     );
@@ -155,9 +155,9 @@ export class TransferPanel {
     clear(this.head);
     const running = jobs.filter((j) => j.state === 'running' || j.state === 'queued').length;
     this.head.append(
-      h('span', { class: 'xf-title' }, `Передачи${running ? ` · активных: ${running}` : ''}`),
-      h('button', { class: 'icon-btn', title: 'Очистить завершённые', 'data-testid': 'xfer-clear', onclick: () => void transfers.clear().then(() => this.kick()) }, icon('trash', 14)),
-      h('button', { class: 'icon-btn', title: this.collapsed ? 'Развернуть' : 'Свернуть', onclick: () => ((this.collapsed = !this.collapsed), this.render(jobs)) }, icon(this.collapsed ? 'up' : 'down', 14)),
+      h('span', { class: 'xf-title' }, `Transfers${running ? ` · active: ${running}` : ''}`),
+      h('button', { class: 'icon-btn', title: 'Clear finished', 'data-testid': 'xfer-clear', onclick: () => void transfers.clear().then(() => this.kick()) }, icon('trash', 14)),
+      h('button', { class: 'icon-btn', title: this.collapsed ? 'Maximize' : 'Minimize', onclick: () => ((this.collapsed = !this.collapsed), this.render(jobs)) }, icon(this.collapsed ? 'up' : 'down', 14)),
     );
     this.list.style.display = this.collapsed ? 'none' : '';
     clear(this.list);
@@ -167,25 +167,25 @@ export class TransferPanel {
   private row(j: TransferView): HTMLElement {
     const pct = j.total > 0 ? Math.min(100, Math.round((j.done / j.total) * 100)) : j.state === 'done' ? 100 : 0;
     const arrow = j.kind === 'upload' ? '↑' : '↓';
-    const stateText: Record<string, string> = { queued: 'в очереди', running: `${pct}% · ${fmtSize(j.speed)}/с`, done: 'готово', cancelled: 'отменено', error: 'ошибка' };
+    const stateText: Record<string, string> = { queued: 'queued', running: `${pct}% · ${fmtSize(j.speed)}/s`, done: 'done', cancelled: 'cancelled', error: 'error' };
     const bar = h('div', { class: 'xf-bar' }, h('div', { class: 'xf-fill ' + j.state, style: `width:${pct}%` }));
     const btns: HTMLElement[] = [];
     if (j.state === 'running' || j.state === 'queued') {
-      btns.push(h('button', { class: 'icon-btn', title: 'Отменить', 'data-testid': 'xfer-cancel', onclick: () => void transfers.cancel(j.id).then(() => this.kick()) }, icon('close', 13)));
+      btns.push(h('button', { class: 'icon-btn', title: 'Cancel', 'data-testid': 'xfer-cancel', onclick: () => void transfers.cancel(j.id).then(() => this.kick()) }, icon('close', 13)));
     } else if (j.state === 'error' || j.state === 'cancelled') {
-      btns.push(h('button', { class: 'icon-btn', title: 'Повторить', 'data-testid': 'xfer-retry', onclick: () => void transfers.retry(j.id, { session_id: this.hooks.currentSession() }).then(() => this.kick()).catch((e) => toast(String(e instanceof Error ? e.message : e))) }, icon('refresh', 13)));
+      btns.push(h('button', { class: 'icon-btn', title: 'Retry', 'data-testid': 'xfer-retry', onclick: () => void transfers.retry(j.id, { session_id: this.hooks.currentSession() }).then(() => this.kick()).catch((e) => toast(String(e instanceof Error ? e.message : e))) }, icon('refresh', 13)));
     }
     const notes: HTMLElement[] = [];
     if (j.error) notes.push(h('div', { class: 'xf-err', 'data-testid': 'xfer-error' }, j.error));
     if (j.state === 'done' && j.skipped.length) {
-      notes.push(h('div', { class: 'xf-note', title: j.skipped.join('\n'), 'data-testid': 'xfer-skipped' }, `Пропущено: ${j.skipped.length} (наведите, чтобы увидеть)`));
+      notes.push(h('div', { class: 'xf-note', title: j.skipped.join('\n'), 'data-testid': 'xfer-skipped' }, `Skipped: ${j.skipped.length} (hover to see)`));
     }
     return h(
       'div',
       { class: 'xf-row', 'data-testid': 'xfer-row', 'data-state': j.state, 'data-kind': j.kind },
       h('div', { class: 'xf-top' }, h('span', { class: 'xf-name', title: j.label }, `${arrow} ${j.label}`), h('span', { class: 'xf-state' }, stateText[j.state] ?? j.state), ...btns),
       j.state === 'running' || j.state === 'queued' ? bar : null,
-      j.state === 'running' && j.current ? h('div', { class: 'xf-note' }, `${j.current} · ${fmtSize(j.done)} из ${fmtSize(j.total)}`) : null,
+      j.state === 'running' && j.current ? h('div', { class: 'xf-note' }, `${j.current} · ${fmtSize(j.done)} of ${fmtSize(j.total)}`) : null,
       ...notes,
     );
   }
@@ -195,7 +195,7 @@ export class TransferPanel {
     for (;;) {
       const all = await transfers.list();
       const t = all.find((x) => x.id === id);
-      if (!t) throw new Error('Передача не найдена.');
+      if (!t) throw new Error('Transfer not found.');
       onProgress?.(t);
       if (t.state === 'done' || t.state === 'error' || t.state === 'cancelled') return t;
       if (signal?.aborted) {

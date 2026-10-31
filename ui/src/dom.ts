@@ -46,7 +46,7 @@ export function confirmDialog(title: string, text: string, okLabel = 'OK', dange
       h(
         'div',
         { class: 'row end' },
-        h('button', { onclick: () => close(false), 'data-testid': 'confirm-cancel' }, 'Отмена'),
+        h('button', { onclick: () => close(false), 'data-testid': 'confirm-cancel' }, 'Cancel'),
         h('button', { class: danger ? 'danger' : 'primary', onclick: () => close(true), 'data-testid': 'confirm-ok' }, okLabel),
       ),
     ),
@@ -59,7 +59,7 @@ export function toast(msg: string, detail?: string): void {
     const d = h('pre', { class: 'detail' }, detail);
     d.style.display = 'none';
     t.append(
-      h('button', { class: 'link', onclick: () => (d.style.display = d.style.display === 'none' ? 'block' : 'none') }, 'Подробнее'),
+      h('button', { class: 'link', onclick: () => (d.style.display = d.style.display === 'none' ? 'block' : 'none') }, 'Details'),
       d,
     );
   }
@@ -84,7 +84,7 @@ export function promptDialog(title: string, label: string, value = '', okLabel =
       h(
         'div',
         { class: 'row end' },
-        h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'prompt-cancel' }, 'Отмена'),
+        h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'prompt-cancel' }, 'Cancel'),
         h('button', { type: 'submit', class: 'primary', 'data-testid': 'prompt-ok' }, okLabel),
       ),
     );

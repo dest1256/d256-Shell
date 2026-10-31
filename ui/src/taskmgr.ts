@@ -1,4 +1,4 @@
-// The "Монитор" tab: a resource list on the left and the details of the selected resource on the right, laid out
+// The "Monitor" tab: a resource list on the left and the details of the selected resource on the right, laid out
 // like the "Performance" tab of the Windows 10 task manager (CPU, memory, every disk, every network interface).
 import { clear, h } from './dom';
 import { getSettings, updateSettings } from './settings';
@@ -9,9 +9,9 @@ const C = { cpu: '#4aa8e8', mem: '#b072e8', disk: '#5cc258', net: '#f08a3c' };
 
 type Key = 'cpu' | 'mem' | `disk:${string}` | `net:${string}`;
 
-const fmt1 = (v: number) => v.toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmt1 = (v: number) => v.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const fmtPct = (v: number | null) => (v === null ? '…' : `${Math.round(v)}%`);
-const fmtGhz = (mhz: number | null | undefined) => (mhz ? `${(mhz / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ГГц` : '—');
+const fmtGhz = (mhz: number | null | undefined) => (mhz ? `${(mhz / 1000).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GHz` : '—');
 
 /** The part of the history shown on the graphs (about a minute, like the task manager). */
 function windowOf(hist: Point[], intervalSec: number): { pts: Point[]; n: number } {
@@ -52,19 +52,19 @@ function head(title: string, right: string): { el: HTMLElement; setRight: (t: st
 // ------------------------------------------------------------------ CPU
 
 function cpuView(onToggle: () => void, total: boolean): View {
-  const hd = head('ЦП', '');
+  const hd = head('CPU', '');
   const cap = h('div', { class: 'tm-cap' });
-  const toggle = h('button', { class: 'tool-sm' + (total ? ' on' : ''), 'data-testid': 'md-cpu-total', title: 'Одна общая диаграмма вместо отдельной на каждое ядро', onclick: onToggle }, 'Общая загрузка');
+  const toggle = h('button', { class: 'tool-sm' + (total ? ' on' : ''), 'data-testid': 'md-cpu-total', title: 'One combined chart instead of one per core', onclick: onToggle }, 'Total load');
   const grid = h('div', { class: 'tm-cores', 'data-testid': 'md-cores' });
   const one = chartBox('cpu', '', C.cpu, 280);
-  const util = stat('cpu-util', 'Использование');
-  const speed = stat('cpu-speed', 'Скорость');
-  const threads = stat('cpu-threads', 'Потоки (задачи)');
-  const up = stat('cpu-uptime', 'Время работы');
+  const util = stat('cpu-util', 'Usage');
+  const speed = stat('cpu-speed', 'Speed');
+  const threads = stat('cpu-threads', 'Threads (tasks)');
+  const up = stat('cpu-uptime', 'Uptime');
   const tb = table([
-    ['Логических процессоров', '—'],
-    ['Нагрузка за 1 / 5 / 15 мин', '—'],
-    ['Выполняется сейчас', '—'],
+    ['Logical processors', '—'],
+    ['Load over 1 / 5 / 15 min', '—'],
+    ['Running now', '—'],
   ]);
   const canv: HTMLCanvasElement[] = [];
   const el = h(
@@ -81,14 +81,14 @@ function cpuView(onToggle: () => void, total: boolean): View {
       const { pts, n } = windowOf(hist, iv);
       const last = pts[pts.length - 1];
       hd.setRight(info?.cpu_model ?? '');
-      cap.textContent = `% использования за ${Math.round((n - 1) * iv)} с`;
+      cap.textContent = `% used over ${Math.round((n - 1) * iv)} s`;
       one.peak.textContent = '100%';
       util.set(fmtPct(last?.cpu ?? null));
       speed.set(fmtGhz(s.cpu_mhz));
       threads.set(s.load ? String(s.load.procs) : '—');
       up.set(fmtDuration(s.uptime));
       tb.set(0, String(s.cores.length || '—'));
-      tb.set(1, s.load ? [s.load.l1, s.load.l5, s.load.l15].map((x) => x.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).join(' / ') : '—');
+      tb.set(1, s.load ? [s.load.l1, s.load.l5, s.load.l15].map((x) => x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })).join(' / ') : '—');
       tb.set(2, s.load ? String(s.load.running) : '—');
       if (total || s.cores.length <= 1) {
         drawChart(one.canvas, [{ data: pts.map((p) => p.cpu), color: C.cpu, fill: true }], { max: 100, grid: true, vgrid: true, frame: C.cpu, points: n });
@@ -98,7 +98,7 @@ function cpuView(onToggle: () => void, total: boolean): View {
       const cols = s.cores.length <= 4 ? 2 : s.cores.length <= 9 ? 3 : s.cores.length <= 16 ? 4 : 8;
       grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
       while (canv.length < s.cores.length) {
-        const c = h('canvas', { class: 'tm-core', style: `border-color:${C.cpu}`, title: `Логический процессор ${canv.length}` }) as HTMLCanvasElement;
+        const c = h('canvas', { class: 'tm-core', style: `border-color:${C.cpu}`, title: `Logical processor ${canv.length}` }) as HTMLCanvasElement;
         canv.push(c);
         grid.append(c);
       }
@@ -110,26 +110,26 @@ function cpuView(onToggle: () => void, total: boolean): View {
 // ------------------------------------------------------------------ memory
 
 function memView(): View {
-  const hd = head('Память', '');
-  const cu = chartBox('mem', 'Использование памяти', C.mem, 240);
+  const hd = head('Memory', '');
+  const cu = chartBox('mem', 'Memory usage', C.mem, 240);
   const bar = h('div', { class: 'tm-membar', 'data-testid': 'md-membar' });
-  const segs = [h('div', { class: 'seg used', title: 'Используется' }), h('div', { class: 'seg cache', title: 'Кэш и буферы' }), h('div', { class: 'seg free', title: 'Свободно' })];
+  const segs = [h('div', { class: 'seg used', title: 'Used' }), h('div', { class: 'seg cache', title: 'Cache and buffers' }), h('div', { class: 'seg free', title: 'Free' })];
   bar.append(...segs);
-  const used = stat('mem-used', 'Используется');
-  const avail = stat('mem-avail', 'Доступно');
-  const cached = stat('mem-cached', 'Кэшировано');
-  const free = stat('mem-free', 'Свободно');
+  const used = stat('mem-used', 'Used');
+  const avail = stat('mem-avail', 'Available');
+  const cached = stat('mem-cached', 'Cached');
+  const free = stat('mem-free', 'Free');
   const tb = table([
-    ['Всего', '—'],
-    ['Своп занят', '—'],
-    ['Своп всего', '—'],
+    ['Total', '—'],
+    ['Swap used', '—'],
+    ['Swap total', '—'],
   ]);
   const el = h(
     'div',
     { class: 'tm-pane' },
     hd.el,
     cu.el,
-    h('div', { class: 'tm-cap' }, h('span', {}, 'Структура памяти: используется, кэш, свободно')),
+    h('div', { class: 'tm-cap' }, h('span', {}, 'Memory layout: used, cache, free')),
     bar,
     h('div', { class: 'tm-stats' }, h('div', { class: 'tm-sgrid' }, used.el, avail.el, cached.el, free.el), tb.el),
   );
@@ -152,8 +152,8 @@ function memView(): View {
       cached.set(fmtBytes(m.cached));
       free.set(fmtBytes(m.free));
       tb.set(0, fmtBytes(m.total));
-      tb.set(1, m.swap_total ? fmtBytes(m.swap_total - m.swap_free) : 'нет');
-      tb.set(2, m.swap_total ? fmtBytes(m.swap_total) : 'нет');
+      tb.set(1, m.swap_total ? fmtBytes(m.swap_total - m.swap_free) : 'none');
+      tb.set(2, m.swap_total ? fmtBytes(m.swap_total) : 'none');
     },
   };
 }
@@ -161,20 +161,20 @@ function memView(): View {
 // ------------------------------------------------------------------ disk
 
 function diskView(name: string): View {
-  const hd = head(`Диск ${name}`, '');
-  const act = chartBox(`disk-${name}-active`, 'Активное время', C.disk, 200);
-  const io = chartBox(`disk-${name}-io`, 'Скорость обмена данными с диском (сплошная — чтение, пунктир — запись)', C.disk, 110);
-  const active = stat('disk-active', 'Активное время', C.disk);
-  const resp = stat('disk-resp', 'Среднее время ответа');
-  const rd = stat('disk-read', 'Скорость чтения', C.disk);
-  const wr = stat('disk-write', 'Скорость записи', C.disk);
+  const hd = head(`Disk ${name}`, '');
+  const act = chartBox(`disk-${name}-active`, 'Active time', C.disk, 200);
+  const io = chartBox(`disk-${name}-io`, 'Disk transfer rate (solid: read, dashed: write)', C.disk, 110);
+  const active = stat('disk-active', 'Active time', C.disk);
+  const resp = stat('disk-resp', 'Average response time');
+  const rd = stat('disk-read', 'Read speed', C.disk);
+  const wr = stat('disk-write', 'Write speed', C.disk);
   wr.el.classList.add('dashed');
   const tb = table([
-    ['Ёмкость', '—'],
-    ['Тип', '—'],
-    ['Модель', '—'],
-    ['Операций в секунду (чт / зап)', '—'],
-    ['Очередь запросов', '—'],
+    ['Capacity', '—'],
+    ['Type', '—'],
+    ['Model', '—'],
+    ['Operations per second (r / w)', '—'],
+    ['Request queue', '—'],
   ]);
   const el = h('div', { class: 'tm-pane' }, hd.el, act.el, io.el, h('div', { class: 'tm-stats' }, h('div', { class: 'tm-sgrid' }, active.el, resp.el, rd.el, wr.el), tb.el));
   return {
@@ -192,7 +192,7 @@ function diskView(name: string): View {
       drawChart(act.canvas, [{ data: series((x) => x.util), color: C.disk, fill: true }], { max: 100, grid: true, vgrid: true, frame: C.disk, points: n });
       drawChart(io.canvas, [{ data: series((x) => x.r), color: C.disk, fill: true }, { data: series((x) => x.w), color: C.disk, dash: true }], { min: 100 * 1024, grid: true, vgrid: true, frame: C.disk, points: n });
       active.set(fmtPct(last?.util ?? null));
-      resp.set(last ? `${fmt1(last.resp)} мс` : '…');
+      resp.set(last ? `${fmt1(last.resp)} ms` : '…');
       rd.set(last ? fmtRate(last.r) : '…');
       wr.set(last ? fmtRate(last.w) : '…');
       tb.set(0, dev?.size ? fmtBytes(dev.size) : '—');
@@ -208,17 +208,17 @@ function diskView(name: string): View {
 
 function netView(name: string): View {
   const hd = head(name, '');
-  const ch = chartBox(`net-${name}`, 'Пропускная способность (сплошная — приём, пунктир — отправка)', C.net, 300);
-  const send = stat('net-send', 'Отправка', C.net);
+  const ch = chartBox(`net-${name}`, 'Throughput (solid: receive, dashed: send)', C.net, 300);
+  const send = stat('net-send', 'Send', C.net);
   send.el.classList.add('dashed');
-  const recv = stat('net-recv', 'Получение', C.net);
+  const recv = stat('net-recv', 'Receive', C.net);
   const tb = table([
-    ['Адаптер', name],
-    ['Состояние', '—'],
-    ['Скорость соединения', '—'],
-    ['MAC-адрес', '—'],
-    ['Принято всего', '—'],
-    ['Отправлено всего', '—'],
+    ['Adapter', name],
+    ['State', '—'],
+    ['Link speed', '—'],
+    ['MAC address', '—'],
+    ['Total received', '—'],
+    ['Total sent', '—'],
   ]);
   const el = h('div', { class: 'tm-pane' }, hd.el, ch.el, h('div', { class: 'tm-stats' }, h('div', { class: 'tm-sgrid' }, send.el, recv.el), tb.el));
   return {
@@ -229,7 +229,7 @@ function netView(name: string): View {
       const last = i(pts[pts.length - 1]);
       const dev = info?.devices?.ifaces?.[name];
       const cur = s.ifaces?.find((x) => x.name === name);
-      hd.setRight(dev?.speed_mbit ? `${dev.speed_mbit >= 1000 ? dev.speed_mbit / 1000 : dev.speed_mbit} ${dev.speed_mbit >= 1000 ? 'Гбит/с' : 'Мбит/с'}` : '');
+      hd.setRight(dev?.speed_mbit ? `${dev.speed_mbit >= 1000 ? dev.speed_mbit / 1000 : dev.speed_mbit} ${dev.speed_mbit >= 1000 ? 'Gbit/s' : 'Mbit/s'}` : '');
       const rx = pts.map((p) => i(p)?.rx ?? null);
       const tx = pts.map((p) => i(p)?.tx ?? null);
       ch.peak.textContent = fmtBits(Math.max(125 * 1024, 1.15 * Math.max(0, ...rx.map((v) => v ?? 0), ...tx.map((v) => v ?? 0))));
@@ -237,7 +237,7 @@ function netView(name: string): View {
       send.set(last ? fmtBits(last.tx) : '…');
       recv.set(last ? fmtBits(last.rx) : '…');
       tb.set(1, dev?.state ?? '—');
-      tb.set(2, dev?.speed_mbit ? `${dev.speed_mbit} Мбит/с` : 'неизвестна');
+      tb.set(2, dev?.speed_mbit ? `${dev.speed_mbit} Mbit/s` : 'unknown');
       tb.set(3, dev?.mac ?? '—');
       tb.set(4, cur ? fmtBytes(cur.rx) : '—');
       tb.set(5, cur ? fmtBytes(cur.tx) : '—');
@@ -267,13 +267,13 @@ export class MonitorDetail {
 
   /** "Update speed" like the task manager: pause, a preset (from 250 ms) or your own value in ms (from 100). */
   private rateBox(): HTMLElement {
-    const PRESETS: [string, string][] = [['250', '250 мс'], ['500', '500 мс'], ['1000', '1 секунда'], ['2000', '2 секунды'], ['5000', '5 секунд'], ['10000', '10 секунд'], ['30000', '30 секунд']];
-    const sel = h('select', { 'data-testid': 'md-rate', title: 'Как часто обновлять графики' }) as HTMLSelectElement;
-    sel.append(h('option', { value: 'pause' }, 'Пауза'));
-    for (const [v, t] of PRESETS) sel.append(h('option', { value: v }, `Каждые: ${t}`));
-    sel.append(h('option', { value: 'custom' }, 'Своя частота…'));
-    const input = h('input', { type: 'number', min: '100', max: '60000', step: '50', 'data-testid': 'md-rate-ms', title: 'Интервал в миллисекундах, от 100 до 60000' }) as HTMLInputElement;
-    const unit = h('span', { class: 'muted' }, 'мс');
+    const PRESETS: [string, string][] = [['250', '250 ms'], ['500', '500 ms'], ['1000', '1 second'], ['2000', '2 seconds'], ['5000', '5 seconds'], ['10000', '10 seconds'], ['30000', '30 seconds']];
+    const sel = h('select', { 'data-testid': 'md-rate', title: 'How often to refresh the charts' }) as HTMLSelectElement;
+    sel.append(h('option', { value: 'pause' }, 'Pause'));
+    for (const [v, t] of PRESETS) sel.append(h('option', { value: v }, `Every: ${t}`));
+    sel.append(h('option', { value: 'custom' }, 'Custom rate…'));
+    const input = h('input', { type: 'number', min: '100', max: '60000', step: '50', 'data-testid': 'md-rate-ms', title: 'Interval in milliseconds, from 100 to 60000' }) as HTMLInputElement;
+    const unit = h('span', { class: 'muted' }, 'ms');
     const custom = h('div', { class: 'tm-rate-custom' }, input, unit);
     const err = h('div', { class: 'tm-rate-err', 'data-testid': 'md-rate-err' });
     const showCustom = (on: boolean) => (custom.style.display = on ? '' : 'none');
@@ -303,7 +303,7 @@ export class MonitorDetail {
     const commit = () => {
       const ms = Math.round(Number(input.value));
       if (!Number.isFinite(ms) || ms < 100 || ms > 60000) {
-        err.textContent = 'От 100 до 60000 мс';
+        err.textContent = 'From 100 to 60000 ms';
         return;
       }
       err.textContent = '';
@@ -311,7 +311,7 @@ export class MonitorDetail {
     };
     input.addEventListener('change', commit);
     input.addEventListener('keydown', (e) => e.key === 'Enter' && commit());
-    return h('div', { class: 'tm-rate' }, h('label', {}, 'Частота обновления', sel), custom, err);
+    return h('div', { class: 'tm-rate' }, h('label', {}, 'Refresh rate', sel), custom, err);
   }
 
   dispose(): void {
@@ -331,17 +331,17 @@ export class MonitorDetail {
     const last = pts[pts.length - 1];
     const m = s.mem;
     const out: ReturnType<MonitorDetail['items']> = [
-      { key: 'cpu', title: 'ЦП', sub: `${fmtPct(last?.cpu ?? null)} ${fmtGhz(s.cpu_mhz)}`.trim(), color: C.cpu, data: pts.map((p) => p.cpu), max: 100 },
-      { key: 'mem', title: 'Память', sub: m ? `${fmt1((m.total - m.available) / 1073741824)}/${fmt1(m.total / 1073741824)} ГБ (${fmtPct(last?.mem ?? null)})` : '', color: C.mem, data: pts.map((p) => p.mem), max: 100 },
+      { key: 'cpu', title: 'CPU', sub: `${fmtPct(last?.cpu ?? null)} ${fmtGhz(s.cpu_mhz)}`.trim(), color: C.cpu, data: pts.map((p) => p.cpu), max: 100 },
+      { key: 'mem', title: 'Memory', sub: m ? `${fmt1((m.total - m.available) / 1073741824)}/${fmt1(m.total / 1073741824)} GB (${fmtPct(last?.mem ?? null)})` : '', color: C.mem, data: pts.map((p) => p.mem), max: 100 },
     ];
     (s.disks ?? []).forEach((d, idx) => {
       const dev = info?.devices?.disks?.[d.name];
       const dp = last?.disks.find((x) => x.name === d.name);
-      out.push({ key: `disk:${d.name}`, title: `Диск ${idx} (${d.name})`, sub: `${dev?.kind ? dev.kind + ' ' : ''}${fmtPct(dp?.util ?? null)}`, color: C.disk, data: pts.map((p) => p.disks.find((x) => x.name === d.name)?.util ?? null), max: 100 });
+      out.push({ key: `disk:${d.name}`, title: `Disk ${idx} (${d.name})`, sub: `${dev?.kind ? dev.kind + ' ' : ''}${fmtPct(dp?.util ?? null)}`, color: C.disk, data: pts.map((p) => p.disks.find((x) => x.name === d.name)?.util ?? null), max: 100 });
     });
     (s.ifaces ?? []).forEach((i) => {
       const ip = last?.ifaces.find((x) => x.name === i.name);
-      out.push({ key: `net:${i.name}`, title: i.name, sub: ip ? `О: ${fmtBits(ip.tx)} П: ${fmtBits(ip.rx)}` : '…', color: C.net, data: pts.map((p) => p.ifaces.find((x) => x.name === i.name)?.rx ?? null), data2: pts.map((p) => p.ifaces.find((x) => x.name === i.name)?.tx ?? null) });
+      out.push({ key: `net:${i.name}`, title: i.name, sub: ip ? `Tx: ${fmtBits(ip.tx)} Rx: ${fmtBits(ip.rx)}` : '…', color: C.net, data: pts.map((p) => p.ifaces.find((x) => x.name === i.name)?.rx ?? null), data2: pts.map((p) => p.ifaces.find((x) => x.name === i.name)?.tx ?? null) });
     });
     return out;
   }
@@ -359,7 +359,7 @@ export class MonitorDetail {
       clear(this.side);
       clear(this.main);
       this.view = null;
-      this.main.append(h('div', { class: 'muted tm-wait', 'data-testid': 'md-wait' }, this.src.error ?? 'Сбор данных… (нужен второй замер, это займёт пару секунд)'));
+      this.main.append(h('div', { class: 'muted tm-wait', 'data-testid': 'md-wait' }, this.src.error ?? 'Collecting data… (a second sample is needed, it takes a couple of seconds)'));
       return;
     }
     const iv = this.src.intervalSec;

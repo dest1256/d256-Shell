@@ -48,20 +48,20 @@ impl std::fmt::Display for VaultError {
             } => {
                 write!(
                     f,
-                    "Файл хранилища не найден, но есть резервная копия (vault.bin.bak)."
+                    "The vault file was not found, but there is a backup (vault.bin.bak)."
                 )
             }
-            Self::Missing { .. } => write!(f, "Хранилище не найдено."),
-            Self::Corrupt(d) => write!(f, "Файл хранилища повреждён ({d})."),
+            Self::Missing { .. } => write!(f, "The vault was not found."),
+            Self::Corrupt(d) => write!(f, "The vault file is damaged ({d})."),
             Self::UnsupportedVersion(v) => {
-                write!(f, "Неподдерживаемая версия формата хранилища: {v}.")
+                write!(f, "Unsupported vault format version: {v}.")
             }
             Self::AuthFailed => write!(
                 f,
-                "Неверный мастер-пароль или файл хранилища изменён/повреждён."
+                "Wrong master password, or the vault file was changed or damaged."
             ),
-            Self::Io(e) => write!(f, "Ошибка доступа к файлу хранилища: {e}"),
-            Self::Crypto(e) => write!(f, "Ошибка шифрования: {e}"),
+            Self::Io(e) => write!(f, "Error accessing the vault file: {e}"),
+            Self::Crypto(e) => write!(f, "Encryption error: {e}"),
         }
     }
 }
@@ -202,7 +202,7 @@ impl Vault {
     /// Create a new vault file (fails if one already exists).
     pub fn create(path: &Path, master: &str, params: KdfParams) -> Result<Vault, VaultError> {
         if path.exists() {
-            return Err(VaultError::Corrupt("файл уже существует".into()));
+            return Err(VaultError::Corrupt("the file already exists".into()));
         }
         let salt = random::<SALT_LEN>()?;
         let key = derive_key(master, &salt, params)?;
@@ -256,7 +256,7 @@ impl Vault {
 
     fn open_bytes(path: &Path, bytes: &[u8], master: &str) -> Result<Vault, VaultError> {
         if bytes.len() < HEADER_LEN + TAG_LEN || &bytes[..4] != MAGIC {
-            return Err(VaultError::Corrupt("неверный заголовок".into()));
+            return Err(VaultError::Corrupt("invalid header".into()));
         }
         if bytes[4] != FORMAT_VERSION {
             return Err(VaultError::UnsupportedVersion(bytes[4]));
@@ -273,7 +273,7 @@ impl Vault {
             || params.p_cost == 0
             || params.p_cost > MAX_P_COST
         {
-            return Err(VaultError::Corrupt("недопустимые параметры KDF".into()));
+            return Err(VaultError::Corrupt("invalid KDF parameters".into()));
         }
         let salt: [u8; SALT_LEN] = bytes[17..17 + SALT_LEN].try_into().expect("salt");
         let nonce = &bytes[17 + SALT_LEN..HEADER_LEN];
@@ -292,7 +292,7 @@ impl Vault {
                 .map_err(|_| VaultError::AuthFailed)?,
         );
         let data: VaultData = serde_json::from_slice(&plain)
-            .map_err(|e| VaultError::Corrupt(format!("содержимое: {e}")))?;
+            .map_err(|e| VaultError::Corrupt(format!("content: {e}")))?;
         Ok(Vault {
             path: path.to_path_buf(),
             key,
@@ -410,7 +410,7 @@ mod tests {
         Vault::create(&p, "master", FAST).unwrap();
         let e = Vault::unlock(&p, "nope").err().unwrap();
         assert!(matches!(e, VaultError::AuthFailed));
-        assert!(e.to_string().contains("Неверный мастер-пароль"));
+        assert!(e.to_string().contains("Wrong master password"));
         fs::remove_dir_all(d).unwrap();
     }
 

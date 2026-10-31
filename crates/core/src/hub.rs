@@ -270,7 +270,7 @@ impl Hub {
         self.prompts.cancel_attempt(&a.attempt);
 
         let (sftp, sftp_error) = match res {
-            None => return Err(api_err("cancelled", "Подключение отменено.")),
+            None => return Err(api_err("cancelled", "Connection cancelled.")),
             Some(Ok(conn)) => (Some(Arc::new(conn)), None),
             // Logged in, but no SFTP: the terminal can still work.
             Some(Err(ConnectError::SftpUnavailable(m))) => (None, Some(m)),
@@ -360,7 +360,7 @@ impl Hub {
     ) -> Result<(), ApiError> {
         let mut l = self.prompts.list.lock().expect("lock");
         let Some(pos) = l.iter().position(|p| p.id == id) else {
-            return Err(api_err("no_prompt", "Запрос уже закрыт."));
+            return Err(api_err("no_prompt", "The request is already closed."));
         };
         let p = l.remove(pos);
         let ans = match accept {
@@ -383,24 +383,24 @@ impl Hub {
         let Some(i) = self.changed.lock().expect("lock").remove(attempt) else {
             return Err(api_err(
                 "no_pending_key",
-                "Нет ключа для замены. Повторите подключение.",
+                "There is no key to replace. Connect again.",
             ));
         };
         known_hosts::replace(&self.known_hosts, &i.host, i.port, &i.key_type, &i.key_b64)
-            .map_err(|e| api_err("io", format!("Не удалось обновить known_hosts: {e}")))
+            .map_err(|e| api_err("io", format!("Could not update known_hosts: {e}")))
     }
 
     fn sftp(&self, id: &str) -> Result<Arc<SftpConnection>, ApiError> {
         let g = self.sessions.lock().expect("lock");
         let s = g
             .get(id)
-            .ok_or_else(|| api_err("no_session", "Сеанс закрыт."))?;
+            .ok_or_else(|| api_err("no_session", "The session is closed."))?;
         s.sftp.clone().ok_or_else(|| {
             api_err(
                 "sftp_unavailable",
                 s.sftp_error
                     .clone()
-                    .unwrap_or_else(|| "SFTP недоступен.".into()),
+                    .unwrap_or_else(|| "SFTP is unavailable.".into()),
             )
         })
     }
@@ -415,17 +415,16 @@ impl Hub {
             };
             let canon = conn.canonicalize(&target).await.map_err(|m| {
                 if lost(&conn) {
-                    api_err("connection_lost", "Соединение с сервером потеряно.")
+                    api_err("connection_lost", "Connection to the server lost.")
                 } else {
                     api_err("sftp", m)
                 }
             })?;
             match conn.list_dir(&canon).await {
                 Ok(entries) => Ok(json!({ "path": canon, "entries": entries })),
-                Err(_) if lost(&conn) => Err(api_err(
-                    "connection_lost",
-                    "Соединение с сервером потеряно.",
-                )),
+                Err(_) if lost(&conn) => {
+                    Err(api_err("connection_lost", "Connection to the server lost."))
+                }
                 Err(m) => Err(ApiError {
                     code: "sftp",
                     message: m,
@@ -439,8 +438,9 @@ impl Hub {
     pub fn fs_op(&self, session_id: &str, op: &str, p: &Value) -> Result<Value, ApiError> {
         let conn = self.sftp(session_id)?;
         let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_owned);
-        let need =
-            |k: &str| s(k).ok_or_else(|| api_err("invalid", format!("Не хватает параметра {k}.")));
+        let need = |k: &str| {
+            s(k).ok_or_else(|| api_err("invalid", format!("A parameter is missing {k}.")))
+        };
         let paths: Vec<String> = p
             .get("paths")
             .and_then(Value::as_array)
@@ -452,7 +452,7 @@ impl Hub {
             .unwrap_or_default();
         let fail = |m: String| {
             if conn.is_closed() {
-                api_err("connection_lost", "Соединение с сервером потеряно.")
+                api_err("connection_lost", "Connection to the server lost.")
             } else {
                 api_err("sftp", m)
             }
@@ -477,7 +477,7 @@ impl Hub {
                 "chmod" => {
                     let mode = p.get("mode").and_then(Value::as_u64).unwrap_or(u64::MAX);
                     let mode = u32::try_from(mode)
-                        .map_err(|_| api_err("invalid", "Недопустимые права."))?;
+                        .map_err(|_| api_err("invalid", "Invalid permissions."))?;
                     let flag = |k: &str, d: bool| p.get(k).and_then(Value::as_bool).unwrap_or(d);
                     conn.chmod_tree(
                         &need("path")?,
@@ -520,7 +520,7 @@ impl Hub {
                                 if conn.is_closed() {
                                     return Err(api_err(
                                         "connection_lost",
-                                        "Соединение с сервером потеряно.",
+                                        "Connection to the server lost.",
                                     ));
                                 }
                                 errors.push(json!({ "path": path, "message": m }));
@@ -531,7 +531,7 @@ impl Hub {
                 }
                 _ => Err(api_err(
                     "unknown_method",
-                    format!("Неизвестная операция: {op}"),
+                    format!("Unknown operation: {op}"),
                 )),
             }
         })
@@ -630,7 +630,7 @@ impl Hub {
             .block_on(conn.edit_save_enc(path, text, bom, eol, encoding, base.as_ref(), limit_mb * 1024 * 1024, force, allow_foreign, in_place))
             .map_err(|e| {
                 if conn.is_closed() && e.code == "sftp" {
-                    api_err("connection_lost", "Соединение с сервером потеряно. Содержимое редактора сохранено в окне; переподключитесь и повторите Ctrl+S.")
+                    api_err("connection_lost", "Connection to the server lost. The editor content is kept in the window; reconnect and press Ctrl+S again.")
                 } else {
                     edit_err(e)
                 }
@@ -646,13 +646,12 @@ impl Hub {
                 v["ms"] = json!(started.elapsed().as_millis() as u64);
                 Ok(v)
             }
-            None if conn.is_closed() => Err(api_err(
-                "connection_lost",
-                "Соединение с сервером потеряно.",
-            )),
+            None if conn.is_closed() => {
+                Err(api_err("connection_lost", "Connection to the server lost."))
+            }
             None => Err(api_err(
                 "monitor_unavailable",
-                "Мониторинг недоступен: сервер не отдаёт /proc (нужен Linux).",
+                "Monitoring is unavailable: the server does not provide /proc (Linux is required).",
             )),
         }
     }
@@ -704,7 +703,7 @@ impl Hub {
             .expect("lock")
             .get(session_id)
             .map(|s| s.info.clone())
-            .ok_or_else(|| api_err("no_session", "Сеанс закрыт."))?;
+            .ok_or_else(|| api_err("no_session", "The session is closed."))?;
         // key login: check the file first, so that a wrong path is explained here and not as an ssh error in the terminal
         let identity = match &info.key_path {
             Some(p) => Some(crate::keyfile::check(p).map_err(|m| api_err("key_error", m))?),
@@ -745,7 +744,7 @@ impl Hub {
                     self.askpass_handler(&term_id, info.password(), info.key_passphrase.clone()),
                     Some(on_refuse),
                 )
-                .map_err(|e| api_err("io", format!("Не удалось запустить askpass: {e}")))?;
+                .map_err(|e| api_err("io", format!("Could not start askpass: {e}")))?;
                 env.push((
                     "SSH_ASKPASS".into(),
                     askpass::askpass_program_path(&ctx.askpass_exe),
@@ -813,7 +812,7 @@ impl Hub {
             .expect("lock")
             .get(id)
             .cloned()
-            .ok_or_else(|| api_err("no_terminal", "Терминал закрыт."))
+            .ok_or_else(|| api_err("no_terminal", "The terminal is closed."))
     }
 
     pub fn term_read(&self, id: &str, timeout: Duration) -> Result<ReadResult, ApiError> {
@@ -824,7 +823,7 @@ impl Hub {
         self.term(id)?
             .session
             .write(data)
-            .map_err(|e| api_err("io", format!("Не удалось записать в терминал: {e}")))
+            .map_err(|e| api_err("io", format!("Could not write to the terminal: {e}")))
     }
 
     pub fn term_resize(&self, id: &str, cols: u16, rows: u16) -> Result<(), ApiError> {
@@ -851,10 +850,10 @@ impl Hub {
             let port = g.get(&t.ssh_session).map(|s| s.info.port).unwrap_or(22);
             (port, t.session.pid())
         };
-        let pid = pid.ok_or_else(|| api_err("no_terminal", "Терминал не запущен."))?;
+        let pid = pid.ok_or_else(|| api_err("no_terminal", "The terminal is not running."))?;
         let Some(local) = crate::terminal::localport::local_port(pid, port) else {
             return Ok(
-                json!({ "found": false, "reason": "Не удалось определить порт соединения терминала." }),
+                json!({ "found": false, "reason": "Could not determine the connection port of the terminal." }),
             );
         };
         self.rt

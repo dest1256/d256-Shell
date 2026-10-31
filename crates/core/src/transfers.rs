@@ -92,7 +92,7 @@ impl Transfers {
             .map(|i| i.path.rsplit(['/', '\\']).next().unwrap_or("").to_string())
             .unwrap_or_default();
         let label = if params.items.len() > 1 {
-            format!("{first} и ещё {}", params.items.len() - 1)
+            format!("{first} plus {}", params.items.len() - 1)
         } else {
             first
         };
@@ -277,7 +277,7 @@ async fn run(conn: &SftpConnection, job: &Job) -> Result<(), XferError> {
     if let Some(max) = p.max_bytes {
         if total > max {
             return Err(XferError::Msg(format!(
-                "Слишком много данных для перетаскивания ({} МБ, лимит {} МБ): используйте «Скачать…».",
+                "Too much data to drag ({} MB, limit {} MB): use “Download…”.",
                 total / (1024 * 1024),
                 max / (1024 * 1024)
             )));
@@ -301,7 +301,7 @@ async fn run(conn: &SftpConnection, job: &Job) -> Result<(), XferError> {
                 let name = local
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .ok_or_else(|| XferError::Msg(format!("{}: недопустимое имя", it.path)))?
+                    .ok_or_else(|| XferError::Msg(format!("{}: invalid name", it.path)))?
                     .to_string();
                 if md.is_dir() {
                     let mut action = it.action;
@@ -342,7 +342,7 @@ async fn run(conn: &SftpConnection, job: &Job) -> Result<(), XferError> {
                 {
                     out.files += 1;
                 } else {
-                    out.skipped.push(format!("{name}: уже есть"));
+                    out.skipped.push(format!("{name}: already exists"));
                 }
             }
             Kind::Download => {
@@ -381,7 +381,7 @@ async fn run(conn: &SftpConnection, job: &Job) -> Result<(), XferError> {
                     let (dest_name, overwrite) = match (exists, it.action) {
                         (false, _) => (name.clone(), false),
                         (true, Action::Skip) => {
-                            out.skipped.push(format!("{name}: уже есть"));
+                            out.skipped.push(format!("{name}: already exists"));
                             continue;
                         }
                         (true, Action::Replace) => (name.clone(), true),

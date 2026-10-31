@@ -1,22 +1,31 @@
-# Журнал изменений
+# Changelog
 
-Формат версий описан в [VERSIONING.md](VERSIONING.md).
+The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
+
+## 1.0.2 — 2026-10-31
+The project is now released under the MIT license, and the whole program and repository are in English.
+
+**Changed**
+- License: instead of the "all rights reserved" notice (`COPYRIGHT`) the project is distributed under the **MIT** license (`LICENSE` file). The license is stated in the metadata (`Cargo.toml`, `package.json`, `PKGBUILD`), shipped in the Linux packages (tar.gz, deb, Arch) and shown in the About window.
+- New English `README.md` for the repository: features, security, installation, building, versions, limitations, license.
+- The release files for the `PKGBUILD` build now contain `LICENSE` instead of `COPYRIGHT`.
+- **Language:** the user interface, messages from the core, tests, scripts and documentation are translated to English. Dates and numbers use the `en-US` format.
 
 ## 1.0.1 — 2026-10-28
-Небольшое улучшение окна вставки.
+A small improvement of the paste dialog.
 
-**Изменено**
-- Окно подтверждения вставки теперь содержит редактируемое поле: перед вставкой текст можно поправить или удалить лишнюю (опасную) строку. Вставляется то, что осталось в поле. Заголовок и счётчик символов обновляются по мере правки, `Ctrl+Enter` вставляет, пустой текст считается отменой.
-- В файлы релиза для Arch добавлены `d256shell.desktop` и `COPYRIGHT`, нужные для `PKGBUILD` (скрипт `scripts/sync-github.sh`).
+**Changed**
+- The paste confirmation dialog now contains an editable field: before pasting you can fix the text or remove an unwanted (dangerous) line. What remains in the field is pasted. The title and the character counter update as you edit, `Ctrl+Enter` pastes, empty text counts as cancel.
+- The Arch release files now include `d256shell.desktop` and `COPYRIGHT`, needed by the `PKGBUILD` (`scripts/sync-github.sh`).
 
 ## 1.0.0 — 2026-10-28
-Первый релиз. Программа называется **d256 Shell** (на этапе разработки проект назывался Shellport).
+First release. The program is called **d256 Shell** (during development the project was called Shellport).
 
-- **Терминал** на системном `ssh` (ConPTY / PTY), автоподстановка пароля через askpass, 2FA, вкладки, поиск, вставка с предупреждением, цветовые схемы.
-- **Хранилище паролей** под мастер-паролем (Argon2id + XChaCha20-Poly1305), проверка ключей хостов, вход по приватному ключу (ed25519, RSA, ECDSA) с парольной фразой.
-- **Проводник SFTP:** создание, переименование, копирование, перенос, удаление, права, очередь передач, drag-and-drop в обе стороны, безопасная запись файлов.
-- **Редактор** CodeMirror: Ctrl+S прямо на сервер, проверка конфликтов с показом различий, любые кодировки (Windows-1251, KOI8-R, UTF-16 …) с автоопределением и выбором кодировки сохранения.
-- **Монитор сервера** в стиле диспетчера задач Windows: ЦП по ядрам, память, диски, сеть; выбор частоты обновления (от 100 мс). Данные читаются из `/proc` и `/sys`, команды на сервере не выполняются.
-- **Дублирование терминала** (Ctrl+Shift+D): вторая живая оболочка с повтором папки, venv, `su` и запущенной программы.
-- **Платформы:** Windows 10/11 (x64) и Linux (Ubuntu/Debian, Arch, портативный архив).
-- Приватное программное обеспечение: лицензия не предоставляется, все права защищены (см. COPYRIGHT).
+- **Terminal** on top of the system `ssh` (ConPTY / PTY), automatic password entry through askpass, 2FA, tabs, search, paste with a warning, color schemes.
+- **Password vault** protected by a master password (Argon2id + XChaCha20-Poly1305), host key verification, login with a private key (ed25519, RSA, ECDSA) with a passphrase.
+- **SFTP explorer:** create, rename, copy, move, delete, permissions, transfer queue, drag-and-drop in both directions, safe file writes.
+- **CodeMirror editor:** Ctrl+S straight to the server, conflict detection with a diff view, any encoding (Windows-1251, KOI8-R, UTF-16 …) with auto-detection and a choice of the saving encoding.
+- **Server monitor** in the style of the Windows task manager: CPU per core, memory, disks, network; selectable refresh rate (down to 100 ms). Data is read from `/proc` and `/sys`; no commands are run on the server.
+- **Terminal duplication** (Ctrl+Shift+D): a second live shell that repeats the folder, venv, `su` and the running program.
+- **Platforms:** Windows 10/11 (x64) and Linux (Ubuntu/Debian, Arch, portable archive).
+- Proprietary software: no license is granted, all rights reserved (see COPYRIGHT).

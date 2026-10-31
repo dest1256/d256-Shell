@@ -55,7 +55,7 @@ const paste = (page: Page, text: string) =>
     document.querySelector('.term-host')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }));
   }, text);
 
-test('вход без ввода пароля, команда, вывод, индикатор состояния', async ({ page }) => {
+test('login without typing a password, command, output, state indicator', async ({ page }) => {
   await openTerminal(page);
   await expect(page.getByTestId('tab-state-s1')).toHaveAttribute('data-state', 'ok');
   await type(page, 'echo marker-$((1000+234))');
@@ -66,7 +66,7 @@ test('вход без ввода пароля, команда, вывод, ин�
   await page.screenshot({ path: 'screenshots/30-terminal.png' });
 });
 
-test('Ctrl+C уходит на сервер как ^C', async ({ page }) => {
+test('Ctrl+C goes to the server as ^C', async ({ page }) => {
   await openTerminal(page);
   await type(page, 'sleep 30');
   await page.waitForTimeout(500);
@@ -76,10 +76,10 @@ test('Ctrl+C уходит на сервер как ^C', async ({ page }) => {
   await waitFor(page, /^alive-42$/m);
 });
 
-test('завершение: код выхода, Enter — переподключение, Esc — закрытие вкладки', async ({ page }) => {
+test('exit: exit code, Enter reconnects, Esc closes the tab', async ({ page }) => {
   await openTerminal(page);
   await type(page, 'exit 3');
-  await waitFor(page, /Сеанс завершён, код 3/);
+  await waitFor(page, /Session ended, code 3/);
   await expect(page.getByTestId('tab-state-s1')).toHaveAttribute('data-state', 'off');
   await page.screenshot({ path: 'screenshots/31-session-ended.png' });
 
@@ -91,18 +91,18 @@ test('завершение: код выхода, Enter — переподклю�
   await waitFor(page, /^again-21$/m);
 
   await type(page, 'exit');
-  await waitFor(page, /Сеанс завершён, код 0/);
+  await waitFor(page, /Session ended, code 0/);
   await page.keyboard.press('Escape'); // closes the tab (no confirmation for an ended session)
   await expect(page.getByTestId('tab-s1')).toHaveCount(0);
 });
 
-test('вставка нескольких строк предупреждает, одна строка — нет', async ({ page }) => {
+test('pasting several lines warns, a single line does not', async ({ page }) => {
   await openTerminal(page);
   const p = (text: string) => paste(page, text);
 
   await p('echo one\necho two\necho three\n');
   await expect(page.getByTestId('paste-confirm')).toBeVisible();
-  await expect(page.getByTestId('paste-confirm')).toContainText('Вставить 4 строк');
+  await expect(page.getByTestId('paste-confirm')).toContainText('Paste 4 lines');
   await page.screenshot({ path: 'screenshots/32-paste-warning.png' });
   await page.getByTestId('paste-cancel').click();
   await page.waitForTimeout(400);
@@ -130,7 +130,7 @@ test('вставка нескольких строк предупреждает,
   await page.getByTestId('paste-cancel').click();
 });
 
-test('размер терминала доходит до сервера', async ({ page }) => {
+test('the terminal size reaches the server', async ({ page }) => {
   await openTerminal(page);
   await page.setViewportSize({ width: 1000, height: 620 });
   await page.waitForTimeout(600);
@@ -142,7 +142,7 @@ test('размер терминала доходит до сервера', async
   await waitFor(page, new RegExp(`^${dims.rows} ${dims.cols}$`, 'm'));
 });
 
-test('UTF-8: кириллица, символы, эмодзи; поток без потерь', async ({ page }) => {
+test('UTF-8: Cyrillic, symbols, emoji; the stream is lossless', async ({ page }) => {
   await openTerminal(page);
   // Cyrillic input (UTF-16 -> UTF-8) reaches the server and comes back unchanged
   await paste(page, 'echo привет-мир-$((6*7))');
@@ -160,7 +160,7 @@ test('UTF-8: кириллица, символы, эмодзи; поток без
   expect(text.split('\n').filter((l) => l === 'ёжик-✓-🙂').length).toBeGreaterThan(9000); // scrollback is 10 000 lines
 });
 
-test('поиск по выводу (Ctrl+Shift+F)', async ({ page }) => {
+test('search in the output (Ctrl+Shift+F)', async ({ page }) => {
   await openTerminal(page);
   await type(page, 'echo needle-$((5+5))');
   await waitFor(page, /^needle-10$/m);
@@ -172,7 +172,7 @@ test('поиск по выводу (Ctrl+Shift+F)', async ({ page }) => {
   await expect(page.getByTestId('term-search')).toBeHidden();
 });
 
-test('Ctrl+B/W внутри терминала уходят на сервер, Ctrl+Shift+B — приложению', async ({ page }) => {
+test('Ctrl+B/W inside the terminal go to the server, Ctrl+Shift+B goes to the app', async ({ page }) => {
   await openTerminal(page);
   await page.keyboard.press('Control+b'); // tmux/readline key: must not toggle the sidebar
   await expect(page.getByTestId('sidebar')).toBeHidden(); // hidden automatically in an SSH tab
@@ -185,7 +185,7 @@ test('Ctrl+B/W внутри терминала уходят на сервер, C
   await expect(page.getByTestId('tab-s1')).toBeVisible();
 });
 
-test('настройки: схема и размер шрифта применяются к открытому терминалу', async ({ page }) => {
+test('settings: the scheme and font size apply to the open terminal', async ({ page }) => {
   await openTerminal(page);
   await page.getByTestId('settings').click();
   await expect(page.getByTestId('ssh-info')).toContainText('OpenSSH_');
@@ -205,7 +205,7 @@ test('настройки: схема и размер шрифта применя
   expect(saved.font_size).toBe(18);
 });
 
-test('сервер без SFTP: терминал работает, панель файлов объясняет причину', async ({ page }) => {
+test('server without SFTP: the terminal works, the file panel explains why', async ({ page }) => {
   bridge = await startBridge();
   await page.goto(bridge.url);
   await createVault(page);
@@ -222,7 +222,7 @@ test('сервер без SFTP: терминал работает, панель 
   await page.screenshot({ path: 'screenshots/34-no-sftp.png' });
 });
 
-test('2FA: код для терминала запрашивается у пользователя', async ({ page }) => {
+test('2FA: the code for the terminal is requested from the user', async ({ page }) => {
   bridge = await startBridge();
   await page.goto(bridge.url);
   await createVault(page);
@@ -240,9 +240,9 @@ test('2FA: код для терминала запрашивается у пол
   await waitFor(page, /\$ $/m);
 });
 
-test('колесо мыши в полноэкранной программе с мышью (btop) шлёт стрелки', async ({ page }) => {
+test('mouse wheel in a full-screen program with mouse tracking (btop) sends arrows', async ({ page }) => {
   await openTerminal(page);
-  // как btop: альтернативный экран + отслеживание мыши; cat -v показывает, что реально пришло
+  // like btop: alternate screen + mouse tracking; cat -v shows what actually arrived
   await type(page, String.raw`printf '\033[?1049h\033[?1000h\033[?1006h'; cat -v`);
   await page.waitForTimeout(500);
   const box = (await page.getByTestId('terminal').boundingBox())!;
@@ -253,30 +253,30 @@ test('колесо мыши в полноэкранной программе с 
   await waitFor(page, '^[[B^[[B^[[B');
 });
 
-test('окно вставки: текст можно править, вставляется отредактированное', async ({ page }) => {
+test('paste window: the text can be edited, the edited text is pasted', async ({ page }) => {
   await openTerminal(page);
   await paste(page, 'echo keep-1\necho DANGEROUS-LINE\necho keep-2\n');
   const ta = page.getByTestId('paste-text');
   await expect(ta).toBeVisible();
   await expect(ta).toBeFocused();
   await expect(ta).toHaveValue('echo keep-1\necho DANGEROUS-LINE\necho keep-2\n');
-  // правка: заголовок и счётчик следуют за текстом, опасная строка убрана, одна исправлена
+  // editing: the title and counter follow the text, the dangerous line is removed, one is fixed
   await ta.fill('echo keep-1\necho fixed-$((6*7))\n');
-  await expect(page.getByTestId('paste-confirm')).toContainText('Вставить 3 строк');
+  await expect(page.getByTestId('paste-confirm')).toContainText('Paste 3 lines');
   await page.screenshot({ path: 'screenshots/68-paste-edit.png' });
   await page.getByTestId('paste-ok').click();
   await page.keyboard.press('Enter');
   await waitFor(page, /^fixed-42$/m);
   expect(await buffer(page)).not.toMatch(/^DANGEROUS-LINE$/m);
 
-  // Ctrl+Enter вставляет прямо из поля
+  // Ctrl+Enter pastes straight from the field
   await paste(page, 'echo ctrl-enter-1\necho ctrl-enter-2\n');
   await page.getByTestId('paste-text').press('Control+Enter');
   await expect(page.getByTestId('paste-confirm')).toHaveCount(0);
   await page.keyboard.press('Enter');
   await waitFor(page, /^ctrl-enter-2$/m);
 
-  // пустой текст после правки = отмена, ничего не вставляется
+  // empty text after editing = cancel, nothing is pasted
   await paste(page, 'echo never-1\necho never-2\n');
   await page.getByTestId('paste-text').fill('');
   await page.getByTestId('paste-ok').click();

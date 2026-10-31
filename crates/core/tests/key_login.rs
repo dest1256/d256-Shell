@@ -115,7 +115,7 @@ async fn wrong_or_cancelled_passphrase_never_reaches_the_server() {
     })
     .await;
     match r {
-        Err(ConnectError::KeyError(m)) => assert!(m.contains("парольная фраза"), "{m}"),
+        Err(ConnectError::KeyError(m)) => assert!(m.contains("passphrase"), "{m}"),
         other => panic!("{:?}", other.err()),
     }
     assert_eq!(
@@ -176,12 +176,12 @@ async fn unusable_key_files_are_explained_before_any_connection() {
         None
     })
     .await;
-    assert!(msg(r).contains("открытый"));
+    assert!(msg(r).contains("public"));
     let (r, _) = connect("sshd-key", Some(key("does-not-exist", None)), None, |_| {
         None
     })
     .await;
-    assert!(msg(r).contains("не найден"));
+    assert!(msg(r).contains("not found"));
     // a server that has public key login switched off says so (sshd-password: PubkeyAuthentication no)
     let (r, _) = connect(
         "sshd-password",

@@ -54,7 +54,7 @@ async fn open_and_save_without_edits_keeps_every_byte() {
     let cases: Vec<(&str, Vec<u8>)> = vec![
         ("lf.txt", b"line1\nline2\n".to_vec()),
         ("crlf.txt", b"a\r\nb\r\nc\r\n".to_vec()),
-        ("bom.txt", "\u{feff}с BOM\n".as_bytes().to_vec()),
+        ("bom.txt", "\u{feff}with BOM\n".as_bytes().to_vec()),
         ("bom-crlf.txt", "\u{feff}x\r\ny".as_bytes().to_vec()),
         ("nonl.txt", b"no final newline".to_vec()),
         ("uni.txt", "юникод ✓ 日本語 🙂\n".as_bytes().to_vec()),

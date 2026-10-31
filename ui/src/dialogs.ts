@@ -20,7 +20,7 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
       type: 'password',
       'data-testid': 'f-password',
       autocomplete: 'new-password',
-      placeholder: existing?.has_password ? '•••••••• (не менять)' : '',
+      placeholder: existing?.has_password ? '•••••••• (do not change)' : '',
     }) as HTMLInputElement;
     const eye = h(
       'button',
@@ -34,16 +34,16 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
             pwInput.value = (await api.getPassword(existing.id).catch(() => null)) ?? '';
           }
           pwInput.type = pwShown ? 'text' : 'password';
-          eye.textContent = pwShown ? 'Скрыть' : 'Показать';
+          eye.textContent = pwShown ? 'Hide' : 'Show';
         },
       },
-      'Показать',
+      'Show',
     );
     // private key login (like "Use private key" in MobaXterm): a checkbox, the key file and, if wanted, its passphrase
     const useKey = h('input', { type: 'checkbox', 'data-testid': 'f-usekey' }) as HTMLInputElement;
     useKey.checked = !!existing?.key_path;
-    const keyPath = h('input', { id: 'f-keypath', type: 'text', 'data-testid': 'f-keypath', value: existing?.key_path ?? '', spellcheck: 'false', placeholder: 'Файл приватного ключа (id_ed25519, id_rsa, *.pem)', autocomplete: 'off' }) as HTMLInputElement;
-    const keyPass = h('input', { id: 'f-keypass', type: 'password', 'data-testid': 'f-keypass', autocomplete: 'new-password', placeholder: existing?.has_key_passphrase ? '•••••••• (не менять)' : 'Парольная фраза ключа (необязательно)' }) as HTMLInputElement;
+    const keyPath = h('input', { id: 'f-keypath', type: 'text', 'data-testid': 'f-keypath', value: existing?.key_path ?? '', spellcheck: 'false', placeholder: 'Private key file (id_ed25519, id_rsa, *.pem)', autocomplete: 'off' }) as HTMLInputElement;
+    const keyPass = h('input', { id: 'f-keypass', type: 'password', 'data-testid': 'f-keypass', autocomplete: 'new-password', placeholder: existing?.has_key_passphrase ? '•••••••• (do not change)' : 'Key passphrase (optional)' }) as HTMLInputElement;
     const browse = h('button', { type: 'button', class: 'btn', 'data-testid': 'f-keybrowse', onclick: async () => {
       const [p] = await native.pick('files');
       if (p) {
@@ -51,8 +51,8 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
         useKey.checked = true;
         syncKey();
       }
-    } }, 'Обзор…');
-    const keyBox = h('div', { class: 'col key-box', 'data-testid': 'key-box' }, h('div', { class: 'row' }, keyPath, browse), keyPass, h('p', { class: 'muted small' }, 'Файлы PuTTY (.ppk) не поддерживаются: экспортируйте ключ в формат OpenSSH. Пароль, если он указан, будет использован только если сервер отклонит ключ.'));
+    } }, 'Browse…');
+    const keyBox = h('div', { class: 'col key-box', 'data-testid': 'key-box' }, h('div', { class: 'row' }, keyPath, browse), keyPass, h('p', { class: 'muted small' }, 'PuTTY files (.ppk) are not supported: export the key to OpenSSH format. The password, if given, is used only if the server rejects the key.'));
     const syncKey = () => (keyBox.style.display = useKey.checked ? '' : 'none');
     useKey.addEventListener('change', syncKey);
     syncKey();
@@ -82,15 +82,15 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
     return h(
       'form',
       { 'data-testid': 'server-form', onsubmit: (e) => (e.preventDefault(), void save()) },
-      h('h3', {}, existing ? 'Изменить сервер' : 'Новый сервер'),
-      f('f-name', 'Название', existing?.name),
-      h('div', { class: 'row' }, f('f-host', 'Адрес', existing?.host), f('f-port', 'Порт', String(existing?.port ?? 22), 'number')),
-      f('f-user', 'Пользователь', existing?.username),
-      h('label', {}, 'Пароль', h('div', { class: 'row' }, pwInput, eye)),
-      h('label', { class: 'check' }, useKey, ' Использовать приватный ключ'),
+      h('h3', {}, existing ? 'Edit server' : 'New server'),
+      f('f-name', 'Name', existing?.name),
+      h('div', { class: 'row' }, f('f-host', 'Address', existing?.host), f('f-port', 'Port', String(existing?.port ?? 22), 'number')),
+      f('f-user', 'User', existing?.username),
+      h('label', {}, 'Password', h('div', { class: 'row' }, pwInput, eye)),
+      h('label', { class: 'check' }, useKey, ' Use a private key'),
       keyBox,
-      f('f-dir', 'Стартовая папка (необязательно)', existing?.initial_dir ?? ''),
-      f('f-args', 'Доп. аргументы ssh (необязательно)', existing?.ssh_extra_args ?? ''),
+      f('f-dir', 'Start folder (optional)', existing?.initial_dir ?? ''),
+      f('f-args', 'Extra ssh arguments (optional)', existing?.ssh_extra_args ?? ''),
       err,
       h(
         'div',
@@ -101,22 +101,22 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
             type: 'button',
             class: 'btn left-auto',
             'data-testid': 'form-test',
-            title: 'Проверка входа по SFTP, без открытия терминала',
+            title: 'Check the SFTP login without opening a terminal',
             onclick: async () => {
               err.textContent = '';
               const host = val('f-host').trim();
               const username = val('f-user').trim();
               const port = Number(val('f-port'));
-              if (!host || !username || !port) return void (err.textContent = 'Заполните адрес, порт и пользователя.');
+              if (!host || !username || !port) return void (err.textContent = 'Fill in the address, port and user.');
               const password = pwInput.value || (existing ? ((await api.getPassword(existing.id).catch(() => null)) ?? '') : '');
               const r = await connectFlow({ label: `${username}@${host}`, host, port, username, password: password || undefined, testOnly: true, keyPath: useKey.checked ? keyPath.value.trim() : undefined, keyPassphrase: useKey.checked && keyPass.value ? keyPass.value : undefined });
-              if (r) toast(`Подключение успешно: ${username}@${host}`);
+              if (r) toast(`Connection successful: ${username}@${host}`);
             },
           },
-          'Проверить подключение',
+          'Test connection',
         ),
-        h('button', { type: 'button', class: 'btn', onclick: () => close(false), 'data-testid': 'form-cancel' }, 'Отмена'),
-        h('button', { type: 'submit', class: 'btn primary', 'data-testid': 'form-save' }, 'Сохранить'),
+        h('button', { type: 'button', class: 'btn', onclick: () => close(false), 'data-testid': 'form-cancel' }, 'Cancel'),
+        h('button', { type: 'submit', class: 'btn primary', 'data-testid': 'form-save' }, 'Save'),
       ),
     );
   });
@@ -126,25 +126,25 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
 export async function changeMasterDialog(): Promise<void> {
   const err = h('div', { class: 'error', 'data-testid': 'cm-error' });
   await modal<boolean>((close) => {
-    const o = pwField('cm-old', 'Текущий мастер-пароль');
-    const n1 = pwField('cm-new1', 'Новый мастер-пароль', 'new-password');
-    const n2 = pwField('cm-new2', 'Повторите новый пароль', 'new-password');
+    const o = pwField('cm-old', 'Current master password');
+    const n1 = pwField('cm-new1', 'New master password', 'new-password');
+    const n2 = pwField('cm-new2', 'Repeat the new password', 'new-password');
     return h(
       'form',
       {
         onsubmit: async (e) => {
           e.preventDefault();
-          if (n1.value !== n2.value) return void (err.textContent = 'Пароли не совпадают.');
+          if (n1.value !== n2.value) return void (err.textContent = 'The passwords do not match.');
           try {
             await api.changeMaster(o.value, n1.value);
-            toast('Мастер-пароль изменён.');
+            toast('Master password changed.');
             close(true);
           } catch (x) {
             err.textContent = errText(x);
           }
         },
       },
-      h('h3', {}, 'Смена мастер-пароля'),
+      h('h3', {}, 'Change master password'),
       o,
       n1,
       n2,
@@ -152,18 +152,18 @@ export async function changeMasterDialog(): Promise<void> {
       h(
         'div',
         { class: 'row end' },
-        h('button', { type: 'button', class: 'btn', onclick: () => close(false) }, 'Отмена'),
-        h('button', { type: 'submit', class: 'btn primary', 'data-testid': 'cm-ok' }, 'Изменить'),
+        h('button', { type: 'button', class: 'btn', onclick: () => close(false) }, 'Cancel'),
+        h('button', { type: 'submit', class: 'btn primary', 'data-testid': 'cm-ok' }, 'Edit'),
       ),
     );
   });
 }
 
 const AUTO_MODES: Array<[string, string]> = [
-  ['auto', 'Автоматически (askpass для ssh 8.4+, иначе осторожный ввод в терминал)'],
-  ['askpass', 'Только askpass (SSH_ASKPASS)'],
-  ['expect', 'Только осторожный ввод в терминал (для старых ssh)'],
-  ['off', 'Не подставлять пароль автоматически'],
+  ['auto', 'Automatic (askpass for ssh 8.4+, otherwise careful typing into the terminal)'],
+  ['askpass', 'Only askpass (SSH_ASKPASS)'],
+  ['expect', 'Only careful typing into the terminal (for old ssh)'],
+  ['off', 'Do not fill in the password automatically'],
 ];
 
 /** Settings: ssh location and password mode, terminal appearance and behaviour. */
@@ -179,13 +179,13 @@ export async function settingsDialog(): Promise<void> {
   const text = (id: string, v: string) => h('input', { id, type: 'text', value: v, 'data-testid': id, spellcheck: 'false' }) as HTMLInputElement;
 
   const sshPath = text('set-ssh-path', cur.ssh_path);
-  sshPath.placeholder = 'пусто — искать автоматически';
+  sshPath.placeholder = 'empty: detect automatically';
   const mode = sel('set-auto', AUTO_MODES, cur.auto_password);
   const scheme = sel('set-scheme', SCHEMES.map((s) => [s.id, s.name] as [string, string]), cur.scheme);
-  const cursor = sel('set-cursor', [['bar', 'Черта'], ['block', 'Блок'], ['underline', 'Подчёркивание']], cur.cursor_style);
-  const rclick = sel('set-rclick', [['copy-paste', 'Копировать выделенное / вставить'], ['menu', 'Контекстное меню браузера']], cur.right_click);
-  const wheel = sel('set-wheel', [['arrows', 'Стрелки вверх/вниз (btop, htop, mc)'], ['mouse', 'События мыши (tmux, vim с mouse)']], cur.wheel_mode);
-  const cloneMode = sel('set-clone', [['ask', 'Показать команды и спросить'], ['auto', 'Сразу повторить папку, окружение и программу'], ['view', 'Только вывод, без команд']], cur.clone_mode);
+  const cursor = sel('set-cursor', [['bar', 'Bar'], ['block', 'Block'], ['underline', 'Underline']], cur.cursor_style);
+  const rclick = sel('set-rclick', [['copy-paste', 'Copy the selection / paste'], ['menu', 'Browser context menu']], cur.right_click);
+  const wheel = sel('set-wheel', [['arrows', 'Up/down arrows (btop, htop, mc)'], ['mouse', 'Mouse events (tmux, vim with mouse)']], cur.wheel_mode);
+  const cloneMode = sel('set-clone', [['ask', 'Show the commands and ask'], ['auto', 'Repeat the folder, environment and program at once'], ['view', 'Output only, no commands']], cur.clone_mode);
   const size = num('set-font-size', cur.font_size);
   const scroll = num('set-scrollback', cur.scrollback);
   const family = text('set-font', cur.font_family);
@@ -201,8 +201,8 @@ export async function settingsDialog(): Promise<void> {
   const err = h('div', { class: 'error', 'data-testid': 'settings-error' });
 
   const sshLine = info.found
-    ? `Найден: ${info.path}\n${info.version}\nАвтопароль: ${info.mode === 'askpass' ? 'askpass (SSH_ASKPASS)' : info.mode === 'expect' ? 'осторожный ввод в терминал' : 'выключен'}`
-    : `ssh не найден: ${info.error ?? ''}`;
+    ? `Found: ${info.path}\n${info.version}\nAuto password: ${info.mode === 'askpass' ? 'askpass (SSH_ASKPASS)' : info.mode === 'expect' ? 'careful typing into the terminal' : 'off'}`
+    : `ssh not found: ${info.error ?? ''}`;
 
   await modal<boolean>((close) =>
     h(
@@ -237,27 +237,27 @@ export async function settingsDialog(): Promise<void> {
           }
         },
       },
-      h('h3', {}, 'Настройки'),
-      h('h4', {}, 'Системный ssh'),
+      h('h3', {}, 'Settings'),
+      h('h4', {}, 'System ssh'),
       h('pre', { class: 'detail', style: 'display:block', 'data-testid': 'ssh-info' }, sshLine),
-      field('Путь к ssh (ssh.exe в Windows)', sshPath),
-      field('Автоподстановка пароля', mode),
-      h('h4', {}, 'Терминал'),
-      h('div', { class: 'row' }, field('Цветовая схема', scheme), field('Курсор', cursor)),
-      h('div', { class: 'row' }, field('Размер шрифта', size), field('Строк прокрутки', scroll)),
-      field('Шрифт', family),
-      field('Правая кнопка мыши', rclick),
-      field('Колесо в полноэкранных программах', wheel),
-      field('Дублирование терминала (Ctrl+Shift+D)', cloneMode),
-      h('h4', {}, 'Передачи и редактор'),
-      h('div', { class: 'row' }, field('Параллельных передач', parallel), field('Лимит перетаскивания наружу, МБ', dragLimit)),
-      h('div', { class: 'row' }, field('Лимит файла в редакторе, МБ', editLimit), field('Автоблокировка, минут (0 — выкл.)', autoLock)),
-      h('label', { class: 'check' }, keepMtime, ' Сохранять время изменения файлов при передаче'),
-      h('h4', {}, 'Монитор сервера'),
-      h('label', { class: 'check' }, monOn, ' Показывать загрузку сервера под терминалом (читает /proc по SFTP, команды не выполняются)'),
-      field('Интервал обновления, мс (от 100)', monInterval),
+      field('Path to ssh (ssh.exe on Windows)', sshPath),
+      field('Fill in the password automatically', mode),
+      h('h4', {}, 'Terminal'),
+      h('div', { class: 'row' }, field('Colour scheme', scheme), field('Cursor', cursor)),
+      h('div', { class: 'row' }, field('Font size', size), field('Scrollback lines', scroll)),
+      field('Font', family),
+      field('Right mouse button', rclick),
+      field('Wheel in full-screen programs', wheel),
+      field('Duplicate terminal (Ctrl+Shift+D)', cloneMode),
+      h('h4', {}, 'Transfers and editor'),
+      h('div', { class: 'row' }, field('Parallel transfers', parallel), field('Drag-out limit, MB', dragLimit)),
+      h('div', { class: 'row' }, field('File size limit in the editor, MB', editLimit), field('Auto-lock, minutes (0 = off)', autoLock)),
+      h('label', { class: 'check' }, keepMtime, ' Keep the modification time of files on transfer'),
+      h('h4', {}, 'Server monitor'),
+      h('label', { class: 'check' }, monOn, ' Show server load under the terminal (reads /proc over SFTP, no commands are run)'),
+      field('Refresh interval, ms (from 100)', monInterval),
       err,
-      h('div', { class: 'row end' }, h('button', { type: 'button', class: 'left-auto', onclick: () => void aboutDialog(), 'data-testid': 'open-about' }, 'О программе'), h('button', { type: 'button', onclick: () => close(false), 'data-testid': 'settings-cancel' }, 'Отмена'), h('button', { type: 'submit', class: 'primary', 'data-testid': 'settings-save' }, 'Сохранить')),
+      h('div', { class: 'row end' }, h('button', { type: 'button', class: 'left-auto', onclick: () => void aboutDialog(), 'data-testid': 'open-about' }, 'About'), h('button', { type: 'button', onclick: () => close(false), 'data-testid': 'settings-cancel' }, 'Cancel'), h('button', { type: 'submit', class: 'primary', 'data-testid': 'settings-save' }, 'Save')),
     ),
   );
 }

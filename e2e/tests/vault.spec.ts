@@ -14,37 +14,37 @@ test.beforeAll(() => {
 test.afterAll(() => rmSync(dir, { recursive: true, force: true }));
 test.afterEach(async () => bridge?.stop());
 
-test('создание мастер-пароля, сервер, перезапуск и разблокировка', async ({ page }) => {
+test('creating the master password, server, restart and unlock', async ({ page }) => {
   bridge = await startBridge(dir);
   await page.goto(bridge.url);
 
-  // создание: пароли должны совпадать и быть не короче 8 символов
+  // creating: the passwords must match and be at least 8 characters
   await page.getByTestId('master1').fill(MASTER);
-  await page.getByTestId('master2').fill('другой пароль');
+  await page.getByTestId('master2').fill('another password');
   await page.getByTestId('create').click();
-  await expect(page.getByTestId('error')).toContainText('не совпадают');
+  await expect(page.getByTestId('error')).toContainText('do not match');
   await page.getByTestId('master2').fill(MASTER);
   await page.getByTestId('create').click();
-  await expect(page.getByTestId('server-list')).toContainText('Сессий пока нет');
+  await expect(page.getByTestId('server-list')).toContainText('No sessions yet');
   await page.screenshot({ path: 'screenshots/01-empty-list.png' });
 
-  // добавление сервера
+  // adding a server
   await page.getByTestId('add').click();
-  await page.getByTestId('f-name').fill('Прод сервер');
+  await page.getByTestId('f-name').fill('Prod server');
   await page.getByTestId('f-host').fill('-oProxyCommand=evil');
   await page.getByTestId('f-user').fill('root');
   await page.getByTestId('form-save').click();
-  await expect(page.getByTestId('form-error')).toContainText('Некорректный адрес'); // защита от инъекции опций
+  await expect(page.getByTestId('form-error')).toContainText('Invalid server address'); // protection against option injection
   await page.getByTestId('f-host').fill('203.0.113.10');
   await page.getByTestId('f-port').fill('2200');
   await page.getByTestId('f-password').fill('S3cret-пароль');
   await page.screenshot({ path: 'screenshots/02-server-form.png' });
   await page.getByTestId('form-save').click();
   const item = page.getByTestId('server-item');
-  await expect(item).toContainText('Прод сервер');
+  await expect(item).toContainText('Prod server');
   await expect(item).toContainText('root@203.0.113.10:2200');
 
-  // пароль виден только по «глазу» и совпадает с введённым
+  // the password is visible only via the eye and matches what was typed
   await item.hover();
   await item.getByTestId('edit').click();
   await expect(page.getByTestId('f-password')).toHaveAttribute('type', 'password');
@@ -52,30 +52,30 @@ test('создание мастер-пароля, сервер, перезапу
   await expect(page.getByTestId('f-password')).toHaveValue('S3cret-пароль');
   await page.getByTestId('form-cancel').click();
 
-  // поиск
-  await page.getByTestId('search').fill('нет-такого');
-  await expect(page.getByTestId('server-list')).toContainText('Ничего не найдено');
+  // search
+  await page.getByTestId('search').fill('nonexistent');
+  await expect(page.getByTestId('server-list')).toContainText('Nothing found');
   await page.getByTestId('search').fill('203.0.113');
   await expect(page.getByTestId('server-item')).toHaveCount(1);
 
-  // файл хранилища не содержит открытого текста
+  // the vault file contains no plain text
   const raw = readFileSync(join(dir, 'vault.bin'));
   expect(raw.includes('S3cret')).toBe(false);
   expect(raw.includes('203.0.113.10')).toBe(false);
 
-  // перезапуск: разблокировка
+  // restart: unlock
   await bridge.stop();
   bridge = await startBridge(dir);
   await page.goto(bridge.url);
-  await page.getByTestId('master').fill('неверный пароль');
+  await page.getByTestId('master').fill('wrong password');
   await page.getByTestId('unlock').click();
-  await expect(page.getByTestId('error')).toContainText('Неверный мастер-пароль');
+  await expect(page.getByTestId('error')).toContainText('Wrong master password');
   await page.screenshot({ path: 'screenshots/03-unlock-error.png' });
   await page.getByTestId('master').fill(MASTER);
   await page.getByTestId('unlock').click();
-  await expect(page.getByTestId('server-item')).toContainText('Прод сервер');
+  await expect(page.getByTestId('server-item')).toContainText('Prod server');
 
-  // дублирование и удаление с подтверждением
+  // duplication and deletion with confirmation
   await page.getByTestId('server-item').first().hover();
   await page.getByTestId('dup').first().click();
   await expect(page.getByTestId('server-item')).toHaveCount(2);
@@ -89,33 +89,33 @@ test('создание мастер-пароля, сервер, перезапу
   await expect(page.getByTestId('server-item')).toHaveCount(1);
   await page.screenshot({ path: 'screenshots/04-main.png' });
 
-  // смена мастер-пароля
+  // changing the master password
   await page.getByTestId('change-master').click();
-  await page.getByTestId('cm-old').fill('не тот');
+  await page.getByTestId('cm-old').fill('wrong');
   await page.getByTestId('cm-new1').fill('new master password');
   await page.getByTestId('cm-new2').fill('new master password');
   await page.getByTestId('cm-ok').click();
-  await expect(page.getByTestId('cm-error')).toContainText('Неверный мастер-пароль');
+  await expect(page.getByTestId('cm-error')).toContainText('Wrong master password');
   await page.getByTestId('cm-old').fill(MASTER);
   await page.getByTestId('cm-ok').click();
   await page.getByTestId('lock').click();
   await page.getByTestId('master').fill(MASTER);
   await page.getByTestId('unlock').click();
-  await expect(page.getByTestId('error')).toContainText('Неверный мастер-пароль');
+  await expect(page.getByTestId('error')).toContainText('Wrong master password');
   await page.getByTestId('master').fill('new master password');
   await page.getByTestId('unlock').click();
   await expect(page.getByTestId('server-item')).toHaveCount(1);
 });
 
-test('повреждённый vault.bin: восстановление из .bak', async ({ page }) => {
-  expect(existsSync(join(dir, 'vault.bin.bak'))).toBe(true); // создан предыдущими сохранениями
+test('corrupted vault.bin: restore from .bak', async ({ page }) => {
+  expect(existsSync(join(dir, 'vault.bin.bak'))).toBe(true); // created by the previous saves
   writeFileSync(join(dir, 'vault.bin'), 'garbage');
   bridge = await startBridge(dir);
   await page.goto(bridge.url);
-  // .bak хранит версию до смены мастер-пароля, поэтому подходит старый пароль
+  // .bak keeps the version before the master password change, so the old password works
   await page.getByTestId('master').fill(MASTER);
   await page.getByTestId('unlock').click();
-  await expect(page.getByTestId('error')).toContainText('повреждён');
+  await expect(page.getByTestId('error')).toContainText('damaged');
   await page.screenshot({ path: 'screenshots/05-corrupt.png' });
   await page.getByTestId('restore').click();
   await expect(page.getByTestId('server-list')).toBeVisible();

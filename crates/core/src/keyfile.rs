@@ -29,29 +29,29 @@ pub fn looks_like_ppk(head: &str) -> bool {
 pub fn check(path: &str) -> Result<PathBuf, String> {
     let p = expand_home(path);
     if path.trim().is_empty() {
-        return Err("Не указан файл приватного ключа.".into());
+        return Err("No private key file specified.".into());
     }
     if !p.is_file() {
-        return Err(format!("Файл приватного ключа не найден: {}", p.display()));
+        return Err(format!("Private key file not found: {}", p.display()));
     }
     let mut head = String::new();
     {
         use std::io::Read;
         let mut f = std::fs::File::open(&p)
-            .map_err(|e| format!("Не удалось прочитать ключ {}: {e}", p.display()))?;
+            .map_err(|e| format!("Could not read the key {}: {e}", p.display()))?;
         let mut buf = [0u8; 64];
         let n = f.read(&mut buf).unwrap_or(0);
         head.push_str(&String::from_utf8_lossy(&buf[..n]));
     }
     if looks_like_ppk(&head) {
         return Err(format!(
-            "Файл {} в формате PuTTY (.ppk): он не поддерживается. Преобразуйте его в формат OpenSSH (PuTTYgen: Conversions → Export OpenSSH key, или `puttygen key.ppk -O private-openssh -o key`).",
+            "File {} is in PuTTY format (.ppk): it is not supported. Convert it to OpenSSH format (PuTTYgen: Conversions → Export OpenSSH key, or `puttygen key.ppk -O private-openssh -o key`).",
             p.display()
         ));
     }
     if head.contains("PUBLIC KEY") || head.starts_with("ssh-") || head.starts_with("ecdsa-") {
         return Err(format!(
-            "{} — это открытый ключ (.pub). Нужен файл ПРИВАТНОГО ключа.",
+            "{} is a public key (.pub). A PRIVATE key file is needed.",
             p.display()
         ));
     }
@@ -83,14 +83,14 @@ mod tests {
         };
         assert!(check(&d.join("missing").to_string_lossy())
             .unwrap_err()
-            .contains("не найден"));
-        assert!(check("").unwrap_err().contains("Не указан"));
+            .contains("not found"));
+        assert!(check("").unwrap_err().contains("specified"));
         assert!(check(&w("a.ppk", "PuTTY-User-Key-File-3: ssh-ed25519\n"))
             .unwrap_err()
             .contains(".ppk"));
         assert!(check(&w("a.pub", "ssh-ed25519 AAAA user@h\n"))
             .unwrap_err()
-            .contains("открытый"));
+            .contains("public"));
         assert!(check(&w("ok", "-----BEGIN OPENSSH PRIVATE KEY-----\nx\n")).is_ok());
         std::fs::remove_dir_all(d).unwrap();
     }

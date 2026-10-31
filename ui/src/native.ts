@@ -12,7 +12,7 @@ async function pick(kind: 'files' | 'folder'): Promise<string[]> {
     if (!r) return [];
     return Array.isArray(r) ? r : [r];
   }
-  const t = await promptDialog(kind === 'files' ? 'Загрузить файлы' : 'Выберите папку', kind === 'files' ? 'Локальные пути (через |)' : 'Локальная папка', '', 'OK');
+  const t = await promptDialog(kind === 'files' ? 'Upload files' : 'Choose a folder', kind === 'files' ? 'Local paths (separated by |)' : 'Local folder', '', 'OK');
   return t ? t.split(/\r?\n|\|/).map((s) => s.trim()).filter(Boolean) : [];
 }
 
@@ -20,7 +20,7 @@ export const native: Native = {
   isTauri: inTauri,
   pick,
   async dragOut(paths) {
-    if (!inTauri) throw new Error('Перетаскивание наружу работает только в приложении.');
+    if (!inTauri) throw new Error('Dragging out only works in the app.');
     await invoke('drag_out', { paths });
   },
   async onFileDrop(h) {

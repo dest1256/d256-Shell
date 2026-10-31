@@ -21,7 +21,7 @@ async function open(page: Page): Promise<string> {
   await connectFirst(page);
   await acceptHostKey(page);
   await expect(page.getByTestId('path-input')).toHaveValue('/home/tester');
-  // рабочая папка на сервере
+  // working folder on the server
   const work = `e2e-x-${Date.now()}`;
   await page.getByTestId('new-folder').click();
   await page.getByTestId('prompt-input').fill(work);
@@ -37,13 +37,13 @@ const prompt = async (page: Page, text: string) => {
   await page.getByTestId('prompt-ok').click();
 };
 
-test('загрузка и скачивание: диалог выбора (мок), очередь передач, конфликты', async ({ page }) => {
+test('upload and download: picker dialog (mock), transfer queue, conflicts', async ({ page }) => {
   const work = await open(page);
   const dir = mkdtempSync(join(tmpdir(), 'd256shell-xfer-'));
   writeFileSync(join(dir, 'отчёт 1.txt'), 'привет\nмир\n');
   writeFileSync(join(dir, 'b.bin'), Buffer.alloc(300_000, 7));
 
-  // загрузить два файла
+  // upload two files
   await page.getByTestId('upload').click();
   await prompt(page, `${join(dir, 'отчёт 1.txt')}|${join(dir, 'b.bin')}`);
   await expect(row(page, 'отчёт 1.txt')).toBeVisible();
@@ -52,27 +52,27 @@ test('загрузка и скачивание: диалог выбора (мо�
   expect((await serverFile(bridge.url, `${work}/отчёт 1.txt`)).text).toBe('привет\nмир\n');
   await page.screenshot({ path: 'screenshots/51-transfers.png' });
 
-  // тот же файл ещё раз: вопрос, «Оставить оба» → «отчёт 1 (1).txt»
+  // the same file again: a question, “Keep both” → “report 1 (1).txt”
   await page.getByTestId('upload').click();
   await prompt(page, join(dir, 'отчёт 1.txt'));
   await expect(page.getByTestId('conflict-dialog')).toBeVisible();
   await page.getByTestId('conflict-rename').click();
   await expect(row(page, 'отчёт 1 (1).txt')).toBeVisible();
 
-  // «Пропустить» ничего не меняет
-  writeFileSync(join(dir, 'отчёт 1.txt'), 'другое');
+  // Skip changes nothing
+  writeFileSync(join(dir, 'отчёт 1.txt'), 'other');
   await page.getByTestId('upload').click();
   await prompt(page, join(dir, 'отчёт 1.txt'));
   await page.getByTestId('conflict-skip').click();
   expect((await serverFile(bridge.url, `${work}/отчёт 1.txt`)).text).toBe('привет\nмир\n');
 
-  // «Заменить»
+  // Replace
   await page.getByTestId('upload').click();
   await prompt(page, join(dir, 'отчёт 1.txt'));
   await page.getByTestId('conflict-replace').click();
-  await expect.poll(async () => (await serverFile(bridge.url, `${work}/отчёт 1.txt`)).text).toBe('другое');
+  await expect.poll(async () => (await serverFile(bridge.url, `${work}/отчёт 1.txt`)).text).toBe('other');
 
-  // скачать
+  // download
   const out = join(dir, 'out');
   mkdirSync(out);
   await row(page, 'b.bin').click();
@@ -81,23 +81,23 @@ test('загрузка и скачивание: диалог выбора (мо�
   await expect.poll(() => existsSync(join(out, 'b.bin'))).toBe(true);
   expect(readFileSync(join(out, 'b.bin')).equals(Buffer.alloc(300_000, 7))).toBe(true);
   expect(readdirSync(out).filter((n) => n.includes('.d256shell-'))).toEqual([]);
-  // повторное скачивание: конфликт, пропуск
+  // downloading again: conflict, skip
   await page.getByTestId('download').click();
   await prompt(page, out);
   await page.getByTestId('conflict-skip').click();
 
-  // папка вверх и обратно
-  const tree = join(dir, 'проект');
+  // folder up and back
+  const tree = join(dir, 'project');
   mkdirSync(join(tree, 'sub'), { recursive: true });
   writeFileSync(join(tree, 'sub', 'f.txt'), 'x');
   await page.getByTestId('upload').click();
   await prompt(page, tree);
-  await expect(row(page, 'проект')).toBeVisible();
-  await row(page, 'проект').dblclick();
+  await expect(row(page, 'project')).toBeVisible();
+  await row(page, 'project').dblclick();
   await expect(row(page, 'sub')).toBeVisible();
 });
 
-test('редактор: открыть, изменить, Ctrl+S, конфликт с различиями, CRLF, закрытие с несохранённым', async ({ page }) => {
+test('editor: open, change, Ctrl+S, conflict with differences, CRLF, closing with unsaved changes', async ({ page }) => {
   const work = await open(page);
   const dir = mkdtempSync(join(tmpdir(), 'd256shell-ed-'));
   writeFileSync(join(dir, 'win.txt'), 'one\r\ntwo\r\n');
@@ -107,7 +107,7 @@ test('редактор: открыть, изменить, Ctrl+S, конфлик
   await prompt(page, [join(dir, 'win.txt'), join(dir, 'a.conf'), join(dir, 'blob.bin')].join('|'));
   await expect(row(page, 'blob.bin')).toBeVisible();
 
-  // CRLF сохраняется
+  // CRLF is kept
   await row(page, 'win.txt').dblclick();
   await expect(page.getByTestId('editor')).toBeVisible();
   await expect(page.getByTestId('ed-info')).toContainText('CRLF');
@@ -116,14 +116,14 @@ test('редактор: открыть, изменить, Ctrl+S, конфлик
   await page.keyboard.type('three');
   await expect(page.getByTestId('dirty-dot')).toBeVisible();
   await page.keyboard.press('Control+s');
-  await expect(page.getByTestId('ed-status')).toHaveText('Сохранено');
+  await expect(page.getByTestId('ed-status')).toHaveText('Saved');
   await expect(page.getByTestId('dirty-dot')).toHaveCount(0);
   const saved = await serverFile(bridge.url, `${work}/win.txt`);
   expect(saved.eol).toBe('crlf');
   expect(saved.text).toBe('one\ntwo\nthree');
   await page.screenshot({ path: 'screenshots/52-editor.png' });
 
-  // конфликт: файл изменён «снаружи»
+  // conflict: the file was changed from outside
   await page.keyboard.type(' mine');
   await serverFile(bridge.url, `${work}/win.txt`, 'one\ntwo\nEXTERNAL');
   await page.keyboard.press('Control+s');
@@ -135,10 +135,10 @@ test('редактор: открыть, изменить, Ctrl+S, конфлик
   expect((await serverFile(bridge.url, `${work}/win.txt`)).text).toBe('one\ntwo\nEXTERNAL');
   await page.keyboard.press('Control+s');
   await page.getByTestId('cs-force').click();
-  await expect(page.getByTestId('ed-status')).toHaveText('Сохранено');
+  await expect(page.getByTestId('ed-status')).toHaveText('Saved');
   expect((await serverFile(bridge.url, `${work}/win.txt`)).text).toBe('one\ntwo\nthree mine');
 
-  // несохранённые изменения: закрытие вкладки спрашивает
+  // unsaved changes: closing the tab asks first
   await page.keyboard.type('!');
   await page.getByTestId(`pane-close-f:${work}/win.txt`).click();
   await expect(page.getByTestId('confirm')).toBeVisible();
@@ -148,17 +148,17 @@ test('редактор: открыть, изменить, Ctrl+S, конфлик
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('editor')).toHaveCount(0);
 
-  // два файла рядом; бинарник не открывается
+  // two files side by side; the binary does not open
   await row(page, 'a.conf').dblclick();
   await expect(page.getByTestId('editor')).toBeVisible();
   await page.getByTestId('pane-term').click();
   await row(page, 'blob.bin').dblclick();
-  await expect(page.getByTestId('confirm')).toContainText('бинарный');
+  await expect(page.getByTestId('confirm')).toContainText('binary');
   await page.getByTestId('confirm-cancel').click();
   await expect(page.getByTestId('editor')).toHaveCount(1);
 });
 
-test('перетаскивание внутри панели: перенос в папку с подтверждением, удаление с подсчётом', async ({ page }) => {
+test('drag inside the panel: move into a folder with confirmation, delete with a count', async ({ page }) => {
   const work = await open(page);
   const mk = async (kind: 'new-folder' | 'new-file', name: string) => {
     await page.getByTestId(kind).click();
@@ -184,7 +184,7 @@ test('перетаскивание внутри панели: перенос в 
   await drag();
   await expect(page.getByTestId('move-confirm')).toContainText(`${work}/target`);
   await page.getByTestId('move-cancel').click();
-  await expect(row(page, 'src')).toBeVisible(); // отмена: ничего не перемещено
+  await expect(row(page, 'src')).toBeVisible(); // cancel: nothing was moved
 
   await drag();
   await page.getByTestId('move-ok').click();
@@ -193,10 +193,10 @@ test('перетаскивание внутри панели: перенос в 
   await expect(row(page, 'src')).toBeVisible();
   await page.getByTestId('up').click();
 
-  // удаление: подтверждение с числом объектов
+  // delete: confirmation with the number of objects
   await row(page, 'target').click();
   await page.keyboard.press('Delete');
-  await expect(page.getByTestId('confirm')).toContainText('3 папок');
+  await expect(page.getByTestId('confirm')).toContainText('3 folders');
   await page.getByTestId('confirm-ok').click();
   await expect(row(page, 'target')).toHaveCount(0);
 });

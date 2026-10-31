@@ -125,20 +125,23 @@ fn norm(s: Option<String>) -> Option<String> {
 fn validate_target(host: &str, username: &str, port: u16) -> Result<(), ApiError> {
     let bad = |c: char| c.is_whitespace() || c.is_control();
     if host.is_empty() || host.starts_with('-') || host.contains(bad) || host.contains('@') {
-        return Err(ApiError::new("invalid", "Некорректный адрес сервера."));
+        return Err(ApiError::new("invalid", "Invalid server address."));
     }
     if username.is_empty() || username.starts_with('-') || username.contains(bad) {
-        return Err(ApiError::new("invalid", "Некорректное имя пользователя."));
+        return Err(ApiError::new("invalid", "Invalid user name."));
     }
     if port == 0 {
-        return Err(ApiError::new("invalid", "Порт должен быть от 1 до 65535."));
+        return Err(ApiError::new(
+            "invalid",
+            "The port must be from 1 to 65535.",
+        ));
     }
     Ok(())
 }
 
 fn validate(i: &ServerInput) -> Result<(), ApiError> {
     if i.name.trim().is_empty() {
-        return Err(ApiError::new("invalid", "Укажите название сервера."));
+        return Err(ApiError::new("invalid", "Specify the server name."));
     }
     validate_target(&i.host, &i.username, i.port)
 }
@@ -181,9 +184,9 @@ impl Service {
             ApiError::new(
                 "ssh_not_found",
                 if cfg!(windows) {
-                    "Не найден ssh.exe. Установите OpenSSH-клиент Windows или укажите путь в настройках (или положите портативный OpenSSH в папку data\\OpenSSH)."
+                    "ssh.exe not found. Install the Windows OpenSSH client or set the path in Settings (or put a portable OpenSSH in the data folder\\OpenSSH)."
                 } else {
-                    "Не найден ssh. Установите клиент OpenSSH (Ubuntu: sudo apt install openssh-client; Arch: sudo pacman -S openssh) или укажите путь в настройках."
+                    "ssh not found. Install the OpenSSH client (Ubuntu: sudo apt install openssh-client; Arch: sudo pacman -S openssh) or set the path in Settings."
                 },
             )
         })?;
@@ -229,7 +232,7 @@ impl Service {
         let sid = params
             .get("session_id")
             .and_then(Value::as_str)
-            .ok_or_else(|| ApiError::new("invalid", "Нет параметра session_id"))?;
+            .ok_or_else(|| ApiError::new("invalid", "Missing parameter session_id"))?;
         let dim = |k: &str, d: u64| {
             params
                 .get(k)
@@ -270,10 +273,10 @@ impl Service {
             }
         }
         let new: Settings = serde_json::from_value(cur)
-            .map_err(|e| ApiError::new("invalid", format!("Неверные настройки: {e}")))?;
+            .map_err(|e| ApiError::new("invalid", format!("Invalid settings: {e}")))?;
         let new = new.sanitized();
         new.save(&self.dirs.settings())
-            .map_err(|e| ApiError::new("io", format!("Не удалось сохранить настройки: {e}")))?;
+            .map_err(|e| ApiError::new("io", format!("Could not save the settings: {e}")))?;
         self.hub
             .transfers
             .set_parallel(new.parallel_transfers as usize);
@@ -305,8 +308,9 @@ impl Service {
 
     pub fn call(&self, method: &str, params: Value) -> Result<Value, ApiError> {
         let p = |k: &str| params.get(k).and_then(Value::as_str).map(str::to_owned);
-        let need =
-            |k: &str| p(k).ok_or_else(|| ApiError::new("invalid", format!("Нет параметра {k}")));
+        let need = |k: &str| {
+            p(k).ok_or_else(|| ApiError::new("invalid", format!("Missing parameter {k}")))
+        };
         match method {
             "status" => Ok(self.status()),
             "create_vault" => {
@@ -314,7 +318,7 @@ impl Service {
                 if master.chars().count() < 8 {
                     return Err(ApiError::new(
                         "invalid",
-                        "Мастер-пароль должен быть не короче 8 символов.",
+                        "The master password must be at least 8 characters long.",
                     ));
                 }
                 let v = Vault::create(&self.dirs.vault(), &master, self.kdf)?;
@@ -340,7 +344,7 @@ impl Service {
                 if new.chars().count() < 8 {
                     return Err(ApiError::new(
                         "invalid",
-                        "Мастер-пароль должен быть не короче 8 символов.",
+                        "The master password must be at least 8 characters long.",
                     ));
                 }
                 Vault::unlock(&self.dirs.vault(), &old)?; // verify the old password against the file
@@ -426,7 +430,7 @@ impl Service {
                     };
                     let mut copy = src.clone();
                     copy.id = id_new.clone();
-                    copy.name = format!("{} (копия)", src.name);
+                    copy.name = format!("{} (copy)", src.name);
                     copy.created = now();
                     copy.updated = copy.created;
                     v.data.servers.push(copy);
@@ -459,7 +463,7 @@ impl Service {
             }
             "term_write" => {
                 let data = Base64::decode_vec(&need("data_b64")?)
-                    .map_err(|_| ApiError::new("invalid", "Некорректные данные ввода."))?;
+                    .map_err(|_| ApiError::new("invalid", "Invalid input data."))?;
                 self.hub.term_write(&need("term_id")?, &data)?;
                 Ok(json!({}))
             }
@@ -495,7 +499,7 @@ impl Service {
                 let id = params
                     .get("id")
                     .and_then(Value::as_u64)
-                    .ok_or_else(|| ApiError::new("invalid", "Нет параметра id"))?;
+                    .ok_or_else(|| ApiError::new("invalid", "Missing parameter id"))?;
                 self.hub.answer_prompt(
                     id,
                     params.get("accept").and_then(Value::as_bool),
@@ -533,7 +537,7 @@ impl Service {
             }
             _ => Err(ApiError::new(
                 "unknown_method",
-                format!("Неизвестный метод: {method}"),
+                format!("Unknown method: {method}"),
             )),
         }
     }
@@ -542,8 +546,9 @@ impl Service {
     fn edit_call(&self, method: &str, p: &Value) -> Result<Value, ApiError> {
         use crate::sftp::edit::{Base, Eol};
         let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_owned);
-        let need =
-            |k: &str| s(k).ok_or_else(|| ApiError::new("invalid", format!("Нет параметра {k}")));
+        let need = |k: &str| {
+            s(k).ok_or_else(|| ApiError::new("invalid", format!("Missing parameter {k}")))
+        };
         let flag = |k: &str| p.get(k).and_then(Value::as_bool).unwrap_or(false);
         let limit = u64::from(self.settings_snapshot().editor_limit_mb);
         match method {
@@ -576,7 +581,7 @@ impl Service {
             }
             _ => Err(ApiError::new(
                 "unknown_method",
-                format!("Неизвестный метод: {method}"),
+                format!("Unknown method: {method}"),
             )),
         }
     }
@@ -585,12 +590,13 @@ impl Service {
         use crate::sftp::xfer::Action;
         use crate::transfers::{Item, JobParams, Kind};
         let s = |k: &str| p.get(k).and_then(Value::as_str).map(str::to_owned);
-        let need =
-            |k: &str| s(k).ok_or_else(|| ApiError::new("invalid", format!("Нет параметра {k}")));
+        let need = |k: &str| {
+            s(k).ok_or_else(|| ApiError::new("invalid", format!("Missing parameter {k}")))
+        };
         let kind = |v: &str| match v {
             "upload" => Ok(Kind::Upload),
             "download" => Ok(Kind::Download),
-            _ => Err(ApiError::new("invalid", "Неизвестный вид передачи.")),
+            _ => Err(ApiError::new("invalid", "Unknown transfer kind.")),
         };
         match method {
             "transfer_plan" => {
@@ -612,7 +618,7 @@ impl Service {
                 let items = p
                     .get("items")
                     .and_then(Value::as_array)
-                    .ok_or_else(|| ApiError::new("invalid", "Нет параметра items"))?
+                    .ok_or_else(|| ApiError::new("invalid", "Missing parameter items"))?
                     .iter()
                     .map(|i| {
                         let path = i
@@ -630,7 +636,7 @@ impl Service {
                     })
                     .collect::<Vec<_>>();
                 if items.is_empty() || items.iter().any(|i| i.path.is_empty()) {
-                    return Err(ApiError::new("invalid", "Нечего передавать."));
+                    return Err(ApiError::new("invalid", "Nothing to transfer."));
                 }
                 let stage = p.get("stage").and_then(Value::as_bool).unwrap_or(false);
                 let (dest, max_bytes) = if stage {
@@ -680,7 +686,7 @@ impl Service {
                     .hub
                     .transfers
                     .retry_params(&need("id")?, risk)
-                    .ok_or_else(|| ApiError::new("invalid", "Эту передачу нельзя повторить."))?;
+                    .ok_or_else(|| ApiError::new("invalid", "This transfer cannot be retried."))?;
                 // after a reconnect the transfer must go through the live session
                 if let Some(s) = p.get("session_id").and_then(Value::as_str) {
                     params.session_id = s.to_string();
@@ -708,7 +714,7 @@ impl Service {
             }
             _ => Err(ApiError::new(
                 "unknown_method",
-                format!("Неизвестный метод: {method}"),
+                format!("Unknown method: {method}"),
             )),
         }
     }
@@ -719,7 +725,7 @@ impl Service {
         let s = |k: &str| params.get(k).and_then(Value::as_str).map(str::to_owned);
         let flag = |k: &str| params.get(k).and_then(Value::as_bool).unwrap_or(false);
         let attempt =
-            s("attempt").ok_or_else(|| ApiError::new("invalid", "Нет параметра attempt"))?;
+            s("attempt").ok_or_else(|| ApiError::new("invalid", "Missing parameter attempt"))?;
         let server_id = s("server_id");
         let (name, host, port, user, saved, extra_args, saved_key, saved_key_pp) = match &server_id
         {
@@ -738,7 +744,7 @@ impl Service {
                         )
                     }))
                 })?
-                .ok_or_else(|| ApiError::new("not_found", "Сервер не найден."))?,
+                .ok_or_else(|| ApiError::new("not_found", "Server not found."))?,
             None => {
                 let host = s("host").unwrap_or_default();
                 let user = s("username").unwrap_or_default();
@@ -804,7 +810,7 @@ impl Service {
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, Option<Vault>>, ApiError> {
         self.vault
             .lock()
-            .map_err(|_| ApiError::new("internal", "Внутренняя ошибка (mutex)."))
+            .map_err(|_| ApiError::new("internal", "Internal error (mutex)."))
     }
 
     fn with_vault<T>(
@@ -814,7 +820,7 @@ impl Service {
         let mut g = self.lock()?;
         let v = g
             .as_mut()
-            .ok_or_else(|| ApiError::new("locked", "Хранилище заблокировано."))?;
+            .ok_or_else(|| ApiError::new("locked", "The vault is locked."))?;
         f(v).map_err(ApiError::from)
     }
 }

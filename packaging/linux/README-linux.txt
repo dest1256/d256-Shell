@@ -11,4 +11,4 @@ folder next to the program: copy the whole folder to move it.
 Installed from a package (deb / PKGBUILD): the program lives in /usr/bin and keeps its data in
 ~/.local/share/d256shell (or $XDG_DATA_HOME/d256shell). To use another folder: D256SHELL_DATA_DIR=/path d256shell
 
-Copyright (c) 2026 dest1256. All rights reserved (private software, see COPYRIGHT).
+Copyright (c) 2026 dest1256. Released under the MIT License, see LICENSE.

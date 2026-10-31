@@ -31,23 +31,6 @@ import { schemeById } from './schemes';
 import { getSettings } from './settings';
 import { gotoLine } from './editor-goto';
 
-const RU: Record<string, string> = {
-  Find: 'Найти',
-  Replace: 'Заменить',
-  next: 'далее',
-  previous: 'назад',
-  all: 'все',
-  'match case': 'с учётом регистра',
-  regexp: 'regexp',
-  'by word': 'слово целиком',
-  replace: 'заменить',
-  'replace all': 'заменить все',
-  close: 'закрыть',
-  'Go to line': 'Перейти к строке',
-  go: 'перейти',
-  'Replace with': 'Заменить на',
-};
-
 /** Language by file name / extension (sh, conf/ini, nginx, yaml, json, toml, xml/html, js/ts, py, php, sql, Dockerfile, md, systemd units...). */
 export function languageFor(path: string): Extension {
   const name = path.split('/').pop() ?? '';
@@ -133,7 +116,7 @@ export class EditorPane {
   private base: EditBase | null = null;
   private bom = false;
   private encoding = 'UTF-8';
-  private encButton = h('button', { class: 'tool-sm', 'data-testid': 'ed-enc', title: 'Кодировка файла: перечитать или сохранять в другой', onclick: () => void this.chooseEncoding() }, 'UTF-8');
+  private encButton = h('button', { class: 'tool-sm', 'data-testid': 'ed-enc', title: 'File encoding: reread, or save in another one', onclick: () => void this.chooseEncoding() }, 'UTF-8');
   private eol: 'lf' | 'crlf' | 'mixed' = 'lf';
   private chosenEol: 'lf' | 'crlf' | null = null;
   private isNew = false;
@@ -147,7 +130,7 @@ export class EditorPane {
     private hooks: EditorHooks,
   ) {
     const name = path.split('/').pop() ?? path;
-    const wrapBtn = h('button', { class: 'tool-sm', 'data-testid': 'ed-wrap', title: 'Перенос строк', onclick: () => this.toggleWrap(wrapBtn) }, 'Перенос');
+    const wrapBtn = h('button', { class: 'tool-sm', 'data-testid': 'ed-wrap', title: 'Wrap lines', onclick: () => this.toggleWrap(wrapBtn) }, 'Wrap');
     this.el = h(
       'div',
       { class: 'editor', 'data-testid': 'editor', 'data-path': path },
@@ -158,8 +141,8 @@ export class EditorPane {
         h('span', { class: 'ed-dir muted' }, path.slice(0, path.length - name.length)),
         h('span', { class: 'ed-spacer' }),
         wrapBtn,
-        h('button', { class: 'tool-sm', 'data-testid': 'ed-find', onclick: () => openSearchPanel(this.view), title: 'Поиск и замена (Ctrl+F / Ctrl+H)' }, icon('search', 13)),
-        h('button', { class: 'tool-sm primary', 'data-testid': 'ed-save', onclick: () => void this.save(), title: 'Сохранить на сервер (Ctrl+S)' }, 'Сохранить'),
+        h('button', { class: 'tool-sm', 'data-testid': 'ed-find', onclick: () => openSearchPanel(this.view), title: 'Find and replace (Ctrl+F / Ctrl+H)' }, icon('search', 13)),
+        h('button', { class: 'tool-sm primary', 'data-testid': 'ed-save', onclick: () => void this.save(), title: 'Save to the server (Ctrl+S)' }, 'Save'),
       ),
       h('div', { class: 'ed-host', 'data-testid': 'ed-host' }),
       h('div', { class: 'ed-statusbar' }, this.status, h('span', { class: 'ed-spacer' }), this.info, this.encButton),
@@ -175,9 +158,9 @@ export class EditorPane {
     this.view = new EditorView({ state, parent: host });
     this.savedDoc = state.doc;
     this.updateInfo();
-    this.status.textContent = isNew ? 'Новый файл: будет создан при первом сохранении' : '';
-    if (o.eol === 'mixed') this.status.textContent = 'В файле смешанные окончания строк: при сохранении вы выберете LF или CRLF.';
-    else if (o.guessed) this.status.textContent = `Кодировка определена автоматически: ${o.encoding}. Если текст неверный, выберите кодировку справа внизу.`;
+    this.status.textContent = isNew ? 'New file: it will be created on the first save' : '';
+    if (o.eol === 'mixed') this.status.textContent = 'The file has mixed line endings: when saving you will choose LF or CRLF.';
+    else if (o.guessed) this.status.textContent = `The encoding was detected automatically: ${o.encoding}. If the text is wrong, choose the encoding at the bottom right.`;
   }
 
   private apply(o: EditOpened): void {
@@ -203,7 +186,6 @@ export class EditorPane {
         bracketMatching(),
         highlightSelectionMatches(),
         search({ top: true }),
-        EditorState.phrases.of(RU),
         this.wrap.of([]),
         languageFor(this.path),
         themeExtensions(),
@@ -238,14 +220,14 @@ export class EditorPane {
     if (d === this.dirty) return;
     this.dirty = d;
     this.hooks.onDirty(d);
-    if (d) this.status.textContent = 'Изменён';
+    if (d) this.status.textContent = 'Modified';
   }
 
   private updateInfo(): void {
     const s = this.view.state;
     const line = s.doc.lineAt(s.selection.main.head);
-    const eol = this.eol === 'mixed' ? (this.chosenEol ?? 'смешанные').toString().toUpperCase() : this.eol.toUpperCase();
-    this.info.textContent = `Строка ${line.number}, столбец ${s.selection.main.head - line.from + 1} · ${this.encoding}${this.bom ? ' BOM' : ''} · ${eol}`;
+    const eol = this.eol === 'mixed' ? (this.chosenEol ?? 'mixed').toString().toUpperCase() : this.eol.toUpperCase();
+    this.info.textContent = `Line ${line.number}, column ${s.selection.main.head - line.from + 1} · ${this.encoding}${this.bom ? ' BOM' : ''} · ${eol}`;
   }
 
   text(): string {
@@ -259,9 +241,9 @@ export class EditorPane {
       h(
         'div',
         { role: 'dialog', 'data-testid': 'eol-dialog' },
-        h('h3', {}, 'Смешанные окончания строк'),
-        h('p', {}, 'В файле есть и LF, и CRLF. Все строки будут сохранены в одном стиле. Какой выбрать?'),
-        h('div', { class: 'row end' }, h('button', { onclick: () => close(null as never), 'data-testid': 'eol-cancel' }, 'Отмена'), h('button', { onclick: () => close('lf'), 'data-testid': 'eol-lf' }, 'LF (Linux)'), h('button', { class: 'primary', onclick: () => close('crlf'), 'data-testid': 'eol-crlf' }, 'CRLF (Windows)')),
+        h('h3', {}, 'Mixed line endings'),
+        h('p', {}, 'The file has both LF and CRLF. All lines will be saved in one style. Which one to choose?'),
+        h('div', { class: 'row end' }, h('button', { onclick: () => close(null as never), 'data-testid': 'eol-cancel' }, 'Cancel'), h('button', { onclick: () => close('lf'), 'data-testid': 'eol-lf' }, 'LF (Linux)'), h('button', { class: 'primary', onclick: () => close('crlf'), 'data-testid': 'eol-crlf' }, 'CRLF (Windows)')),
       ),
     );
     if (r) this.chosenEol = r;
@@ -274,7 +256,7 @@ export class EditorPane {
     const eol = await this.chooseEol();
     if (!eol) return false;
     this.saving = true;
-    this.status.textContent = 'Сохранение…';
+    this.status.textContent = 'Saving…';
     const text = this.text();
     const doc = this.view.state.doc;
     try {
@@ -283,7 +265,7 @@ export class EditorPane {
       this.isNew = false;
       this.savedDoc = doc;
       this.setDirty(!this.view.state.doc.eq(doc));
-      this.status.textContent = 'Сохранено';
+      this.status.textContent = 'Saved';
       this.el.dispatchEvent(new CustomEvent('saved', { bubbles: true }));
       return true;
     } catch (e) {
@@ -304,14 +286,14 @@ export class EditorPane {
       case 'connection_lost':
       case 'no_session': {
         if (!retried && (await this.hooks.reconnect())) return this.save(opts, true);
-        this.fail('Соединение потеряно. Содержимое сохранено в редакторе; переподключитесь и нажмите Ctrl+S ещё раз.');
+        this.fail('Connection lost. The content is kept in the editor; reconnect and press Ctrl+S again.');
         return false;
       }
       case 'conflict': {
         const remote = (e.details?.remote_text as string | null | undefined) ?? null;
         const choice = await this.conflictDialog(remote, text);
         if (choice === 'force') return this.save({ ...opts, force: true }, retried);
-        this.status.textContent = 'Не сохранено: файл изменён на сервере';
+        this.status.textContent = 'Not saved: the file changed on the server';
         return false;
       }
       case 'deleted': {
@@ -319,9 +301,9 @@ export class EditorPane {
           h(
             'div',
             { role: 'dialog', 'data-testid': 'deleted-dialog' },
-            h('h3', {}, 'Файл удалён на сервере'),
-            h('p', {}, `«${this.path}» больше не существует. Создать его заново с текущим содержимым?`),
-            h('div', { class: 'row end' }, h('button', { onclick: () => close(false), 'data-testid': 'deleted-cancel' }, 'Отмена'), h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'deleted-create' }, 'Создать заново')),
+            h('h3', {}, 'The file was deleted on the server'),
+            h('p', {}, `“${this.path}” no longer exists. Create it again with the current content?`),
+            h('div', { class: 'row end' }, h('button', { onclick: () => close(false), 'data-testid': 'deleted-cancel' }, 'Cancel'), h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'deleted-create' }, 'Create again')),
           ),
         );
         if (ok) return this.save({ ...opts, force: true }, retried);
@@ -333,13 +315,13 @@ export class EditorPane {
           h(
             'div',
             { role: 'dialog', 'data-testid': 'inplace-dialog' },
-            h('h3', {}, e.code === 'foreign_owner' ? 'Файл другого пользователя' : 'Папка недоступна для записи'),
+            h('h3', {}, e.code === 'foreign_owner' ? 'A file of another user' : 'The folder is not writable'),
             h('p', {}, e.message),
-            h('div', { class: 'row end' }, h('button', { onclick: () => close(false), 'data-testid': 'inplace-cancel' }, 'Отмена'), h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'inplace-ok' }, 'Записать на месте')),
+            h('div', { class: 'row end' }, h('button', { onclick: () => close(false), 'data-testid': 'inplace-cancel' }, 'Cancel'), h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'inplace-ok' }, 'Write in place')),
           ),
         );
         if (ok) return this.save({ ...opts, in_place: true }, retried);
-        this.status.textContent = 'Не сохранено';
+        this.status.textContent = 'Not saved';
         return false;
       }
       default:
@@ -349,7 +331,7 @@ export class EditorPane {
   }
 
   private fail(msg: string, detail?: string): void {
-    this.status.textContent = `Ошибка: ${msg}`;
+    this.status.textContent = `Error: ${msg}`;
     toast(msg, detail);
   }
 
@@ -360,7 +342,7 @@ export class EditorPane {
       const showDiff = () => {
         if (diffHost.childElementCount) return;
         if (remote === null) {
-          diffHost.textContent = 'Файл на сервере слишком велик, чтобы показать различия.';
+          diffHost.textContent = 'The file on the server is too large to show differences.';
           return;
         }
         const common = [EditorView.editable.of(false), EditorState.readOnly.of(true), themeExtensions(), lineNumbers()];
@@ -369,15 +351,15 @@ export class EditorPane {
       const box = h(
         'div',
         { role: 'dialog', 'data-testid': 'conflict-save-dialog', class: 'wide' },
-        h('h3', {}, 'Файл изменён на сервере'),
-        h('p', {}, 'С момента открытия файл на сервере изменился. Слева — версия на сервере, справа — ваша.'),
+        h('h3', {}, 'The file changed on the server'),
+        h('p', {}, 'Since the file was opened it has changed on the server. Left: the version on the server, right: yours.'),
         diffHost,
         h(
           'div',
           { class: 'row end wrap' },
-          h('button', { type: 'button', onclick: () => close('cancel'), 'data-testid': 'cs-cancel' }, 'Отмена'),
-          h('button', { type: 'button', onclick: showDiff, 'data-testid': 'cs-diff' }, 'Показать различия'),
-          h('button', { type: 'button', class: 'danger', onclick: () => close('force'), 'data-testid': 'cs-force' }, 'Перезаписать всё равно'),
+          h('button', { type: 'button', onclick: () => close('cancel'), 'data-testid': 'cs-cancel' }, 'Cancel'),
+          h('button', { type: 'button', onclick: showDiff, 'data-testid': 'cs-diff' }, 'Show differences'),
+          h('button', { type: 'button', class: 'danger', onclick: () => close('force'), 'data-testid': 'cs-force' }, 'Overwrite anyway'),
         ),
       );
       return box;
@@ -391,7 +373,7 @@ export class EditorPane {
       for (const [n, t] of ENCODINGS) sel.append(h('option', { value: n, selected: n === this.encoding }, t));
       const bom = h('input', { type: 'checkbox', 'data-testid': 'enc-bom' }) as HTMLInputElement;
       bom.checked = this.bom;
-      const bomRow = h('label', { class: 'check' }, bom, ' Записывать BOM (метку порядка байтов)');
+      const bomRow = h('label', { class: 'check' }, bom, ' Write a BOM (byte order mark)');
       const sync = () => (bomRow.style.display = supportsBom(sel.value) ? '' : 'none');
       sel.addEventListener('change', sync);
       sync();
@@ -401,12 +383,12 @@ export class EditorPane {
           type: 'button',
           'data-testid': 'enc-reread',
           onclick: async () => {
-            if (this.dirty && !window.confirm('Несохранённые изменения будут потеряны. Перечитать файл?')) return;
+            if (this.dirty && !window.confirm('Unsaved changes will be lost. Reread the file?')) return;
             close(null);
             await this.reread(sel.value);
           },
         },
-        'Перечитать в этой кодировке',
+        'Reread in this encoding',
       );
       if (this.isNew) reread.setAttribute('disabled', '');
       const saveAs = h(
@@ -421,20 +403,20 @@ export class EditorPane {
             this.encButton.textContent = this.encoding;
             this.updateInfo();
             this.setDirty(true);
-            this.status.textContent = `Файл будет сохранён в кодировке ${this.encoding}`;
+            this.status.textContent = `The file will be saved in the encoding ${this.encoding}`;
             close(null);
           },
         },
-        'Сохранять в этой',
+        'Save as this',
       );
       return h(
         'div',
         { role: 'dialog', 'data-testid': 'enc-dialog' },
-        h('h3', {}, 'Кодировка'),
-        h('p', {}, `Сейчас: ${encodingTitle(this.encoding)}. «Перечитать» заново расшифрует файл с сервера (если текст показан иероглифами). «Сохранять» запишет текущий текст в выбранной кодировке: это конвертация файла.`),
+        h('h3', {}, 'Encoding'),
+        h('p', {}, `Now: ${encodingTitle(this.encoding)}. “Reread” decodes the file from the server again (if the text is shown as garbage). “Save as” writes the current text in the chosen encoding: this converts the file.`),
         sel,
         bomRow,
-        h('div', { class: 'row end wrap' }, h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'enc-cancel' }, 'Отмена'), reread, saveAs),
+        h('div', { class: 'row end wrap' }, h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'enc-cancel' }, 'Cancel'), reread, saveAs),
       );
     }).then(() => {
       setTimeout(() => this.view.focus(), 0);
@@ -451,7 +433,7 @@ export class EditorPane {
       this.savedDoc = state.doc;
       this.setDirty(false);
       this.updateInfo();
-      this.status.textContent = `Файл перечитан в кодировке ${o.encoding}`;
+      this.status.textContent = `The file was reread in the encoding ${o.encoding}`;
     } catch (e) {
       this.fail(e instanceof ApiError ? e.message : String(e));
     }
@@ -470,10 +452,10 @@ export function pickEncoding(reason: string): Promise<string | null> {
     return h(
       'div',
       { role: 'dialog', 'data-testid': 'enc-pick-dialog' },
-      h('h3', {}, 'Выберите кодировку'),
+      h('h3', {}, 'Choose an encoding'),
       h('p', {}, reason),
       sel,
-      h('div', { class: 'row end' }, h('button', { onclick: () => close(null), 'data-testid': 'enc-pick-cancel' }, 'Отмена'), h('button', { class: 'primary', onclick: () => close(sel.value), 'data-testid': 'enc-pick-ok' }, 'Открыть')),
+      h('div', { class: 'row end' }, h('button', { onclick: () => close(null), 'data-testid': 'enc-pick-cancel' }, 'Cancel'), h('button', { class: 'primary', onclick: () => close(sel.value), 'data-testid': 'enc-pick-ok' }, 'Open')),
     );
   });
 }

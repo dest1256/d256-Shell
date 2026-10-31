@@ -18,7 +18,7 @@ strip "$BIN" 2>/dev/null || true
 P=$OUT/d256shell
 mkdir -p "$P/data"
 cp "$BIN" "$P/d256shell"
-cp packaging/linux/d256shell.desktop packaging/linux/README-linux.txt COPYRIGHT src-tauri/icons/128x128.png "$P/"
+cp packaging/linux/d256shell.desktop packaging/linux/README-linux.txt LICENSE src-tauri/icons/128x128.png "$P/"
 tar -C "$OUT" -czf "$OUT/d256shell-$VER-linux-x86_64.tar.gz" d256shell
 rm -rf "$P"
 
@@ -29,7 +29,7 @@ install -Dm644 packaging/linux/d256shell.desktop "$D/usr/share/applications/d256
 install -Dm644 src-tauri/icons/32x32.png "$D/usr/share/icons/hicolor/32x32/apps/d256shell.png"
 install -Dm644 src-tauri/icons/128x128.png "$D/usr/share/icons/hicolor/128x128/apps/d256shell.png"
 install -Dm644 "src-tauri/icons/128x128@2x.png" "$D/usr/share/icons/hicolor/256x256/apps/d256shell.png"
-install -Dm644 COPYRIGHT "$D/usr/share/doc/d256shell/copyright"
+install -Dm644 LICENSE "$D/usr/share/doc/d256shell/copyright"
 mkdir -p "$D/DEBIAN"
 SIZE=$(du -ks "$D/usr" | cut -f1)
 cat > "$D/DEBIAN/control" <<EOF
@@ -52,7 +52,7 @@ rm -rf "$D"
 # ---- Arch: PKGBUILD that installs the prebuilt tarball (checksum filled in)
 SUM=$(sha256sum "$OUT/d256shell-$VER-linux-x86_64.tar.gz" | cut -d' ' -f1)
 sed -e "s/@VER@/$VER/" -e "s/@SUM@/$SUM/" packaging/arch/PKGBUILD.in > "$OUT/PKGBUILD"
-cp packaging/linux/d256shell.desktop COPYRIGHT "$OUT/"
+cp packaging/linux/d256shell.desktop LICENSE "$OUT/"
 
 (cd "$OUT" && sha256sum d256shell-$VER-linux-x86_64.tar.gz d256shell_${VER}_amd64.deb > SHA256SUMS.txt && cat SHA256SUMS.txt)
 ls -l "$OUT"

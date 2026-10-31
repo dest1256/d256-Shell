@@ -777,5 +777,5 @@ fn unusable_key_path_is_explained_before_ssh_is_started() {
         )
         .unwrap_err();
     assert_eq!(e.code, "key_error", "{e:?}");
-    assert!(e.message.contains("не найден"), "{}", e.message);
+    assert!(e.message.contains("not found"), "{}", e.message);
 }

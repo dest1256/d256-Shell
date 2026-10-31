@@ -348,10 +348,9 @@ mod tests {
 
     #[test]
     fn roundtrip_with_special_characters() {
-        let s =
-            server(|p| (p == "tester@h's password:").then(|| "pä$$ wörd\"'\\ ключ".to_string()));
+        let s = server(|p| (p == "tester@h's password:").then(|| "pä$$ wörd\"'\\ key".to_string()));
         let pw = request(&s.addr.to_string(), &s.token, "tester@h's password:").unwrap();
-        assert_eq!(pw, "pä$$ wörd\"'\\ ключ");
+        assert_eq!(pw, "pä$$ wörd\"'\\ key");
     }
 
     #[test]

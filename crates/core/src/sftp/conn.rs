@@ -121,22 +121,22 @@ impl ConnectError {
 impl std::fmt::Display for ConnectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Timeout => write!(f, "Сервер не отвечает (превышено время ожидания)."),
-            Self::Network(e) => write!(f, "Не удалось подключиться: {e}"),
+            Self::Timeout => write!(f, "The server does not respond (timeout exceeded)."),
+            Self::Network(e) => write!(f, "Could not connect: {e}"),
             Self::HostKeyChanged(i) => write!(
                 f,
-                "ВНИМАНИЕ: ключ сервера {} изменился! Возможна атака «человек посередине». Подключение не выполнено.",
+                "WARNING: the server key {} changed! A man-in-the-middle attack is possible. The connection was not made.",
                 i.host
             ),
-            Self::HostKeyRevoked(i) => write!(f, "Ключ сервера {} отозван (@revoked). Подключение не выполнено.", i.host),
-            Self::HostKeyRejected => write!(f, "Ключ сервера не принят. Подключение отменено."),
-            Self::AuthFailed { saved_password_used: true } => write!(f, "Неверный пароль (или вход запрещён для этого пользователя)."),
-            Self::AuthFailed { .. } => write!(f, "Вход не выполнен: учётные данные отклонены."),
-            Self::AuthCancelled => write!(f, "Вход отменён."),
+            Self::HostKeyRevoked(i) => write!(f, "Server key {} revoked (@revoked). The connection was not made.", i.host),
+            Self::HostKeyRejected => write!(f, "The server key was not accepted. The connection was cancelled."),
+            Self::AuthFailed { saved_password_used: true } => write!(f, "Wrong password (or login is not allowed for this user)."),
+            Self::AuthFailed { .. } => write!(f, "Login failed: the credentials were rejected."),
+            Self::AuthCancelled => write!(f, "Login cancelled."),
             Self::KeyError(m) => f.write_str(m),
-            Self::KeyRejected => write!(f, "Сервер не принял приватный ключ. Проверьте, что соответствующий открытый ключ добавлен в ~/.ssh/authorized_keys этого пользователя на сервере."),
-            Self::NoAuthMethod(m) => write!(f, "Сервер не поддерживает вход по паролю (доступно: {}).", m.join(", ")),
-            Self::Protocol(e) => write!(f, "Ошибка протокола SSH: {e}"),
+            Self::KeyRejected => write!(f, "The server did not accept the private key. Check that the matching public key is added to ~/.ssh/authorized_keys of this user on the server."),
+            Self::NoAuthMethod(m) => write!(f, "The server does not support password login (available: {}).", m.join(", ")),
+            Self::Protocol(e) => write!(f, "SSH protocol error: {e}"),
             Self::SftpUnavailable(m) => f.write_str(m),
         }
     }
@@ -243,7 +243,7 @@ impl Handler for Client {
                     &key_b64,
                 ) {
                     set(HostKeyFailure::Io(format!(
-                        "не удалось записать known_hosts: {e}"
+                        "could not write known_hosts: {e}"
                     )));
                     return Ok(false);
                 }
@@ -359,11 +359,13 @@ impl SftpConnection {
             match tokio::time::timeout(Duration::from_secs(15), ch.wait()).await {
                 Ok(Some(russh::ChannelMsg::Success)) => break,
                 Ok(Some(russh::ChannelMsg::Failure)) => {
-                    return Err(sftp_unavailable(&"сервер отклонил запрос подсистемы sftp"))
+                    return Err(sftp_unavailable(
+                        &"the server rejected the sftp subsystem request",
+                    ))
                 }
                 Ok(Some(_)) => continue, // window adjust, banner data, ...
-                Ok(None) => return Err(sftp_unavailable(&"сервер закрыл канал")),
-                Err(_) => return Err(sftp_unavailable(&"нет ответа на запрос подсистемы sftp")),
+                Ok(None) => return Err(sftp_unavailable(&"the server closed the channel")),
+                Err(_) => return Err(sftp_unavailable(&"no reply to the sftp subsystem request")),
             }
         }
         let sftp = SftpSession::new(ch.into_stream())
@@ -455,7 +457,7 @@ impl SftpConnection {
 
 fn sftp_unavailable(e: &dyn std::fmt::Display) -> ConnectError {
     ConnectError::SftpUnavailable(format!(
-        "Сервер не предоставил SFTP: подсистема отключена или запрещена для этого пользователя ({e}). Терминал работает, файловая панель недоступна. На OpenWrt (dropbear) SFTP по умолчанию нет: выполните в терминале «opkg update && opkg install openssh-sftp-server» и переподключитесь."
+        "The server did not provide SFTP: the subsystem is disabled or forbidden for this user ({e}). The terminal works, the file panel is unavailable. SFTP is not available on OpenWrt (dropbear) by default: run “opkg update && opkg install openssh-sftp-server” in the terminal and reconnect."
     ))
 }
 
@@ -465,14 +467,14 @@ pub fn describe(e: russh_sftp::client::error::Error) -> String {
     use russh_sftp::protocol::StatusCode;
     match &e {
         Error::Status(s) => match s.status_code {
-            StatusCode::NoSuchFile => "Нет такого файла или папки.".to_string(),
-            StatusCode::PermissionDenied => "Нет прав доступа.".to_string(),
+            StatusCode::NoSuchFile => "No such file or folder.".to_string(),
+            StatusCode::PermissionDenied => "No access rights.".to_string(),
             StatusCode::ConnectionLost | StatusCode::NoConnection => {
-                "Соединение с сервером потеряно.".to_string()
+                "Connection to the server lost.".to_string()
             }
-            _ => format!("Ошибка сервера: {}", s.error_message),
+            _ => format!("Server error: {}", s.error_message),
         },
-        other => format!("Ошибка SFTP: {other}"),
+        other => format!("SFTP error: {other}"),
     }
 }
 
@@ -500,7 +502,7 @@ async fn authenticate(
     if let Some(k) = &p.key {
         if !methods.contains(&MethodKind::PublicKey) {
             return Err(ConnectError::KeyError(
-                "Сервер не принимает вход по ключу (метод publickey отключён).".into(),
+                "The server does not accept key login (the publickey method is disabled).".into(),
             ));
         }
         let key = load_key(k, interaction, waiting).await?;
@@ -539,7 +541,7 @@ async fn authenticate(
             None => {
                 let _g = WaitGuard::new(waiting);
                 (interaction.prompt)(AuthPrompt {
-                    text: format!("Пароль для {user}@{}:", p.host),
+                    text: format!("Password for {user}@{}:", p.host),
                     echo: false,
                     kind: PromptKind::Password,
                     saved_password_rejected: false,
@@ -604,7 +606,7 @@ async fn authenticate(
             }
         }
         return Err(ConnectError::Protocol(
-            "слишком много запросов аутентификации".into(),
+            "too many authentication requests".into(),
         ));
     }
 
@@ -632,7 +634,7 @@ async fn load_key(
         Ok(key) => return Ok(key),
         Err(e) if !encrypted(&e) => {
             return Err(ConnectError::KeyError(format!(
-                "Не удалось прочитать ключ {}: {e}. Поддерживаются ключи OpenSSH и PEM (RSA, ECDSA, Ed25519).",
+                "Could not read the key {}: {e}. OpenSSH and PEM keys are supported (RSA, ECDSA, Ed25519).",
                 path.display()
             )))
         }
@@ -650,7 +652,7 @@ async fn load_key(
         }
         let _g = WaitGuard::new(waiting);
         let ans = (interaction.prompt)(AuthPrompt {
-            text: format!("Парольная фраза для ключа {}:", path.display()),
+            text: format!("Passphrase for the key {}:", path.display()),
             echo: false,
             kind: PromptKind::Passphrase,
             saved_password_rejected: round > 0
@@ -661,7 +663,7 @@ async fn load_key(
         candidate = Some(ans);
     }
     Err(ConnectError::KeyError(format!(
-        "Неверная парольная фраза для ключа {}.",
+        "Wrong passphrase for the key {}.",
         path.display()
     )))
 }

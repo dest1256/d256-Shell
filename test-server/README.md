@@ -1,14 +1,14 @@
-# Тестовые SSH-серверы (только для тестов!)
+# Test SSH servers (for tests only!)
 
-| Порт (127.0.0.1) | Сервис          | Режим |
+| Port (127.0.0.1) | Service         | Mode |
 |------|-----------------|-------|
-| 2221 | sshd-password   | только password |
-| 2222 | sshd-kbdint     | только keyboard-interactive (`Password:`) |
-| 2223 | sshd-2fa        | пароль + `Verification code:` (TOTP, секрет `JBSWY3DPEHPK3PXP`) |
-| 2224 | sshd-otherkey   | как 2221, но другой host key (тест «ключ изменился») |
-| 2225 | sshd-nosftp     | как 2221, но SFTP-подсистема отключена (оболочка работает) |
+| 2221 | sshd-password   | password only |
+| 2222 | sshd-kbdint     | keyboard-interactive only (`Password:`) |
+| 2223 | sshd-2fa        | password + `Verification code:` (TOTP, secret `JBSWY3DPEHPK3PXP`) |
+| 2224 | sshd-otherkey   | like 2221 but with a different host key (the "key changed" test) |
+| 2225 | sshd-nosftp     | like 2221 but the SFTP subsystem is disabled (the shell works) |
 
-Пользователь `tester` / пароль `testpass`; `otheruser` / `otherpass` (владелец файла `other_owner.txt`).
-Тестовая зона: `/home/tester/zone`; эталон для проверки удаления: `/protected` (+ `/protected.sha256`).
-Host keys генерируются при старте контейнера и меняются при пересоздании.
-Не подключайте эти серверы никуда, кроме тестов. Заглушка без posix-rename — будет добавлена на этапе 5.
+User `tester` / password `testpass`; `otheruser` / `otherpass` (owner of the file `other_owner.txt`).
+Test zone: `/home/tester/zone`; reference for the deletion check: `/protected` (+ `/protected.sha256`).
+Host keys are generated when the container starts and change when it is recreated.
+Do not connect these servers to anything except the tests. A stub without posix-rename will be added in stage 5.

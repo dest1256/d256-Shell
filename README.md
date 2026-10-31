@@ -1,139 +1,141 @@
-<div align="center">
-
-<img src="docs/logo.png" width="96" alt="d256 Shell">
-
 # d256 Shell
 
-**Портативный SSH-клиент для Windows и Linux**
-терминал · файловый проводник SFTP · редактор · монитор сервера
+**A portable SSH client for Windows and Linux** — terminal · SFTP file browser · editor · server monitor
 
-![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-0078D4?logo=windows&logoColor=white)
-![Linux](https://img.shields.io/badge/Linux-Ubuntu%20%7C%20Arch-FCC624?logo=linux&logoColor=black)
-![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)
-![Rust](https://img.shields.io/badge/core-Rust-DEA584?logo=rust&logoColor=black)
-![Repository](https://img.shields.io/badge/repository-private-lightgrey)
+![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white)
+![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)
+![Tauri](https://img.shields.io/badge/Tauri-24C8DB?logo=tauri&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white)
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-</div>
+d256 Shell puts everything you need to work with servers into a single window styled like Windows Terminal, with a MobaXterm-like panel layout: the server's file tree on the left, the terminal on the right, and live load statistics at the bottom. No installation required: all data is stored next to the program in the `data` folder and protected by a master password.
 
----
+![Terminal with its live duplicate side by side](docs/screenshots/terminal-split.png)
 
-d256 Shell объединяет всё, что нужно для работы с серверами, в одном окне в стиле Windows Terminal с расположением панелей как в MobaXterm:
-слева дерево файлов сервера, справа терминал, внизу живая статистика нагрузки. Работает без установки, все данные лежат рядом с программой
-в папке `data` и защищены мастер-паролем.
+## Features
 
-<div align="center">
-<img src="docs/screenshots/terminal-split.png" alt="Терминал и его живая копия рядом" width="900">
-</div>
+### Terminal
 
-## Возможности
+- The real system `ssh` running in a pseudo-console (ConPTY / PTY), rendered with xterm.js and WebGL.
+- The password is supplied automatically via `SSH_ASKPASS` — no typing, and it never appears on the command line. A wrong password is tried exactly once.
+- 2FA and any other server prompts are shown in a dialog.
+- Paste with a warning for multi-line text, search in output, clickable links, font zoom, tabs, color schemes.
+- **Terminal duplication** (`Ctrl+Shift+D`): a second live shell opens on the right and replays the current directory, virtual environment (venv/conda), `su` login and the running program (`btop`, `tail -f …`). Commands are shown and confirmed before being sent.
 
-### Терминал
-- Настоящий системный `ssh` в псевдоконсоли (ConPTY / PTY), отрисовка в xterm.js с WebGL.
-- Пароль подставляется автоматически через `SSH_ASKPASS`, без ввода и без попадания в командную строку. Неверный пароль пробуется **ровно один раз**.
-- 2FA и любые другие вопросы сервера показываются в диалоге.
-- Вставка с предупреждением о многострочном тексте, поиск по выводу, ссылки, масштаб шрифта, вкладки, цветовые схемы.
-- **Дублирование терминала** (`Ctrl+Shift+D`): справа открывается вторая живая оболочка, в которую повторяются папка, виртуальное окружение (venv/conda),
-  вход через `su` и запущенная программа (btop, `tail -f` …). Команды перед вводом показываются и подтверждаются.
+### Key and password authentication
 
-### Вход по ключу и паролю
-- Пароли хранятся в зашифрованном хранилище (Argon2id + XChaCha20-Poly1305).
-- Вход по приватному ключу (ed25519, RSA, ECDSA; OpenSSH и PEM) с необязательной парольной фразой.
+- Passwords are stored in an encrypted vault (Argon2id + XChaCha20-Poly1305).
+- Private key login (ed25519, RSA, ECDSA; OpenSSH and PEM formats) with an optional passphrase.
 
-<div align="center"><img src="docs/screenshots/key-login.png" alt="Форма сервера с входом по ключу" width="420"></div>
+<p align="center"><img src="docs/screenshots/key-login.png" alt="Server form with key-based login" width="420"></p>
 
-### Файловый проводник (SFTP)
-- Список с виртуализацией (10 000+ файлов), строка «..», хлебные крошки, сортировка, скрытые файлы.
-- Создать, переименовать, копировать, вырезать, вставить, удалить (с подсчётом объектов), права доступа (в т. ч. рекурсивно), свойства.
-- Загрузка и скачивание файлов и папок через очередь передач: прогресс, скорость, отмена, повтор, вопросы о конфликтах.
-- Безопасная запись: временный файл → проверка размера → замена; при обрыве оригинал остаётся нетронутым.
-- Drag-and-drop: из Проводника в панель, внутри панели (перенос), из панели наружу.
+### File browser (SFTP)
 
-<div align="center"><img src="docs/screenshots/explorer.png" alt="Проводник" width="900"></div>
+- Virtualized list (10,000+ files), a `..` entry, breadcrumbs, sorting, hidden files.
+- Create, rename, copy, cut, paste, delete (with object count), permissions (including recursive), properties.
+- Upload and download files and folders through a transfer queue: progress, speed, cancel, retry, conflict prompts.
+- Safe writes: temporary file → size check → replace. If the connection drops, the original stays untouched.
+- Drag and drop: from Explorer into the panel, within the panel (move), and from the panel out.
 
-### Встроенный редактор
-- CodeMirror 6: подсветка синтаксиса, поиск и замена, переход к строке. `Ctrl+S` сохраняет прямо на сервер.
-- Сохраняет BOM, окончания строк (LF/CRLF) и отсутствие перевода строки в конце байт в байт.
-- Любые кодировки (Windows-1251, KOI8-R, UTF-16, Shift_JIS, GBK …): автоопределение, ручной выбор, сохранение в выбранной кодировке (конвертация). Символы, которых нет в кодировке, не теряются: сохранение откажет.
-- Если файл изменился на сервере, показываются различия и предлагается выбор.
+![File browser](docs/screenshots/explorer.png)
 
-<div align="center"><img src="docs/screenshots/conflict.png" alt="Конфликт при сохранении" width="900"></div>
+### Built-in editor
 
-### Монитор сервера
-Строка под терминалом (ЦП, ОЗУ, своп, нагрузка, сеть, аптайм и мини-графики) и подробная вкладка с графиками, нагрузкой по ядрам и по дискам.
-Данные читаются из `/proc` по SFTP: **на сервере не выполняется ни одной команды.**
+- CodeMirror 6: syntax highlighting, find and replace, go to line. `Ctrl+S` saves straight to the server.
+- Preserves BOM, line endings (LF/CRLF) and a missing trailing newline byte for byte.
+- Any encoding (Windows-1251, KOI8-R, UTF-16, Shift_JIS, GBK …): auto-detection, manual selection, saving in the chosen encoding (conversion). Characters that don't exist in the target encoding are never lost — the save is refused instead.
+- If the file changed on the server, a diff is shown and you choose what to do.
 
-<div align="center"><img src="docs/screenshots/monitor.png" alt="Монитор" width="900"></div>
+![Save conflict dialog](docs/screenshots/conflict.png)
 
-## Безопасность
+### Server monitor
+
+A status bar under the terminal (CPU, RAM, swap, load average, network, uptime and sparklines) plus a detailed tab with charts, per-core and per-disk load. Data is read from `/proc` over SFTP: **not a single command is executed on the server**.
+
+![Server monitor](docs/screenshots/monitor.png)
+
+## Security
 
 | | |
 |---|---|
-| Ключи хостов | Проверяются всегда. Изменённый ключ означает отказ, замена только явным двойным подтверждением. |
-| Пароли | Никогда не попадают в логи, аргументы `ssh` и переменные окружения (передаётся только одноразовый токен askpass). |
-| Сервер | Программа не выполняет служебных команд и `sudo`. Всё идёт через SFTP или интерактивный shell, который открыли вы. |
-| Сеть | Никаких запросов, кроме SSH к вашим серверам: нет телеметрии и автообновлений. |
-| Зависимости | Только crates.io и npm, закреплённые версии, `cargo audit`, `cargo deny`, `npm audit` без замечаний. |
-| Интерфейс | Полностью встроен в программу, без CDN и удалённых шрифтов, строгий CSP. |
+| **Host keys** | Always verified. A changed key means refusal; replacing it requires an explicit double confirmation. |
+| **Passwords** | Never written to logs, `ssh` arguments or environment variables (only a one-time askpass token is passed). |
+| **Server** | The program runs no service commands and no `sudo`. Everything goes through SFTP or the interactive shell you opened. |
+| **Network** | No requests other than SSH to your servers: no telemetry, no auto-updates. |
+| **Dependencies** | crates.io and npm only, pinned versions; `cargo audit`, `cargo deny` and `npm audit` report no issues. |
+| **UI** | Fully bundled into the program — no CDNs or remote fonts, strict CSP. |
 
-## Установка
+## Installation
 
-Готовые сборки лежат в [Releases](../../releases).
+Prebuilt packages are available on the [Releases](../../releases) page.
 
 ### Windows 10 / 11 (x64)
-1. Распакуйте `d256Shell.zip` в любую папку с правом записи.
-2. Запустите `d256Shell.exe`. Нужны WebView2 (есть в Windows 11) и клиент OpenSSH (`Параметры → Дополнительные компоненты`).
-3. Сверьте SHA-256 с `SHA256SUMS-windows.txt`.
+
+1. Extract `d256Shell.zip` into any folder you have write access to.
+2. Run `d256Shell.exe`. Requires WebView2 (included in Windows 11) and the OpenSSH client (Settings → Optional features).
+3. Verify the SHA-256 against `SHA256SUMS-windows.txt`.
 
 ### Ubuntu / Debian
+
 ```bash
-sudo apt install ./d256shell_1.0.1_amd64.deb
+sudo apt install ./d256shell_1.0.2_amd64.deb
 ```
 
 ### Arch Linux
-Положите `PKGBUILD`, `d256shell-1.0.1-linux-x86_64.tar.gz`, `d256shell.desktop` и `COPYRIGHT` в одну папку:
+
+Put `PKGBUILD`, `d256shell-1.0.2-linux-x86_64.tar.gz`, `d256shell.desktop` and `LICENSE` in one folder, then run:
+
 ```bash
 makepkg -si
 ```
 
-### Портативно (любой Linux)
+### Portable (any Linux)
+
 ```bash
-tar xzf d256shell-1.0.1-linux-x86_64.tar.gz && ./d256shell/d256shell
+tar xzf d256shell-1.0.2-linux-x86_64.tar.gz && ./d256shell/d256shell
 ```
 
-Нужны WebKitGTK 4.1, GTK 3 и OpenSSH. Бинарник собран на Ubuntu 22.04 (glibc ≥ 2.34) и проверен установкой в чистые Ubuntu 22.04, 24.04 и Arch.
+Requires WebKitGTK 4.1, GTK 3 and OpenSSH. The binary is built on Ubuntu 22.04 (glibc ≥ 2.34) and tested by installing on clean Ubuntu 22.04, 24.04 and Arch.
 
-> **Где хранятся данные.** Если рядом с программой есть папка `data`, она и используется (портативный режим, весь профиль переносится копированием).
-> У пакета Linux данные лежат в `~/.local/share/d256shell`. Другую папку задаёт `D256SHELL_DATA_DIR`.
+### Where data is stored
 
-## Сборка из исходников
+If there is a `data` folder next to the program, it is used (portable mode — the whole profile can be moved by copying it). For the Linux package, data lives in `~/.local/share/d256shell`. A different folder can be set with `D256SHELL_DATA_DIR`.
 
-Всё собирается и тестируется в Docker, на хосте ничего ставить не нужно.
+## Building from source
+
+Everything is built and tested in Docker — nothing needs to be installed on the host.
 
 ```bash
 cd .devcontainer
-docker compose up -d --build                         # dev-контейнер и тестовые sshd (порты 2221–2226)
-docker compose exec dev bash scripts/check-all.sh    # линт, тесты, e2e, аудит зависимостей
-docker compose exec dev bash scripts/make-dist.sh    # Windows: d256Shell.exe и zip
+docker compose up -d --build                         # dev container and test sshd servers (ports 2221–2226)
+docker compose exec dev bash scripts/check-all.sh    # lint, tests, e2e, dependency audit
+docker compose exec dev bash scripts/make-dist.sh    # Windows: d256Shell.exe and zip
 docker compose --profile linux run --rm linux bash scripts/build-linux.sh   # Linux: tar.gz, deb, PKGBUILD
 ```
 
-Структура: `crates/core` (вся логика), `crates/devbridge` (HTTP-мост для e2e), `src-tauri` (окно и команды), `ui` (TypeScript + Vite),
-`e2e` (Playwright), `test-server` (образ тестового sshd), `packaging` (Linux), `scripts`.
+**Layout:** `crates/core` (all the logic), `crates/devbridge` (HTTP bridge for e2e), `src-tauri` (window and commands), `ui` (TypeScript + Vite), `e2e` (Playwright), `test-server` (test sshd image), `packaging` (Linux), `scripts`.
 
-Тесты запускаются **только** против собственных тестовых серверов в контейнерах, никогда против реальных.
-Подробности и принятые решения: [NOTES.md](NOTES.md), зависимости: [DEPENDENCIES.md](DEPENDENCIES.md).
+Tests only ever run against the project's own test servers in containers, never against real ones. Details and design decisions: [NOTES.md](NOTES.md); dependencies: [DEPENDENCIES.md](DEPENDENCIES.md).
 
-## Версии и обновления
+## Versioning and releases
 
-Номер версии `МАЖОР.МИНОР.ПАТЧ` ([правила](VERSIONING.md)): патч — исправления, минор — новые функции без потери совместимости, мажор — несовместимые изменения. История — в [CHANGELOG.md](CHANGELOG.md). Релиз выпускается тегом `v<версия>`: GitHub Actions собирает пакеты для Windows и Linux и прикрепляет их к странице Releases.
+Versions follow `MAJOR.MINOR.PATCH` ([Semantic Versioning](https://semver.org)): patch — bug fixes, minor — new features without breaking compatibility, major — breaking changes. History is in [CHANGELOG.md](CHANGELOG.md). A release is made by pushing a `v<version>` tag: GitHub Actions builds the Windows and Linux packages and attaches them to the Releases page.
 
-## Известные ограничения
-- Файлы ключей PuTTY (`.ppk`) не поддерживаются: экспортируйте в формат OpenSSH.
-- Монитор и дублирование терминала требуют Linux-сервер с SFTP; на OpenWrt нужен пакет `openssh-sftp-server`.
-- Копирование между разными серверами пока недоступно; нет SSH-агента и аппаратных ключей.
-- Исполняемые файлы не подписаны цифровой подписью, Windows SmartScreen может показать предупреждение.
+## Known limitations
 
-## Автор и права
+- PuTTY key files (`.ppk`) are not supported — export them to OpenSSH format.
+- The monitor and terminal duplication require a Linux server with SFTP; on OpenWrt the `openssh-sftp-server` package is needed.
+- Copying between different servers is not available yet; no SSH agent or hardware key support.
+- Executables are not code-signed, so Windows SmartScreen may show a warning.
 
-© 2026 **dest1256**. Приватное программное обеспечение: лицензия не предоставляется, все права защищены (см. [COPYRIGHT](COPYRIGHT)). Репозиторий и сборки предназначены только для доверенных лиц, копировать, изменять и распространять их без разрешения автора нельзя.
-Сторонние библиотеки распространяются на условиях своих лицензий (MIT, Apache-2.0 и др.), их полный список есть в программе: `Настройки → О программе → Лицензии библиотек`.
+## License
+
+Copyright © 2026 dest1256.
+
+Released under the [MIT License](LICENSE). You may use, copy, modify and distribute this software, provided the copyright notice and license text are kept.
+
+Third-party libraries are distributed under their own licenses (MIT, Apache-2.0, etc.); the full list is available in the app under **Settings → About → Library licenses**.
+
+## Acknowledgements
+
+Developed by dest1256 with the assistance of [Claude](https://claude.ai) by Anthropic.

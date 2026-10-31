@@ -34,7 +34,7 @@ allow = [
 confidence-threshold = 0.9
 
 [licenses.private]
-# d256 Shell's own crates are private (publish = false, no licence; see COPYRIGHT).
+# d256 Shell's own crates are MIT-licensed (see LICENSE); publish = false keeps them off crates.io.
 ignore = true
 
 [bans]

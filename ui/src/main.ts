@@ -28,12 +28,12 @@ async function openShell(): Promise<void> {
 function showSetup(): void {
   authTabs();
   clear(screen);
-  const p1 = pwField('master1', 'Мастер-пароль (не короче 8 символов)', 'new-password');
-  const p2 = pwField('master2', 'Повторите мастер-пароль', 'new-password');
+  const p1 = pwField('master1', 'Master password (at least 8 characters)', 'new-password');
+  const p2 = pwField('master2', 'Repeat the master password', 'new-password');
   const err = h('div', { class: 'error', 'data-testid': 'error' });
   const submit = async () => {
     err.textContent = '';
-    if (p1.value !== p2.value) return void (err.textContent = 'Пароли не совпадают.');
+    if (p1.value !== p2.value) return void (err.textContent = 'The passwords do not match.');
     try {
       await api.createVault(p1.value);
       await openShell();
@@ -49,13 +49,13 @@ function showSetup(): void {
         'form',
         { class: 'auth-card', onsubmit: (e) => (e.preventDefault(), void submit()) },
         logo(),
-        h('h1', {}, 'Создайте мастер-пароль'),
-        h('p', {}, 'Им шифруются пароли ваших серверов. Папку data можно переносить на другой компьютер.'),
-        h('p', { class: 'warn' }, 'Восстановить мастер-пароль невозможно: если вы его забудете, сохранённые пароли будут потеряны.'),
+        h('h1', {}, 'Create a master password'),
+        h('p', {}, 'It encrypts the passwords of your servers. The data folder can be moved to another computer.'),
+        h('p', { class: 'warn' }, 'The master password cannot be recovered: if you forget it, the saved passwords will be lost.'),
         p1,
         p2,
         err,
-        h('button', { class: 'primary', type: 'submit', 'data-testid': 'create' }, 'Создать хранилище'),
+        h('button', { class: 'primary', type: 'submit', 'data-testid': 'create' }, 'Create vault'),
       ),
     ),
   );
@@ -66,7 +66,7 @@ function showSetup(): void {
 function showUnlock(backupExists: boolean, note = ''): void {
   authTabs();
   clear(screen);
-  const pw = pwField('master', 'Мастер-пароль');
+  const pw = pwField('master', 'Master password');
   const err = h('div', { class: 'error', 'data-testid': 'error' }, note);
   const actions = h('div', { class: 'col' });
   const offerRestore = () => {
@@ -80,14 +80,14 @@ function showUnlock(backupExists: boolean, note = ''): void {
           onclick: async () => {
             try {
               await api.restoreBackup(pw.value);
-              toast('Хранилище восстановлено из резервной копии.');
+              toast('The vault was restored from the backup.');
               await openShell();
             } catch (e) {
               err.textContent = errText(e);
             }
           },
         },
-        'Восстановить из резервной копии (vault.bin.bak)',
+        'Restore from the backup (vault.bin.bak)',
       ),
     );
   };
@@ -110,10 +110,10 @@ function showUnlock(backupExists: boolean, note = ''): void {
         { class: 'auth-card', onsubmit: (e) => (e.preventDefault(), void submit()) },
         logo(),
         h('h1', {}, 'd256 Shell'),
-        h('p', {}, 'Введите мастер-пароль, чтобы открыть хранилище.'),
+        h('p', {}, 'Enter the master password to open the vault.'),
         pw,
         err,
-        h('button', { class: 'primary', type: 'submit', 'data-testid': 'unlock' }, 'Разблокировать'),
+        h('button', { class: 'primary', type: 'submit', 'data-testid': 'unlock' }, 'Unlock'),
         actions,
       ),
     ),
@@ -130,7 +130,7 @@ async function start(): Promise<void> {
     if (st.state === 'unlocked') return void (await openShell());
     showUnlock(st.backup_exists);
   } catch (e) {
-    screen.textContent = `Ошибка запуска: ${errText(e)}`;
+    screen.textContent = `Start error: ${errText(e)}`;
   }
 }
 

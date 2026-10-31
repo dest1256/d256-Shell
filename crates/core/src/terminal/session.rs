@@ -68,7 +68,7 @@ impl TermSession {
                 pixel_width: 0,
                 pixel_height: 0,
             })
-            .map_err(|e| format!("не удалось создать псевдотерминал: {e}"))?;
+            .map_err(|e| format!("could not create the pseudo-terminal: {e}"))?;
         let mut cmd = CommandBuilder::new(&o.program);
         for a in &o.args {
             cmd.arg(a);
@@ -80,7 +80,7 @@ impl TermSession {
         let mut child: Box<dyn Child + Send + Sync> = pair
             .slave
             .spawn_command(cmd)
-            .map_err(|e| format!("не удалось запустить {}: {e}", o.program.display()))?;
+            .map_err(|e| format!("could not start {}: {e}", o.program.display()))?;
         drop(pair.slave);
         let pid = child.process_id();
         let killer = child.clone_killer();
@@ -203,7 +203,7 @@ impl TermSession {
                     pixel_height: 0,
                 })
                 .map_err(|e| e.to_string()),
-            None => Err("сеанс закрыт".into()),
+            None => Err("session closed".into()),
         }
     }
 

@@ -26,7 +26,7 @@ async function addKeyServer(page: Page, name: string, key: string, passphrase?: 
   await page.getByTestId('f-name').fill(name);
   await page.getByTestId('f-host').fill('sshd-key');
   await page.getByTestId('f-user').fill('tester');
-  await expect(page.getByTestId('key-box')).toBeHidden(); // скрыто, пока флажок не включён
+  await expect(page.getByTestId('key-box')).toBeHidden(); // hidden until the checkbox is on
   await page.getByTestId('f-usekey').check();
   await expect(page.getByTestId('key-box')).toBeVisible();
   await page.getByTestId('f-keypath').fill(`/testkeys/${key}`);
@@ -36,13 +36,13 @@ async function addKeyServer(page: Page, name: string, key: string, passphrase?: 
   await expect(page.getByTestId('server-item').filter({ hasText: name })).toBeVisible();
 }
 
-test('вход по ключу без пароля: SFTP и терминал, значок «ключ» в списке', async ({ page }) => {
+test('key login without a password: SFTP and terminal, a key marker in the list', async ({ page }) => {
   await start(page);
   await addKeyServer(page, 'Key1', 'id_ed25519');
-  await expect(page.getByTestId('server-item').first()).toContainText('· ключ');
+  await expect(page.getByTestId('server-item').first()).toContainText('· key');
   await page.getByTestId('server-item').first().dblclick();
   await acceptHostKey(page);
-  await expect(page.getByTestId('prompt-dialog')).toHaveCount(0); // ни пароля, ни парольной фразы
+  await expect(page.getByTestId('prompt-dialog')).toHaveCount(0); // neither a password nor a passphrase
   await expect(page.getByTestId('path-input')).toHaveValue('/home/tester');
   await page.getByTestId('terminal').click();
   await expect.poll(() => text(page), { timeout: 20_000 }).toMatch(/\$ $/m);
@@ -51,12 +51,12 @@ test('вход по ключу без пароля: SFTP и терминал, з
   await expect.poll(() => text(page)).toContain('via-key-42');
 });
 
-test('ключ с парольной фразой: сохранённая не спрашивается, несохранённая запрашивается и маскируется', async ({ page }) => {
+test('key with a passphrase: a saved one is not asked for, an unsaved one is asked for and masked', async ({ page }) => {
   await start(page);
   await addKeyServer(page, 'Saved', 'id_enc', 'keypass');
   await addKeyServer(page, 'Ask', 'id_enc');
 
-  // сохранённая фраза: вопросов нет
+  // saved passphrase: no questions
   await page.getByTestId('server-item').filter({ hasText: 'Saved' }).dblclick();
   await acceptHostKey(page);
   await expect(page.getByTestId('tab-s1')).toBeVisible();
@@ -66,17 +66,17 @@ test('ключ с парольной фразой: сохранённая не �
   await expect(page.getByTestId('tab-s1')).toHaveCount(0);
   await page.getByTestId('tab-home').click();
 
-  // несохранённая: диалог «Парольная фраза ключа», поле скрыто; терминал спросит ещё раз (отдельный ssh)
+  // not saved: the Key passphrase dialog, the field is masked; the terminal asks again (separate ssh)
   await page.getByTestId('server-item').filter({ hasText: 'Ask' }).dblclick();
   const dlg = page.getByTestId('prompt-dialog');
   await expect(dlg).toBeVisible();
-  await expect(dlg).toContainText('Парольная фраза ключа');
+  await expect(dlg).toContainText('Key passphrase');
   await expect(dlg.locator('input')).toHaveAttribute('type', 'password');
   await page.screenshot({ path: 'screenshots/62-passphrase.png' });
   await dlg.locator('input').fill('keypass');
   await page.getByTestId('prompt-ok').click();
   await expect(page.getByTestId('tab-s2')).toBeVisible();
-  // терминал той же вкладки спрашивает фразу сам: отвечаем и попадаем в оболочку
+  // the terminal of the same tab asks for the passphrase itself: we answer and get into the shell
   await expect(dlg).toBeVisible({ timeout: 20_000 });
   await dlg.locator('input').fill('keypass');
   await page.getByTestId('prompt-ok').click();
@@ -84,7 +84,7 @@ test('ключ с парольной фразой: сохранённая не �
   await expect.poll(() => text(page), { timeout: 20_000 }).toMatch(/\$ $/m);
 });
 
-test('понятные ошибки: файл .ppk, открытый ключ, чужой ключ; «Проверить подключение» с ключом', async ({ page }) => {
+test('clear errors: a .ppk file, a public key, someone else’s key; Test connection with a key', async ({ page }) => {
   await start(page);
   await page.getByTestId('add').click();
   await page.getByTestId('f-name').fill('Bad');
@@ -106,14 +106,14 @@ test('понятные ошибки: файл .ppk, открытый ключ, �
   await page.getByTestId('error-ok').click();
   await page.getByTestId('f-keypath').fill('/testkeys/id_ed25519.pub');
   await test_();
-  await expect(page.getByTestId('error-message')).toContainText('открытый', { timeout: 15_000 });
+  await expect(page.getByTestId('error-message')).toContainText('public', { timeout: 15_000 });
   await page.getByTestId('error-ok').click();
   await page.getByTestId('f-keypath').fill('/testkeys/id_other');
   await test_();
-  await expect(page.getByTestId('error-message')).toContainText('не принял приватный ключ', { timeout: 15_000 });
+  await expect(page.getByTestId('error-message')).toContainText('did not accept the private key', { timeout: 15_000 });
   await page.getByTestId('error-ok').click();
-  // правильный ключ: успех
+  // the correct key: success
   await page.getByTestId('f-keypath').fill('/testkeys/id_rsa');
   await test_();
-  await expect(page.getByRole('alert').filter({ hasText: 'Подключение успешно' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('alert').filter({ hasText: 'Connection successful' })).toBeVisible({ timeout: 15_000 });
 });

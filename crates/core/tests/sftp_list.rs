@@ -106,9 +106,9 @@ async fn listing_errors_are_human_readable() {
     need_servers!();
     let c = connect("errs").await;
     let e = c.list_dir("/definitely/not/here").await.unwrap_err();
-    assert!(e.contains("Нет такого файла"), "{e}");
+    assert!(e.contains("No such file"), "{e}");
     let e = c.list_dir("/root").await.unwrap_err();
-    assert!(e.contains("Нет прав"), "{e}");
+    assert!(e.contains("No access"), "{e}");
     c.close().await;
 }
 

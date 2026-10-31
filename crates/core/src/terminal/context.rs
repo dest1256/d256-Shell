@@ -147,7 +147,7 @@ impl SftpConnection {
             .sftp
             .read_dir("/proc".to_string())
             .await
-            .map_err(|_| "Сервер не отдаёт /proc (нужен Linux).".to_string())?
+            .map_err(|_| "The server does not provide /proc (Linux is required).".to_string())?
             .map(|e| e.file_name())
             .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
             .collect();
@@ -200,7 +200,7 @@ impl SftpConnection {
         }
         let Some(shell_pid) = shell else {
             return Ok(
-                json!({ "found": false, "reason": "Оболочка этого терминала не найдена на сервере (нет SSH_CONNECTION/SSH_CLIENT в окружении процессов)." }),
+                json!({ "found": false, "reason": "The shell of this terminal was not found on the server (no SSH_CONNECTION/SSH_CLIENT in the process environment)." }),
             );
         };
         let st = stats[&shell_pid].clone();

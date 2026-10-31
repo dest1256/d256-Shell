@@ -201,12 +201,12 @@ impl SftpConnection {
         let mut buf = Vec::new();
         f.read_to_end(&mut buf)
             .await
-            .map_err(|e| EditError::new("sftp", format!("Чтение: {e}")))?;
+            .map_err(|e| EditError::new("sftp", format!("Read: {e}")))?;
         Ok(buf)
     }
 
     fn perm_msg(&self, path: &str) -> String {
-        format!("{path}: нет прав на запись для пользователя {}.", self.user)
+        format!("{path}: no write permission for user {}.", self.user)
     }
 
     /// Open `path` for editing. `new` = the file must not exist yet (it is created by the first save).
@@ -223,7 +223,7 @@ impl SftpConnection {
         encoding: Option<&str>,
     ) -> R<Value> {
         if !path.starts_with('/') {
-            return Err(EditError::new("invalid", "Недопустимый путь."));
+            return Err(EditError::new("invalid", "Invalid path."));
         }
         if new {
             if self
@@ -234,7 +234,7 @@ impl SftpConnection {
             {
                 return Err(EditError::new(
                     "exists",
-                    format!("«{}» уже существует.", crate::remote_path::file_name(path)),
+                    format!("“{}” already exists.", crate::remote_path::file_name(path)),
                 ));
             }
             return Ok(json!({
@@ -248,14 +248,14 @@ impl SftpConnection {
             .await
             .map_err(|e| EditError::new("sftp", describe(e)))?;
         if !m.file_type().is_file() {
-            return Err(EditError::new("not_file", "Это не обычный файл."));
+            return Err(EditError::new("not_file", "This is not a regular file."));
         }
         let size = m.size.unwrap_or(0);
         if size > limit {
             return Err(EditError::new(
                 "too_large",
                 format!(
-                    "Файл слишком большой для редактора ({} МБ, лимит {} МБ). Скачайте его.",
+                    "The file is too large for the editor ({} MB, limit {} MB). Download it.",
                     size / (1024 * 1024),
                     limit / (1024 * 1024)
                 ),
@@ -330,12 +330,12 @@ impl SftpConnection {
         in_place: bool,
     ) -> R<Value> {
         if !path.starts_with('/') {
-            return Err(EditError::new("invalid", "Недопустимый путь."));
+            return Err(EditError::new("invalid", "Invalid path."));
         }
         let bytes = encode_with(text, bom, if eol == Eol::Mixed { Eol::Lf } else { eol }, encoding).map_err(|c| {
             let mut e = EditError::new(
                 "unmappable",
-                format!("Символ «{c}» (U+{:04X}) нельзя записать в кодировке {encoding}. Удалите его или выберите другую кодировку (например, UTF-8).", c as u32),
+                format!("Character “{c}” (U+{:04X}) cannot be written in the encoding {encoding}. Remove it or choose another encoding (for example, UTF-8).", c as u32),
             );
             e.details = Some(json!({ "char": c.to_string() }));
             e
@@ -355,13 +355,13 @@ impl SftpConnection {
             (None, Some(_)) if !force => {
                 return Err(EditError::new(
                     "deleted",
-                    "Файл удалён на сервере. Создать его заново?",
+                    "The file was deleted on the server. Create it again?",
                 ));
             }
             (Some(_), None) if !force => {
                 return Err(EditError::new(
                     "exists",
-                    "Файл с таким именем уже появился на сервере: он не будет перезаписан.",
+                    "A file with this name has appeared on the server: it will not be overwritten.",
                 ));
             }
             (Some(m), Some(b)) if !force => {
@@ -382,8 +382,10 @@ impl SftpConnection {
                     } else {
                         None
                     };
-                    let mut e =
-                        EditError::new("conflict", "Файл изменён на сервере с момента открытия.");
+                    let mut e = EditError::new(
+                        "conflict",
+                        "The file changed on the server since it was opened.",
+                    );
                     e.details = Some(json!({ "remote_text": remote_text }));
                     return Err(e);
                 }
@@ -407,7 +409,7 @@ impl SftpConnection {
             Err(XferError::ForeignOwner) => {
                 let mut e = EditError::new(
                     "foreign_owner",
-                    "Файл принадлежит другому пользователю: при атомарной замене владелец изменится. Записать «на месте» (не атомарно) или отменить?",
+                    "The file belongs to another user: an atomic replacement will change the owner. Write in place (not atomic) or cancel?",
                 );
                 e.details = Some(json!({ "can_in_place": true }));
                 return Err(e);
@@ -418,7 +420,7 @@ impl SftpConnection {
                 }
                 let mut e = EditError::new(
                     "dir_not_writable",
-                    format!("В папку файла нельзя записывать для пользователя {}, поэтому безопасная (атомарная) замена невозможна. Можно записать «на месте»: это не атомарно, при обрыве файл может повредиться.", self.user),
+                    format!("Cannot write to the folder of the file for user {}, so a safe (atomic) replacement is impossible. You can write in place: this is not atomic and the file may be damaged if the connection drops.", self.user),
                 );
                 e.details = Some(json!({ "can_in_place": true }));
                 return Err(e);
@@ -426,10 +428,10 @@ impl SftpConnection {
             Err(XferError::Exists) => {
                 return Err(EditError::new(
                     "exists",
-                    "Файл уже существует и не был перезаписан.",
+                    "The file already exists and was not overwritten.",
                 ))
             }
-            Err(XferError::Cancelled) => return Err(EditError::new("cancelled", "Отменено.")),
+            Err(XferError::Cancelled) => return Err(EditError::new("cancelled", "Cancelled.")),
             Err(XferError::Msg(m)) => return Err(EditError::new("sftp", m)),
         }
         let m = self

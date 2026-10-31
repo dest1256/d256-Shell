@@ -1,177 +1,183 @@
 # NOTES
 
-Автор: dest1256.
+Author: dest1256.
 
-## Этап 0–1: решения и отклонения
+## Stages 0–1: decisions and deviations
 
-- Dev-контейнер собирается и запускается через `docker compose` с хоста (кнопка «Reopen in Container» не обязательна):
-  `docker compose -f .devcontainer/docker-compose.yml up -d`, команды — `docker compose exec dev …`.
-- Образы закреплены по дайджесту: `rust:1.99.1-bookworm`, `node:22.23.4-bookworm`, `debian:bookworm-slim`.
-- Инструменты (`cargo-xwin`, `tauri-cli`, `cargo-audit`, `cargo-deny`, `cargo-about --features cli`) ставятся в `/opt/tools`,
-  чтобы том `CARGO_HOME` их не перекрывал.
-- Tauri: в crates.io уже есть 3.0 alpha; используется `tauri = "2"` (последний 2.x), как требует ТЗ.
-- Файлы, созданные со стороны Windows, видны в контейнере как `root:755`; один раз выполнено `chown dev` для каталогов проекта
-  (`docker compose exec -u root dev …`). Если снова появится EACCES — повторить.
-- Лицензия Microsoft на CRT/SDK для `cargo-xwin` принята пользователем; `XWIN_ACCEPT_LICENSE` передаётся только в командной строке.
+- The dev container is built and started with `docker compose` from the host (the "Reopen in Container" button is not required):
+  `docker compose -f .devcontainer/docker-compose.yml up -d`, commands: `docker compose exec dev …`.
+- Images are pinned by digest: `rust:1.99.1-bookworm`, `node:22.23.4-bookworm`, `debian:bookworm-slim`.
+- The tools (`cargo-xwin`, `tauri-cli`, `cargo-audit`, `cargo-deny`, `cargo-about --features cli`) are installed in `/opt/tools`
+  so that the `CARGO_HOME` volume does not shadow them.
+- Tauri: crates.io already has a 3.0 alpha; `tauri = "2"` (the latest 2.x) is used, as the spec requires.
+- Files created from the Windows side appear in the container as `root:755`; `chown dev` was run once for the project directories
+  (`docker compose exec -u root dev …`). If EACCES appears again, repeat it.
+- The user accepted the Microsoft license for the CRT/SDK used by `cargo-xwin`; `XWIN_ACCEPT_LICENSE` is passed only on the command line.
 
-## Известные пробелы (запланированы)
+## Known gaps (planned)
 
-- Стандартный манифест Tauri в exe **не содержит** `asInvoker`, `PerMonitorV2`, `longPathAware`, `supportedOS` — нужен собственный
-  манифест (этап 9, п. 13.2). Иконка и VERSIONINFO (dest1256) встраиваются при кросс-сборке — проверено `scripts/inspect-exe.sh`.
-- Проверка «нет следов вне папки программы» и запуск на Windows — ещё не выполнены.
-- Сообщение об ошибке папки данных пока пишется в stderr; нативное окно сообщения — позже.
+- The standard Tauri manifest in the exe **does not contain** `asInvoker`, `PerMonitorV2`, `longPathAware`, `supportedOS` — a custom
+  manifest is needed (stage 9, item 13.2). The icon and VERSIONINFO (dest1256) are embedded during cross-compilation — checked with `scripts/inspect-exe.sh`.
+- The "no traces outside the program folder" check and running on Windows have not been done yet.
+- The data folder error message is currently written to stderr; a native message window comes later.
 
-## Этап 2: vault, менеджер серверов
+## Stage 2: vault, server manager
 
-- Формат `vault.bin`: `SHPV | ver | m,t,p (u32 LE) | salt16 | nonce24 | ciphertext+tag`, весь заголовок — AAD. Параметры из
-  заголовка проверяются на разумные пределы (защита от огромного `m_cost` в подменённом файле).
-- API крейтов проверено по исходникам: `chacha20poly1305 0.11` (`Key`/`XNonce` — `hybrid_array::Array`, `from_slice` устарел),
+- `vault.bin` format: `SHPV | ver | m,t,p (u32 LE) | salt16 | nonce24 | ciphertext+tag`, the whole header is AAD. The parameters from the
+  header are checked against sane limits (protection against a huge `m_cost` in a tampered file).
+- The crate APIs were checked against the sources: `chacha20poly1305 0.11` (`Key`/`XNonce` are `hybrid_array::Array`, `from_slice` is deprecated),
   `argon2 0.6`, `getrandom 0.4` (`getrandom::fill`).
-- Весь API приложения — один диспетчер `d256shell_core::service::Service::call(method, params)`. Tauri-слой — одна команда `api`.
-- **Отклонение:** `devbridge` — не WebSocket, а HTTP JSON-RPC (`POST /rpc`) + раздача `ui/dist` на том же origin, только на `std`
-  (без новых зависимостей). Для терминала (этап 4) понадобится push — тогда добавим WebSocket (dev-only зависимость).
-- Хост и имя пользователя валидируются при сохранении (нельзя начинать с `-`, пробелы, `@`) — защита от инъекции опций в argv ssh.
-- Пароль в списке серверов не отдаётся; показывается по кнопке «Показать» (`get_password`).
-- `cargo audit`: 2 предупреждения (`proc-macro-error` unmaintained, `glib` unsound) — это Linux/GTK-зависимости Tauri, в Windows-сборку
-  не входят. Задокументировать в `DEPENDENCIES.md` на этапе 9.
-- Не сделано в этапе 2: «Быстрое подключение» и «Проверить подключение» (нужен SFTP, этап 3); автоблокировка по бездействию (этап 8).
-- Крейт `d256shell` (Tauri) не собирается/не тестируется на Linux (нет GTK); линт и сборка — через `cargo xwin` на Windows-цели.
+- The whole application API is one dispatcher `d256shell_core::service::Service::call(method, params)`. The Tauri layer is a single `api` command.
+- **Deviation:** `devbridge` is not a WebSocket but HTTP JSON-RPC (`POST /rpc`) + serving `ui/dist` on the same origin, on `std` only
+  (no new dependencies). The terminal (stage 4) needs push — then a WebSocket (dev-only dependency) will be added.
+- The host and user name are validated on save (cannot start with `-`, no spaces, no `@`) — protection against option injection into the ssh argv.
+- The password is not returned in the server list; it is shown by the "Show" button (`get_password`).
+- `cargo audit`: 2 warnings (`proc-macro-error` unmaintained, `glib` unsound) — these are Linux/GTK dependencies of Tauri and are not part of the Windows
+  build. To be documented in `DEPENDENCIES.md` at stage 9.
+- Not done in stage 2: "Quick connect" and "Test connection" (need SFTP, stage 3); auto-lock on inactivity (stage 8).
+- The `d256shell` (Tauri) crate is not built/tested on Linux (no GTK); lint and build go through `cargo xwin` for the Windows target.
 
-## Этап 3: known_hosts, SFTP, проводник (чтение)
+## Stage 3: known_hosts, SFTP, explorer (read)
 
-- Зависимости: `russh 0.65` (репозиторий теперь `warp-tech/russh`, бывший Eugeny), `russh-sftp 3.0` (AspectUnk), `tokio`,
-  `hmac`/`sha1`/`base64ct` (RustCrypto; нужны для хэшированных записей known_hosts). API проверено по исходникам.
-- `russh-sftp` решает вопрос с не-UTF-8 именами: имена декодируются с заменой (`U+FFFD`), листинг не ломается. Такие записи помечаются
-  `name_lossy` и **блокируются для любых операций** (замена на `ssh2` не потребовалась).
-- Политика входа: `authenticate_none` → выбор метода: если есть `password` — ровно одна попытка (без fallback на keyboard-interactive с тем же
-  паролем), иначе keyboard-interactive: пароль подставляется один раз, остальные запросы (2FA, повторный пароль) идут пользователю.
-  Подтверждено тестами по логу sshd (`Failed password` ровно +1).
-- Ключ хоста: порядок алгоритмов в `russh` переставляется так, чтобы известные из known_hosts шли первыми (как делает OpenSSH);
-  проверено для ed25519/ecdsa/rsa. Изменённый ключ — отказ до отправки пароля; замена только отдельным действием с двойным подтверждением.
-- Интерактивные вопросы (ключ хоста, пароль, 2FA) реализованы без push: `connect` блокирует, UI опрашивает `poll_prompts` и отвечает `answer_prompt`.
-- Тестовая инфраструктура: sshd пишут лог в общий том (`/sshlogs`), host-ключи пересоздаются при старте (иначе у всех контейнеров они
-  одинаковы — это поймал тест «ключ изменился»), `pam_google_authenticator` требует права 0600 на файл секрета.
-- `aws-lc-sys` (крипто `russh`) для Windows-цели требует NASM — он добавлен в dev-образ из репозитория Debian.
-- `cargo audit`: RUSTSEC-2023-0071 (`rsa`, Marvin) — исключение с обоснованием в `.cargo/audit.toml` (приватных RSA-операций нет).
-- Ограничения этапа: нет автоматического переподключения при обрыве (есть баннер «Переподключиться»), нет операций записи (этап 5).
+- Dependencies: `russh 0.65` (the repository is now `warp-tech/russh`, formerly Eugeny), `russh-sftp 3.0` (AspectUnk), `tokio`,
+  `hmac`/`sha1`/`base64ct` (RustCrypto; needed for hashed known_hosts entries). The APIs were checked against the sources.
+- `russh-sftp` handles non-UTF-8 names: names are decoded with replacement (`U+FFFD`), the listing does not break. Such entries are marked
+  `name_lossy` and **blocked for all operations** (replacing it with `ssh2` was not required).
+- Login policy: `authenticate_none` → method choice: if `password` is available — exactly one attempt (no fallback to keyboard-interactive with the same
+  password), otherwise keyboard-interactive: the password is supplied once, the other prompts (2FA, repeated password) go to the user.
+  Confirmed by tests against the sshd log (`Failed password` exactly +1).
+- Host key: the algorithm order in `russh` is rearranged so that those known from known_hosts come first (as OpenSSH does);
+  checked for ed25519/ecdsa/rsa. A changed key is refused before the password is sent; replacing it is a separate action with a double confirmation.
+- Interactive questions (host key, password, 2FA) are implemented without push: `connect` blocks, the UI polls `poll_prompts` and replies with `answer_prompt`.
+- Test infrastructure: the sshd servers write their log to a shared volume (`/sshlogs`), host keys are regenerated at start (otherwise all containers
+  share the same ones — caught by the "key changed" test), `pam_google_authenticator` requires mode 0600 on the secret file.
+- `aws-lc-sys` (the `russh` crypto) needs NASM for the Windows target — it was added to the dev image from the Debian repository.
+- `cargo audit`: RUSTSEC-2023-0071 (`rsa`, Marvin) — an exception justified in `.cargo/audit.toml` (there are no private RSA operations).
+- Stage limitations: no automatic reconnect on a dropped connection (there is a "Reconnect" banner), no write operations (stage 5).
 
-## Этап 4: терминал
+## Stage 4: terminal
 
-- Терминал — системный `ssh.exe` в ConPTY (`portable-pty`), вывод в xterm.js 6 (webgl/fit/unicode11/web-links/search). Байты идут через `Channel` как есть
-  (UTF-8 не пересобирается), очередь ограничена 4 МиБ с back-pressure; тест на 50 МБ вывода проходит.
-- Аргументы ssh: `-F none`, опции безопасности первыми, пользовательские — по allowlist, затем `-p -l -t -- host`; `UserKnownHostsFile` с прямыми слэшами и кавычками при пробелах.
-- Пароль: `SSH_ASKPASS` указывает на сам exe (режим helper по `D256SHELL_ASKPASS=1`), обмен по loopback TCP с токеном, `SSH_ASKPASS_REQUIRE=force` (OpenSSH ≥ 8.4).
-  Для старых ssh — expect-режим с жёсткими условиями (≤60 с, один раз, пользователь ничего не вводил, подсказка стоит в конце вывода и «затихла» 150 мс).
-- Найденная тестом ошибка: при отмене диалога askpass OpenSSH отправлял пустые пароли (3 неудачных попытки на сервере). Теперь `OnRefuse` убивает ssh до ответа helper’а: 1 вопрос, 1 неудачная попытка.
-- Сервер без SFTP (ошибка «sender dropped»): сессия открывается, терминал работает, панель файлов объясняет причину (`sftp_unavailable`).
-- Вставка: многострочная/большая вставка требует подтверждения; bracketed paste сохраняется. Ctrl+T/W/B с фокусом в терминале уходят на сервер, приложение — Ctrl+Shift+T/W/B.
-- Артефакт тестов: Playwright `keyboard.type` для не-ASCII использует `insertText` и переставляет ввод, `keyboard.press` не знает кириллицу — кириллица проверяется через вставку, эмодзи — выводом сервера. К продукту это не относится.
-- Не проверено на Windows (нужен ручной прогон): ConPTY, askpass из GUI-exe без вспышки окна, короткие 8.3-пути, завершение ssh.exe при закрытии вкладки.
+- The terminal is the system `ssh.exe` in ConPTY (`portable-pty`), output goes to xterm.js 6 (webgl/fit/unicode11/web-links/search). Bytes go through a `Channel` as is
+  (UTF-8 is not reassembled), the queue is limited to 4 MiB with back-pressure; the 50 MB output test passes.
+- ssh arguments: `-F none`, security options first, user options by allowlist, then `-p -l -t -- host`; `UserKnownHostsFile` with forward slashes and quotes when there are spaces.
+- Password: `SSH_ASKPASS` points to the exe itself (helper mode by `D256SHELL_ASKPASS=1`), exchange over loopback TCP with a token, `SSH_ASKPASS_REQUIRE=force` (OpenSSH ≥ 8.4).
+  For old ssh versions — expect mode with strict conditions (≤60 s, once, the user typed nothing, the prompt is at the end of the output and has been quiet for 150 ms).
+- A bug found by a test: when the askpass dialog was cancelled, OpenSSH sent empty passwords (3 failed attempts on the server). Now `OnRefuse` kills ssh before the helper answers: 1 question, 1 failed attempt.
+- A server without SFTP (error "sender dropped"): the session opens, the terminal works, the file panel explains the reason (`sftp_unavailable`).
+- Paste: multi-line/large paste needs confirmation; bracketed paste is preserved. Ctrl+T/W/B with focus in the terminal go to the server, the application uses Ctrl+Shift+T/W/B.
+- A test artifact: Playwright `keyboard.type` uses `insertText` for non-ASCII and reorders the input, `keyboard.press` does not know Cyrillic — Cyrillic is checked through paste, emoji through server output. This does not concern the product.
+- Not verified on Windows (a manual run is needed): ConPTY, askpass from a GUI exe without a window flash, short 8.3 paths, ssh.exe terminating when the tab is closed.
 
-## Этап 5: операции записи, передачи
+## Stage 5: write operations, transfers
 
-- Всё через SFTP, ни одной команды на сервере (в т.ч. для OpenWrt/dropbear без SFTP: подсказка `opkg install openssh-sftp-server`, запасной режим через shell сознательно **не** сделан — п. 14 ТЗ).
-- Загрузка (`sftp/xfer.rs`): `.<имя>.d256shell-<rand>.part` в той же папке → проверка размера → права старого файла и mtime → замена. Цель-симлинк пишется «насквозь» (ссылка остаётся ссылкой), битая ссылка/папка/спецфайл — отказ.
-  Чужой владелец (uid ≠ uid домашней папки: SFTP не умеет «whoami») — отдельное решение пользователя («записать на месте» / «заменить»).
-- **Отклонение:** расширение `posix-rename@openssh.com` не используется (`russh-sftp` не отдаёт расширенные запросы), всегда применяется запасной порядок из ТЗ:
-  оригинал → `.bak`, временный → цель, удалить `.bak`, при ошибке — вернуть оригинал. Окно «между» двумя rename короткое; потому сервера «без posix-rename» отдельного теста не требуют (запасной путь — единственный и тестируется всеми тестами записи). `statvfs`/`hardlink` не определяются (не нужны).
-- Хвосты (`.part`/`.bak`, которые не удалось убрать из-за обрыва) запоминаются в сессии и удаляются при следующем подключении к тому же серверу (`Hub::connect` забирает список у старых сессий).
-- Рекурсия: загрузка идёт по локальным симлинкам с защитой от циклов (канонические пути), скачивание не заходит в удалённые симлинки на папки, симлинки на файлы читаются. Конфликт имён **внутри** папки: действует выбор пользователя для верхнего уровня («заменить»/«пропустить»/«оставить оба» применяется ко всем вложенным файлам) — отдельный вопрос на каждый вложенный файл не задаётся.
-- Удаление: подсчёт перед подтверждением, `lstat`-рекурсия, жёсткий отказ для `/`, пустого пути, домашней папки и всего, что её содержит, и системных корней; остановка на первой ошибке с отчётом.
-- Имена: скачивание отказывается создавать локальные имена, недопустимые в Windows (`:`, `\`, `CON`, хвостовые точка/пробел…) — пропуск с отчётом. Не-UTF-8 имена блокируются для любых операций (и пропускаются в рекурсиях).
-- Очередь передач: параллельно `parallel_transfers` (по умолчанию 2), прогресс/скорость/отмена/повтор; повтор после обрыва идёт через новую сессию; переподключение SFTP — при следующей операции проводника (один автоматический повтор) и при Ctrl+S.
-- chmod: диалог с rwx и восьмеричным полем, рекурсивно только по галочке, отдельно «файлам / папкам», симлинки не трогаются.
-- Тест на 512 МБ: `scripts/test-big.sh` (по умолчанию в наборе — 96 МБ, SHA-256 потоково).
+- Everything goes through SFTP, not a single command on the server (including OpenWrt/dropbear without SFTP: the hint is `opkg install openssh-sftp-server`, a fallback through the shell is deliberately **not** implemented — item 14 of the spec).
+- Upload (`sftp/xfer.rs`): `.<name>.d256shell-<rand>.part` in the same folder → size check → permissions and mtime of the old file → replace. A symlink target is written "through" (the link stays a link), a broken link/folder/special file is refused.
+  A foreign owner (uid ≠ uid of the home folder: SFTP cannot do "whoami") is a separate user decision ("write in place" / "replace").
+- **Deviation:** the `posix-rename@openssh.com` extension is not used (`russh-sftp` does not expose extended requests), the fallback order from the spec is always used:
+  original → `.bak`, temporary → target, delete `.bak`, on error restore the original. The window "between" the two renames is short; therefore servers "without posix-rename" need no separate test (the fallback path is the only one and is tested by all write tests). `statvfs`/`hardlink` are not detected (not needed).
+- Leftovers (`.part`/`.bak` that could not be removed because of a dropped connection) are remembered in the session and deleted at the next connection to the same server (`Hub::connect` takes the list from old sessions).
+- Recursion: upload follows local symlinks with loop protection (canonical paths), download does not enter remote symlinks to folders, symlinks to files are read. Name conflict **inside** a folder: the user's choice for the top level ("replace"/"skip"/"keep both" applies to all nested files) — a separate question is not asked for each nested file.
+- Deletion: count before confirmation, `lstat` recursion, a hard refusal for `/`, an empty path, the home folder and everything containing it, and system roots; it stops at the first error with a report.
+- Names: download refuses to create local names that are invalid on Windows (`:`, `\`, `CON`, trailing dot/space …) — skipped with a report. Non-UTF-8 names are blocked for all operations (and skipped in recursions).
+- Transfer queue: `parallel_transfers` in parallel (2 by default), progress/speed/cancel/retry; a retry after a drop goes through a new session; the SFTP reconnect happens at the next explorer operation (one automatic retry) and on Ctrl+S.
+- chmod: a dialog with rwx and an octal field, recursive only by checkbox, separately "files / folders", symlinks are not touched.
+- A 512 MB test: `scripts/test-big.sh` (the default suite uses 96 MB, SHA-256 streamed).
 
-## Этап 6: редактор
+## Stage 6: editor
 
-- Вкладка сервера имеет полосу «Терминал | файл1 ● | файл2…» (показывается, когда открыт хотя бы один файл). CodeMirror 6, цвета берутся из выбранной схемы терминала.
-- Открытие: лимит из настроек (5 МБ), NUL-байты или не-UTF-8 — отказ с предложением скачать, BOM и тип окончаний строк запоминаются, «базовая версия» — SHA-256, размер, mtime, mode, uid. Смешанные окончания — при первом сохранении спрашивается LF/CRLF.
-  Редактор всегда видит `\n`; бэкенд восстанавливает CRLF и BOM (юнит-тесты на байт-в-байт круговой путь, включая пустой файл и отсутствие финального перевода строки).
-- Сохранение: перечитывание и сверка хэша → «Файл изменён на сервере» (показать различия `@codemirror/merge` / перезаписать / отмена), «удалён» → создать заново, чужой владелец или недоступная папка → предложение записи «на месте» (с пояснением, что она не атомарна), нет прав → сообщение с именем пользователя; содержимое не теряется, маркер ● остаётся. Новый файл создаётся только при первом сохранении, существующее имя не перезаписывается.
-- Закрытие вкладки файла / сеанса / окна с несохранённым — подтверждение.
-- Не сделано (опционально по ТЗ): «открыть во внешнем редакторе».
+- A server tab has a strip "Terminal | file1 ● | file2…" (shown when at least one file is open). CodeMirror 6, colors come from the selected terminal scheme.
+- Opening: the limit from the settings (5 MB), NUL bytes or non-UTF-8 — refused with an offer to download, the BOM and the line ending type are remembered, the "base version" is SHA-256, size, mtime, mode, uid. Mixed line endings — LF/CRLF is asked at the first save.
+  The editor always sees `\n`; the backend restores CRLF and the BOM (unit tests for a byte-exact round trip, including an empty file and a missing final newline).
+- Saving: re-read and compare the hash → "File changed on the server" (show the diff `@codemirror/merge` / overwrite / cancel), "deleted" → create again, a foreign owner or an inaccessible folder → an offer of an "in place" write (explaining that it is not atomic), no permission → a message with the user name; the content is not lost, the ● marker stays. A new file is created only at the first save, an existing name is not overwritten.
+- Closing a file tab / session / window with unsaved changes asks for confirmation.
+- Not done (optional in the spec): "open in an external editor".
 
-## Этап 7: drag-and-drop
+## Stage 7: drag and drop
 
-- Внутри панели — на pointer events (HTML5 DnD при включённом файловом drop Tauri в WebView2 не работает): цель — папка в списке или сегмент пути, подтверждение «Переместить N объектов в …?» с «не спрашивать в этом сеансе». Проверено e2e.
-- Из Проводника в панель: событие Tauri `onDragDropEvent`; координаты физические → делятся на `devicePixelRatio`, под курсором ищется папка (подсвечивается). **Не проверено на Windows** (нужен ручной тест на 100% и 150%).
-- Из панели в Проводник: за пределами панели файлы скачиваются в `data\staging\<rand>\` (оверлей «не отпускайте кнопку», отмена при отпускании, лимит из настроек, по умолчанию 200 МБ), затем нативный drag крейтом `drag`. Staging удаляется через 120 с после drop (Проводник может ещё копировать) и при запуске. **Не проверено на Windows.**
+- Inside the panel — on pointer events (HTML5 DnD does not work in WebView2 when the Tauri file drop is on): the target is a folder in the list or a path segment, with the confirmation "Move N items to …?" and "don't ask in this session". Verified by e2e.
+- From Explorer into the panel: the Tauri `onDragDropEvent`; the coordinates are physical → divided by `devicePixelRatio`, the folder under the cursor is looked up (and highlighted). **Not verified on Windows** (a manual test at 100% and 150% is needed).
+- From the panel to Explorer: outside the panel the files are downloaded to `data\staging\<rand>\` (the "don't release the button" overlay, cancel on release, limit from the settings, 200 MB by default), then a native drag with the `drag` crate. Staging is removed 120 s after the drop (Explorer may still be copying) and at startup. **Not verified on Windows.**
 
-## Этап 8: полировка
+## Stage 8: polish
 
-- Настройки: передачи (параллельность, mtime), лимиты drag-out и редактора, автоблокировка по бездействию (по умолчанию выкл.; не срабатывает при несохранённом файле), «О программе» (версия, автор dest1256, лицензии библиотек офлайн — `scripts/gen-licenses.mjs`: `cargo about` + npm).
-- Переименование вкладки — двойной щелчок. Колесо в btop/htop/mc: по умолчанию стрелки (ConPTY + `ssh.exe` теряют отчёты мыши), переключается в настройках.
-- Не сделано (опционально): светлая тема. Автоблокировка не покрыта автотестом (минимальный интервал — минута).
+- Settings: transfers (parallelism, mtime), drag-out and editor limits, auto-lock on inactivity (off by default; does not trigger with an unsaved file), "About" (version, author dest1256, offline library licenses — `scripts/gen-licenses.mjs`: `cargo about` + npm).
+- Renaming a tab — double click. Wheel in btop/htop/mc: arrows by default (ConPTY + `ssh.exe` lose mouse reports), switchable in the settings.
+- Not done (optional): a light theme. Auto-lock is not covered by an automatic test (the minimum interval is a minute).
 
-## Этап 9: итоги
+## Stage 9: results
 
-- `deny.toml` (граф только для Windows-цели): advisories/bans/licenses/sources — ok; `cargo audit` и `npm audit` (ui и e2e) — 0 уязвимостей; исключение RUSTSEC-2023-0071 описано.
-- Манифест exe: `asInvoker`, `PerMonitorV2`, длинные пути, Windows 10/11, UTF-8; сведения о версии (ProductName/CompanyName/LegalCopyright/описание) — dest1256; без UPX и обфускации; `strip`.
-- `scripts/run-win-tests.ps1` (запускает пользователь): метаданные, манифест, Defender (`MpCmdRun`), запуск из папки с пробелами и кириллицей, время запуска, память, следы вне папки, askpass-режим, вход `ssh.exe` через SSH_ASKPASS на локальный тестовый сервер.
-- **Отклонение:** отдельные тестовые exe с настоящим ConPTY (`cargo xwin test --no-run`) не собираются — терминальные тесты используют unix-PTY и запускаются в контейнере; поведение Windows (ConPTY, askpass из GUI-exe, 8.3-пути, закрытие ssh.exe) проверяется ручным чек-листом из README.
-- Результат Defender и VirusTotal в этот файл вносит пользователь после запуска `run-win-tests.ps1` (мы не загружаем файлы на сторонние сервисы).
-- Известные ограничения: копирование между разными серверами недоступно; цифровой подписи нет (место под `signtool` в CI выключено); автообновлений и телеметрии нет по ТЗ.
+- `deny.toml` (graph for the Windows target only): advisories/bans/licenses/sources — ok; `cargo audit` and `npm audit` (ui and e2e) — 0 vulnerabilities; the RUSTSEC-2023-0071 exception is documented.
+- exe manifest: `asInvoker`, `PerMonitorV2`, long paths, Windows 10/11, UTF-8; version info (ProductName/CompanyName/LegalCopyright/description) — dest1256; no UPX and no obfuscation; `strip`.
+- `scripts/run-win-tests.ps1` (run by the user): metadata, manifest, Defender (`MpCmdRun`), starting from a folder with spaces and Cyrillic, startup time, memory, traces outside the folder, askpass mode, `ssh.exe` login through SSH_ASKPASS to a local test server.
+- **Deviation:** separate test exes with a real ConPTY (`cargo xwin test --no-run`) are not built — the terminal tests use a unix PTY and run in the container; Windows behavior (ConPTY, askpass from a GUI exe, 8.3 paths, closing ssh.exe) is checked with the manual checklist from the README.
+- The Defender and VirusTotal results are entered in this file by the user after running `run-win-tests.ps1` (we do not upload files to third-party services).
+- Known limitations: copying between different servers is unavailable; no digital signature (the `signtool` slot in CI is off); no auto-updates and no telemetry, per the spec.
 
-## Монитор сервера (после этапа 9)
+## Server monitor (after stage 9)
 
-- Нижняя строка под терминалом: сначала цифры, после промежутка — мини-графики (ЦП, ОЗУ, сеть); клик открывает вкладку «Монитор» (графики истории ~5 минут, нагрузка по ядрам, память/своп, сеть, load average, процессы, сведения о машине).
-- **Без команд на сервере (п. 14 ТЗ):** значения читаются как обычные файлы `/proc/stat`, `/proc/meminfo`, `/proc/loadavg`, `/proc/uptime`, `/proc/net/dev` (+ раз в сеанс `/proc/cpuinfo`, `/etc/os-release`, hostname) через SFTP. Проценты и скорости считает UI по двум замерам (`crates/core/src/monitor.rs` — парсер, юнит- и интеграционные тесты).
-- Ограничения: нужен Linux (на OpenWrt/dropbear без SFTP, на не-Linux — строка с пояснением), диск (`statvfs`) не показывается — расширение SFTP недоступно в `russh-sftp`. Опрос идёт только пока вкладка видна и окно не свёрнуто; интервал и включение — в настройках.
-- Диски: `/proc/diskstats` (только целые физические устройства: без разделов, loop/ram/sr; устройства без единой операции скрыты). По двум замерам считаются чтение/запись (сектор = 512 Б), IOPS, очередь и занятость (`ms_doing_io`, как `%util` в iostat); во вкладке «Монитор» — общий график и строка на каждый диск. В нижней строке дисков нет.
+- The bottom line under the terminal: numbers first, after a gap — mini charts (CPU, RAM, network); a click opens the "Monitor" tab (history charts of ~5 minutes, per-core load, memory/swap, network, load average, processes, machine information).
+- **No commands on the server (item 14 of the spec):** the values are read as ordinary files `/proc/stat`, `/proc/meminfo`, `/proc/loadavg`, `/proc/uptime`, `/proc/net/dev` (+ once per session `/proc/cpuinfo`, `/etc/os-release`, hostname) over SFTP. The UI computes percentages and speeds from two samples (`crates/core/src/monitor.rs` — the parser, unit and integration tests).
+- Limitations: Linux is required (on OpenWrt/dropbear without SFTP, or on non-Linux, a line with an explanation is shown), disk space (`statvfs`) is not shown — the SFTP extension is not available in `russh-sftp`. Polling runs only while the tab is visible and the window is not minimized; the interval and switching on are in the settings.
+- Disks: `/proc/diskstats` (only whole physical devices: no partitions, loop/ram/sr; devices without a single operation are hidden). From two samples read/write (sector = 512 B), IOPS, queue and busy time (`ms_doing_io`, like `%util` in iostat) are calculated; the "Monitor" tab has a total chart and a row for each disk. The bottom line has no disks.
 
-## Строка «..» и снимок терминала
+## The ".." row and the terminal snapshot
 
-- Проводник: над всеми папками всегда стоит строка «..» (кроме корня): двойной щелчок/Enter — на уровень вверх, на неё можно перетащить файлы (перенос в родителя). Это не настоящий элемент: в копировании, удалении, Ctrl+A и счётчиках не участвует.
-- «Дублировать» (кнопка и Ctrl+Shift+D): справа от терминала (во всю высоту, граница двигается) открывается **живая копия** — второй `ssh`-процесс на том же сервере. Сверху в ней виден экран и прокрутка исходного терминала (с цветами, `@xterm/addon-serialize`), ниже — разделитель и новая оболочка, в которую **повторяются** рабочая папка, виртуальное окружение и запущенная программа (btop, `tail -f`, …).
-  Как это узнаётся без команд на сервере: оболочка терминала находится по клиентскому порту в `SSH_CONNECTION`/`SSH_CLIENT` её окружения (локальный порт `ssh` берётся из таблицы TCP ОС: `GetExtendedTcpTable` на Windows, `/proc/net/tcp` на Linux), затем по SFTP читаются `/proc/<pid>/{stat,cwd,cmdline,environ}`: папка оболочки, программа переднего плана (группа процессов терминала) и её `VIRTUAL_ENV`/`CONDA_*`. Для простаивающей оболочки активация venv не видна в `/proc` (окружение меняется только в памяти оболочки), поэтому дополнительно запоминаются набранные в терминале `source …/activate`, `conda activate`, `deactivate` (только если строка набрана целиком вручную, без Tab/стрелок).
-  **Отступление от п. 14 ТЗ (по прямому желанию пользователя):** в копию автоматически вводятся команды. Защита: перед этим они показываются в окне и редактируются (`Настройки → Дублирование терминала`: «спросить» — по умолчанию, «сразу» или «только вывод»), вводятся только после того, как новая оболочка вывела приглашение и пока пользователь ничего не набрал сам. Состояние запущенной программы не копируется — она стартует заново; нужен SFTP и Linux-сервер (на OpenWrt/dropbear работает, если dropbear задаёт `SSH_CONNECTION`/`SSH_CLIENT`). Закрытие копии спрашивает подтверждение.
-- Исправлено: ответы xterm на запросы оболочки (BusyBox ash спрашивает положение курсора при старте) приходят через `onData` и раньше считались «пользователь начал печатать» — команды в копию не вводились. Теперь вводом пользователя считаются только реальные нажатия клавиш, вставка и ввод через IME (окно 80 мс). Для полноэкранных программ (btop, htop, mc, vim, tmux …) показ прежнего вывода сверху по умолчанию выключен (переключатель в окне дублирования): их экран — снимок одного момента и в прокрутке копии выглядит мусором.
-- Вложенные оболочки (`su - user`, `sudo -i`, `bash`): по таблице процессов (`/proc/*/stat`) строится цепочка от оболочки входа до программы переднего плана; внутренняя оболочка и команда, которой она запущена (`su - comfyui`), попадают в план копии первыми, затем `cd` в папку внутренней оболочки, активация venv и программа. Это работает без пароля, если вход выполнен под root (`su`/`sudo` от root). Под обычным пользователем `su`/`sudo`/`ssh` спросят пароль, поэтому в копию вводится **только** строка входа, остальное (папка, venv, программа) показано в окне и вводится вручную после пароля — ничего не набирается «в парольный запрос». Для простаивающей внутренней оболочки venv не виден в `/proc`, поэтому работает запоминание набранного (`cd ~/App && source .venv/bin/activate` в одной строке понимается; `cd` перед активацией сохраняется вместе с ней, т.к. путь к скрипту обычно относительный). Папка чужого пользователя читается только при праве ptrace (root на обычном сервере; в Docker права отсутствуют — тест это учитывает).
-- Определение состояния ускорено (сначала `stat` всех процессов, окружение читается только у лидеров сеансов с терминалом), показывается уведомление, ожидание ограничено 25 с, любая ошибка не скрывается: копия открывается без команд с пояснением. Между строками запуска выдерживается пауза «терминал молчит 400 мс».
-- Тестовый sshd с паролем допускает вход root (только тесты) — для проверки `su - user` без пароля.
+- Explorer: above all folders there is always a ".." row (except at the root): double click/Enter goes one level up, files can be dropped on it (move to the parent). It is not a real entry: it takes no part in copying, deleting, Ctrl+A and counters.
+- "Duplicate" (button and Ctrl+Shift+D): to the right of the terminal (full height, the border can be dragged) a **live copy** opens — a second `ssh` process on the same server. At the top it shows the screen and scrollback of the source terminal (with colors, `@xterm/addon-serialize`), below a separator and a new shell into which the working folder, the virtual environment and the running program (btop, `tail -f`, …) are **replayed**.
+  How this is found out without commands on the server: the terminal's shell is located by the client port in `SSH_CONNECTION`/`SSH_CLIENT` of its environment (the local `ssh` port is taken from the OS TCP table: `GetExtendedTcpTable` on Windows, `/proc/net/tcp` on Linux), then `/proc/<pid>/{stat,cwd,cmdline,environ}` are read over SFTP: the shell's folder, the foreground program (the terminal's process group) and its `VIRTUAL_ENV`/`CONDA_*`. For an idle shell, venv activation is not visible in `/proc` (the environment changes only in the shell's memory), so `source …/activate`, `conda activate`, `deactivate` typed in the terminal are additionally remembered (only if the line was typed completely by hand, without Tab/arrows).
+  **Deviation from item 14 of the spec (at the user's direct request):** commands are typed into the copy automatically. Protection: before that they are shown in a window and are editable (`Settings → Terminal duplication`: "ask" — the default, "immediately" or "output only"), and they are typed only after the new shell has printed its prompt and while the user has typed nothing themself. The state of the running program is not copied — it starts anew; SFTP and a Linux server are required (on OpenWrt/dropbear it works if dropbear sets `SSH_CONNECTION`/`SSH_CLIENT`). Closing the copy asks for confirmation.
+- Fixed: xterm replies to shell queries (BusyBox ash asks for the cursor position at start) arrive through `onData` and were previously counted as "the user started typing" — commands were not typed into the copy. Now only real key presses, paste and IME input (an 80 ms window) count as user input. For full-screen programs (btop, htop, mc, vim, tmux …) showing the earlier output at the top is off by default (a switch in the duplication dialog): their screen is a snapshot of one moment and looks like garbage in the copy's scrollback.
+- Nested shells (`su - user`, `sudo -i`, `bash`): from the process table (`/proc/*/stat`) a chain is built from the login shell to the foreground program; the inner shell and the command that started it (`su - comfyui`) go first into the copy's plan, then `cd` into the inner shell's folder, venv activation and the program. This works without a password if the login is as root (`su`/`sudo` from root). As a regular user `su`/`sudo`/`ssh` will ask for a password, so **only** the login line is typed into the copy, the rest (folder, venv, program) is shown in the window and typed by hand after the password — nothing is typed "into a password prompt". For an idle inner shell the venv is not visible in `/proc`, so remembering what was typed works (`cd ~/App && source .venv/bin/activate` in one line is understood; a `cd` before activation is saved together with it, since the script path is usually relative). Another user's folder is read only with the ptrace right (root on a regular server; Docker lacks it — the test accounts for that).
+- State detection is faster (first `stat` of all processes, the environment is read only for session leaders with a terminal), a notification is shown, the wait is limited to 25 s, any error is not hidden: the copy opens without commands, with an explanation. Between the launch lines there is a "terminal quiet for 400 ms" pause.
+- The test sshd with a password allows root login (tests only) — to check `su - user` without a password.
 
-## Порт на Linux (Ubuntu, Arch)
+## Linux port (Ubuntu, Arch)
 
-- Код общий: терминал на Linux использует тот же `portable-pty` (PTY вместо ConPTY) и системный `ssh`; askpass, expect-режим, дублирование терминала, монитор, SFTP — без изменений (интеграционные и терминальные тесты и так выполняются на Linux).
-- Отличия: (1) **папка данных** — портативный `data` рядом с бинарником, если он существует, иначе XDG (`~/.local/share/d256shell`), потому что пакет ставится в `/usr/bin` (нет прав записи); `D256SHELL_DATA_DIR` по-прежнему главнее. Windows не изменился. (2) **рамка окна** — на Linux системная (`decorations(true)`), собственные кнопки сворачивания/закрытия скрываются (`NATIVE_FRAME`); у окна без рамки в GTK нет границ для изменения размера. (3) **drag-out** — крейт `drag` для GTK принимает `gtk::ApplicationWindow` (`window.gtk_window()`), для Windows — дескриптор окна. (4) **имена при скачивании** — строгие правила имён Windows применяются только в Windows (`windows_name_ok`), на Linux допустимо всё, что допускает удалённая сторона, кроме `/` и NUL. (5) текст ошибки «ssh не найден» — для Linux с командами установки.
-- Сборка: `Dockerfile.linux` на Ubuntu 22.04 (образ закреплён дайджестом; тулчейны Rust и Node копируются из тех же официальных образов, что и основной dev-образ), `scripts/build-linux.sh` → tar.gz, deb (собирается `dpkg-deb`), PKGBUILD с готовым tar.gz. Бинарник требует glibc ≥ 2.34 и WebKitGTK 4.1. В `src-tauri` добавлен feature `custom-protocol` (встраивание UI при обычном `cargo build --release`).
-- Проверено: clippy (`scripts/clippy-linux.sh`), установка deb в чистые Ubuntu 22.04 и 24.04, сборка и установка PKGBUILD в чистом Arch (`makepkg`, `pacman -U`), запуск на виртуальном дисплее: окно появляется, папка данных создаётся в XDG, скриншоты `e2e/screenshots/{ubuntu-22.04,ubuntu-24.04,arch}.png`.
-- **Не проверено** (нет настоящего рабочего стола в контейнере): работа под Wayland/X11 с оконным менеджером, системные диалоги выбора файлов, перетаскивание из/в файловый менеджер, буфер обмена WebKitGTK, WebGL в xterm на разных драйверах (при проблемах отрисовки — `WEBKIT_DISABLE_DMABUF_RENDERER=1`). Не собраны AppImage и Flatpak (нужны сторонние загрузчики во время сборки; отложено по правилам цепочки поставки).
+- The code is shared: on Linux the terminal uses the same `portable-pty` (PTY instead of ConPTY) and the system `ssh`; askpass, expect mode, terminal duplication, the monitor, SFTP — unchanged (the integration and terminal tests run on Linux anyway).
+- Differences: (1) **data folder** — a portable `data` next to the binary if it exists, otherwise XDG (`~/.local/share/d256shell`), because the package is installed in `/usr/bin` (no write access); `D256SHELL_DATA_DIR` still takes priority. Windows is unchanged. (2) **window frame** — on Linux it is the system one (`decorations(true)`), our own minimize/close buttons are hidden (`NATIVE_FRAME`); a frameless GTK window has no borders for resizing. (3) **drag-out** — the `drag` crate for GTK accepts a `gtk::ApplicationWindow` (`window.gtk_window()`), for Windows a window handle. (4) **download names** — the strict Windows name rules apply only on Windows (`windows_name_ok`), on Linux anything the remote side allows is fine except `/` and NUL. (5) the "ssh not found" error text is Linux-specific, with install commands.
+- Build: `Dockerfile.linux` on Ubuntu 22.04 (the image is pinned by digest; the Rust and Node toolchains are copied from the same official images as the main dev image), `scripts/build-linux.sh` → tar.gz, deb (built by `dpkg-deb`), PKGBUILD with the ready tar.gz. The binary needs glibc ≥ 2.34 and WebKitGTK 4.1. The `custom-protocol` feature was added to `src-tauri` (embedding the UI in a plain `cargo build --release`).
+- Verified: clippy (`scripts/clippy-linux.sh`), installing the deb into clean Ubuntu 22.04 and 24.04, building and installing the PKGBUILD in a clean Arch (`makepkg`, `pacman -U`), running on a virtual display: the window appears, the data folder is created in XDG, screenshots `e2e/screenshots/{ubuntu-22.04,ubuntu-24.04,arch}.png`.
+- **Not verified** (there is no real desktop in the container): operation under Wayland/X11 with a window manager, system file pickers, dragging from/to a file manager, the WebKitGTK clipboard, WebGL in xterm on various drivers (for rendering problems — `WEBKIT_DISABLE_DMABUF_RENDERER=1`). AppImage and Flatpak are not built (they need third-party downloaders at build time; postponed under the supply-chain rules).
 
-## Вход по приватному ключу
+## Private key login
 
-- Сервер хранит **только путь** к файлу ключа (`key_path`) и, по желанию пользователя, парольную фразу (`key_passphrase`, внутри того же шифрованного хранилища; затирается при удалении из памяти). Сам ключ никуда не копируется. Снятый флажок «Использовать приватный ключ» удаляет путь и сохранённую фразу.
-- Терминал: `-i <путь> -o PubkeyAuthentication=yes -o IdentitiesOnly=yes -o IdentityAgent=none -o AddKeysToAgent=no -o PreferredAuthentications=publickey,keyboard-interactive,password`; без ключа поведение прежнее (`PubkeyAuthentication=no`, никаких «чужих» ключей). Путь передаётся отдельным аргументом (пробелы не требуют кавычек). Файл проверяется до запуска ssh (нет файла / `.ppk` / открытый `.pub` — понятное сообщение).
-- Парольная фраза в терминале приходит в askpass как «Enter passphrase for key …»: сохранённая подставляется **один раз**, дальше вопрос идёт пользователю (маскированный ввод), как и для пароля; фраза и пароль не путаются.
-- SFTP (russh): ключ пробуется первым (RSA — с лучшим из поддерживаемых сервером хэшей); зашифрованный ключ расшифровывается локально, до трёх вопросов о фразе без единой попытки входа на сервере; если ключ отвергнут — «Сервер не принял ключ», а при сохранённом пароле (или при частичном успехе, ключ + код 2FA) вход продолжается по прежней политике: ровно одна попытка пароля.
-- Не поддерживается: `.ppk` (нужен экспорт в OpenSSH), SSH-агент, сертификаты (`*-cert.pub`), аппаратные ключи (FIDO).
-- Тесты: тестовый sshd `sshd-key` (порт 2226, ключи генерируются при старте в общий том `/testkeys`: ed25519, RSA, RSA-PEM, ECDSA, ключ с фразой `keypass`, неавторизованный ключ, файл `.ppk`); интеграционные (`key_login`), терминальные (реальный `ssh -i` + askpass), e2e (`keys.spec.ts`).
+- The server stores **only the path** to the key file (`key_path`) and, if the user wants, the passphrase (`key_passphrase`, inside the same encrypted vault; wiped when removed from memory). The key itself is not copied anywhere. Clearing the "Use a private key" checkbox removes the path and the saved passphrase.
+- Terminal: `-i <path> -o PubkeyAuthentication=yes -o IdentitiesOnly=yes -o IdentityAgent=none -o AddKeysToAgent=no -o PreferredAuthentications=publickey,keyboard-interactive,password`; without a key the behavior is as before (`PubkeyAuthentication=no`, no "foreign" keys). The path is passed as a separate argument (spaces need no quotes). The file is checked before ssh starts (no file / `.ppk` / a public `.pub` — a clear message).
+- The passphrase in the terminal reaches askpass as "Enter passphrase for key …": the saved one is supplied **once**, after that the question goes to the user (masked input), as with the password; the passphrase and the password are not confused.
+- SFTP (russh): the key is tried first (RSA — with the best hash the server supports); an encrypted key is decrypted locally, up to three passphrase questions without a single login attempt on the server; if the key is rejected — "The server did not accept the key", and with a saved password (or on partial success, key + 2FA code) the login continues under the earlier policy: exactly one password attempt.
+- Not supported: `.ppk` (export to OpenSSH is needed), the SSH agent, certificates (`*-cert.pub`), hardware keys (FIDO).
+- Tests: the test sshd `sshd-key` (port 2226, keys are generated at start into the shared volume `/testkeys`: ed25519, RSA, RSA-PEM, ECDSA, a key with the passphrase `keypass`, an unauthorized key, a `.ppk` file); integration (`key_login`), terminal (a real `ssh -i` + askpass), e2e (`keys.spec.ts`).
 
-## Кодировки в редакторе
+## Encodings in the editor
 
-- Раньше не-UTF-8 файл не открывался («Файл нельзя открыть в редакторе»). Теперь поддерживаются все кодировки стандарта WHATWG (крейты `encoding_rs`, `chardetng`): UTF-8/16, Windows-125x, KOI8-R/U, CP866, ISO-8859-x, Mac, Shift_JIS, EUC-JP/KR, GBK, GB18030, Big5 (список выбора — `ui/src/encodings.ts`, он же `sftp/codec.rs`).
-- Открытие: BOM → корректный UTF-8 → автоопределение (`chardetng`; в строке состояния пометка «определена автоматически»). Кнопка кодировки справа внизу: «Перечитать в этой кодировке» (если угадано неверно) и «Сохранять в этой» (конвертация; для Unicode — галочка BOM). Если файл не расшифровывается автоматически, при открытии предлагается выбрать кодировку.
-- **Безопасность данных:** файл открывается в кодировке только если запись неизменённого текста обратно даёт те же байты (иначе отказ, «выберите другую кодировку»); недопустимые байты не заменяются на «�»; символ, которого нет в выбранной кодировке (например `ß` в Windows-1251), при сохранении называется в ошибке и ничего не пишется. Нулевые байты по-прежнему означают бинарный файл (кроме UTF-16 с BOM или выбранного вручную UTF-16).
-- Автоопределение — эвристика: для коротких файлов оно может ошибиться (например, KOI8-R/Windows-1251) — поэтому есть ручной выбор. UTF-32 не поддерживается.
+- Previously a non-UTF-8 file did not open ("The file cannot be opened in the editor"). Now all encodings of the WHATWG standard are supported (the `encoding_rs`, `chardetng` crates): UTF-8/16, Windows-125x, KOI8-R/U, CP866, ISO-8859-x, Mac, Shift_JIS, EUC-JP/KR, GBK, GB18030, Big5 (the choice list is `ui/src/encodings.ts`, the same as `sftp/codec.rs`).
+- Opening: BOM → valid UTF-8 → auto-detection (`chardetng`; the status bar says "detected automatically"). The encoding button at the bottom right: "Reopen with this encoding" (if the guess was wrong) and "Save with this" (conversion; a BOM checkbox for Unicode). If the file cannot be decoded automatically, a choice of encoding is offered on opening.
+- **Data safety:** a file is opened in an encoding only if writing the unchanged text back gives the same bytes (otherwise a refusal, "choose another encoding"); invalid bytes are not replaced by "�"; a character that does not exist in the selected encoding (for example `ß` in Windows-1251) is named in the error on saving and nothing is written. Null bytes still mean a binary file (except UTF-16 with a BOM or manually selected UTF-16).
+- Auto-detection is a heuristic: for short files it can be wrong (for example KOI8-R/Windows-1251) — hence the manual choice. UTF-32 is not supported.
 
-## Вкладка «Монитор» в стиле диспетчера задач Windows 10
+## "Monitor" tab in the style of the Windows 10 task manager
 
-- Слева список ресурсов с живыми мини-графиками (ЦП, Память, каждый диск, каждый сетевой интерфейс), справа подробности выбранного — как на вкладке «Производительность»: ЦП (диаграмма на каждое логическое ядро или общая, использование, скорость в ГГц, потоки, время работы д:чч:мм:сс, нагрузка), Память (график, полоса «используется / кэш / свободно», доступно, кэшировано, своп), Диск (активное время, среднее время ответа, скорости чтения/записи с пунктиром для записи, ёмкость/тип HDD-SSD/модель, IOPS, очередь), Сеть (приём/отправка в бит/с, состояние, скорость соединения, MAC, всего принято/отправлено). Окно графиков — 60 секунд.
-- Источники (только чтение файлов по SFTP, команды не выполняются): `/proc/stat`, `/proc/meminfo`, `/proc/loadavg`, `/proc/uptime`, `/proc/net/dev`, `/proc/diskstats`, `/proc/cpuinfo` (частота), один раз `/sys/block/<диск>/{size,queue/rotational,device/model}` и `/sys/class/net/<интерфейс>/{speed,operstate,address}`.
-- Нет (недоступно по SFTP без команд): GPU, IP-адрес адаптера, число процессов, базовая частота и размеры кэшей ЦП. «Потоки» — это число задач из `/proc/loadavg`. В виртуальных машинах и контейнерах `/sys` может не содержать данных о дисках и сетевых картах: тогда соответствующие поля показывают «—».
-- Частота обновления графиков: список «Частота обновления» внизу вкладки «Монитор» (пауза, 1/2/5/10/30 с); значение сохраняется в `settings.json` (`monitor_interval_sec`, то же поле в Настройках, диапазон 1–60 с) и применяется сразу. Окно графиков — всегда 60 секунд (число точек зависит от частоты).
-- Исправлено: сведения об устройствах (модель, ёмкость и тип диска, скорость сетевой карты, модель ЦП) приходят в первой выборке, а вкладка читала их из последней и показывала «—»; кроме того, они дочитываются, когда диск или интерфейс появляется позже (простаивающие диски в первой выборке скрыты).
-- Частота обновления задаётся в **миллисекундах** (`monitor_interval_ms`, 100–60000; прежнее значение в секундах из старого `settings.json` переносится автоматически). В списке на вкладке «Монитор»: пауза, 250 мс … 30 с и «Своя частота…» (поле в мс, от 100). Фактический темп ограничен задержкой сети: следующий опрос начинается после ответа на предыдущий, поэтому на медленном канале 100 мс недостижимы — графики просто обновляются настолько часто, насколько отвечает сервер. История хранит до 700 точек (минута при 100 мс).
+- On the left a list of resources with live mini charts (CPU, Memory, each disk, each network interface), on the right the details of the selected one — like the Performance tab: CPU (a chart per logical core or a total one, utilization, speed in GHz, threads, uptime d:hh:mm:ss, load), Memory (chart, a "used / cache / free" bar, available, cached, swap), Disk (active time, average response time, read/write speeds with a dashed line for writes, capacity/type HDD-SSD/model, IOPS, queue), Network (receive/send in bit/s, state, link speed, MAC, total received/sent). The chart window is 60 seconds.
+- Sources (read-only files over SFTP, no commands): `/proc/stat`, `/proc/meminfo`, `/proc/loadavg`, `/proc/uptime`, `/proc/net/dev`, `/proc/diskstats`, `/proc/cpuinfo` (frequency), once `/sys/block/<disk>/{size,queue/rotational,device/model}` and `/sys/class/net/<interface>/{speed,operstate,address}`.
+- Not available (impossible over SFTP without commands): GPU, the adapter's IP address, the number of processes, the base frequency and cache sizes of the CPU. "Threads" is the number of tasks from `/proc/loadavg`. In virtual machines and containers `/sys` may hold no data about disks and network cards: then the corresponding fields show "—".
+- Refresh rate: the "Refresh rate" list at the bottom of the "Monitor" tab (pause, 1/2/5/10/30 s); the value is saved in `settings.json` (`monitor_interval_sec`, the same field in Settings, range 1–60 s) and applied immediately. The chart window is always 60 seconds (the number of points depends on the rate).
+- Fixed: the device information (model, capacity and type of a disk, network card speed, CPU model) arrives in the first sample, but the tab read it from the last one and showed "—"; it is also read later when a disk or interface appears later (idle disks are hidden in the first sample).
+- The refresh rate is given in **milliseconds** (`monitor_interval_ms`, 100–60000; an old value in seconds from an old `settings.json` is migrated automatically). The list on the "Monitor" tab: pause, 250 ms … 30 s and "Custom rate…" (a field in ms, from 100). The actual pace is limited by network latency: the next poll starts after the previous reply, so 100 ms is unreachable on a slow link — the charts simply update as often as the server answers. The history keeps up to 700 points (a minute at 100 ms).
 
-## Релиз 1.0.0 и переименование
+## Release 1.0.0 and the rename
 
-- Проект переименован в **d256 Shell** (было Shellport): окно, заголовки, «О программе», сведения о версии exe (ProductName `d256 Shell`), пакеты. Имена файлов без пробелов: `d256Shell.exe`, `d256Shell.zip`, Linux `d256shell` (`d256shell-1.0.0-linux-x86_64.tar.gz`, `d256shell_1.0.0_amd64.deb`); идентификатор `com.dest1256.d256shell`; крейты `d256shell`, `d256shell-core`, `d256shell-devbridge`; переменные окружения `D256SHELL_*` (`D256SHELL_DATA_DIR` …); суффикс временных файлов на сервере `.d256shell-<rand>.part`; XDG-папка Linux `~/.local/share/d256shell`.
-- Формат данных не менялся (`vault.bin`, `known_hosts`, `settings.json`), так что папку `data` из пред-релизных сборок можно взять без изменений. Не переносятся только мелкие настройки интерфейса в WebView (положение панелей и т.п.: их ключ `localStorage` теперь `d256shell.*`).
-- Внутренний путь dev-контейнера `/workspaces/shellport` оставлен намеренно: его смена потребовала бы полной пересборки образа Docker, а на продукт он не влияет.
-- Версия 1.0.0 (единый источник — `Cargo.toml`); правила и скрипт повышения — `VERSIONING.md`, `scripts/bump-version.sh`; журнал — `CHANGELOG.md`; релиз в GitHub — тег `v<версия>` (workflow `release.yml`, **не запускался**: проверен только синтаксис и закреплённые SHA действий).
+- The project was renamed **d256 Shell** (formerly Shellport): the window, titles, "About", exe version info (ProductName `d256 Shell`), packages. File names without spaces: `d256Shell.exe`, `d256Shell.zip`, Linux `d256shell` (`d256shell-1.0.0-linux-x86_64.tar.gz`, `d256shell_1.0.0_amd64.deb`); identifier `com.dest1256.d256shell`; crates `d256shell`, `d256shell-core`, `d256shell-devbridge`; environment variables `D256SHELL_*` (`D256SHELL_DATA_DIR` …); the temporary file suffix on the server `.d256shell-<rand>.part`; the Linux XDG folder `~/.local/share/d256shell`.
+- The data format did not change (`vault.bin`, `known_hosts`, `settings.json`), so the `data` folder from pre-release builds can be used as is. Only small UI settings in the WebView (panel positions etc.: their `localStorage` key is now `d256shell.*`) are not carried over.
+- The internal dev container path `/workspaces/shellport` was left on purpose: changing it would require a full rebuild of the Docker image, and it does not affect the product.
+- Version 1.0.0 (the single source is `Cargo.toml`); the rules and the bump script are in `VERSIONING.md`, `scripts/bump-version.sh`; the log is `CHANGELOG.md`; a GitHub release is the tag `v<version>` (workflow `release.yml`, **never run**: only the syntax and the pinned action SHAs were checked).
 
 ## 1.0.1
 
-- Окно подтверждения вставки в терминал (многострочный или большой текст) содержит редактируемое поле `textarea`: вставляется отредактированный текст, `Ctrl+Enter` — вставить, пустой текст = отмена. Предупреждение, счётчик строк и символов обновляются при правке.
-- Порядок выпуска обновления: `RELEASING.md`.
+- The confirmation dialog for pasting into the terminal (multi-line or large text) contains an editable `textarea`: the edited text is pasted, `Ctrl+Enter` pastes, empty text = cancel. The warning and the line and character counters update while editing.
+- The procedure for publishing an update: `RELEASING.md`.
+
+## 1.0.2: MIT license and English
+
+- The project is distributed under the MIT license (`LICENSE`, © 2026 dest1256), instead of the previously adopted "private" `COPYRIGHT` notice. Metadata: `license = "MIT"` in `Cargo.toml` and the crates, `"license": "MIT"` in `package.json`, `license=('MIT')` in `PKGBUILD`. The license is placed in the packages (tar.gz, `/usr/share/doc/d256shell/copyright` in the deb, `/usr/share/licenses` in Arch). MIT requires users to keep the copyright notice and the license text; third-party library licenses stay under their own terms (the list is in "About").
+- Before publishing it was checked that the repository contains no secrets: the test credentials (`tester/testpass`, the `test-server` keys) are used only in the isolated Docker test containers.
+- The whole program and repository were translated to English: UI, messages from the core, tests, scripts, documentation. Dates and numbers use `en-US`. The Russian words that the program must recognize in server prompts (for example the password prompt of a Russian-localized server) were deliberately kept in `prompt.rs` and `terminal/expect.rs`, and Cyrillic test data (file names, text in other encodings) was kept as test input.

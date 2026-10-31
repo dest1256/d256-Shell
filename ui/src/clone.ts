@@ -32,10 +32,10 @@ export function buildPlan(ctx: TermContext, typedEnv: string[]): ClonePlan {
   let env: string[] = [];
   const nested = ctx.nested;
   const launcher = nested ? nested.launcher.map(shq).join(' ') : '';
-  if (launcher) summary.push(`вход: ${nested!.launcher.join(' ')}`);
+  if (launcher) summary.push(`login: ${nested!.launcher.join(' ')}`);
   if (ctx.cwd) {
     lines.push(`cd ${shq(ctx.cwd)}`);
-    summary.push(`папка ${ctx.cwd}`);
+    summary.push(`folder ${ctx.cwd}`);
   }
   const e = ctx.env ?? {};
   if (e.VIRTUAL_ENV) {
@@ -46,21 +46,21 @@ export function buildPlan(ctx: TermContext, typedEnv: string[]): ClonePlan {
     summary.push(`conda ${e.CONDA_DEFAULT_ENV}`);
   } else if (typedEnv.length) {
     env = typedEnv;
-    summary.push('окружение, которое вы активировали в этом терминале');
+    summary.push('the environment you activated in this terminal');
   }
   lines.push(...env);
   const fg = ctx.fg;
   const comm = (ctx.fg_comm ?? '').trim();
   if (fg?.length && !fg[0].startsWith('-') && !SHELLS.has(comm) && !SHELLS.has(fg[0].split('/').pop() ?? '')) {
     lines.push(fg.map(shq).join(' '));
-    summary.push(`запущено: ${fg.join(' ')}`);
+    summary.push(`running: ${fg.join(' ')}`);
   }
   const prog = (fg?.[0] ?? '').split('/').pop() ?? '';
   if (launcher) {
     if (ctx.root) lines.unshift(launcher);
     else {
       // su / sudo / ssh as an ordinary user ask for a password: nothing may be typed after the launcher
-      summary.push('дальше (папка, окружение, программа) вводятся после пароля вручную');
+      summary.push('next (folder, environment, program) are typed manually after the password');
       lines.splice(0, lines.length, launcher);
     }
   }
@@ -82,24 +82,24 @@ function confirmPlan(ctx: TermContext, plan: ClonePlan): Promise<{ lines: string
     };
     const found = ctx.found
       ? plan.summary.length
-        ? `Найдено на сервере: ${plan.summary.join(' · ')}.`
-        : 'Оболочка найдена: она на приглашении в домашней папке, повторять нечего.'
-      : `Состояние терминала определить не удалось: ${ctx.reason ?? ''}`;
+        ? `Found on the server: ${plan.summary.join(' · ')}.`
+        : 'The shell was found: it is at the prompt in the home folder, nothing to repeat.'
+      : `Could not determine the state of the terminal: ${ctx.reason ?? ''}`;
     return h(
       'form',
       { role: 'dialog', 'data-testid': 'clone-dialog', class: 'wide', onsubmit: (e) => (e.preventDefault(), void done(ta.value.split('\n').map((s) => s.trim()).filter(Boolean))) },
-      h('h3', {}, 'Дублировать терминал'),
+      h('h3', {}, 'Duplicate terminal'),
       h('p', {}, found),
-      h('p', { class: 'muted' }, 'В копию будут введены эти команды, по одной на строку. Их можно изменить или убрать. Состояние запущенной программы (её внутренние данные) не копируется: она запустится заново.'),
+      h('p', { class: 'muted' }, 'These commands will be typed into the copy, one per line. You can change or remove them. The state of the running program (its internal data) is not copied: it will start again.'),
       ta,
-      h('label', { class: 'check' }, showOld, ' Показать сверху прежний вывод терминала'),
-      h('label', { class: 'check' }, remember, ' Больше не спрашивать (в Настройках можно вернуть)'),
+      h('label', { class: 'check' }, showOld, ' Show the earlier terminal output on top'),
+      h('label', { class: 'check' }, remember, ' Do not ask again (can be restored in Settings)'),
       h(
         'div',
         { class: 'row end wrap' },
-        h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'clone-cancel' }, 'Отмена'),
-        h('button', { type: 'button', onclick: () => void done([]), 'data-testid': 'clone-view' }, 'Только вывод, без команд'),
-        h('button', { type: 'submit', class: 'primary', 'data-testid': 'clone-ok' }, 'Дублировать'),
+        h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'clone-cancel' }, 'Cancel'),
+        h('button', { type: 'button', onclick: () => void done([]), 'data-testid': 'clone-view' }, 'Output only, no commands'),
+        h('button', { type: 'submit', class: 'primary', 'data-testid': 'clone-ok' }, 'Duplicate'),
       ),
     );
   });
@@ -121,14 +121,14 @@ export async function prepareClone(src: TerminalView): Promise<CloneResult | nul
   let ctx: TermContext;
   try {
     // a busy server (hundreds of processes) takes a moment: say so, and never wait forever
-    toast('Определяю, что сейчас происходит в терминале…');
+    toast('Finding out what is going on in the terminal…');
     ctx = await Promise.race([
       api.termContext(src.id),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('сервер отвечает слишком долго')), 25_000)),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('the server takes too long to respond')), 25_000)),
     ]);
   } catch (e) {
     ctx = { found: false, reason: e instanceof ApiError ? e.message : String(e) };
-    if (mode === 'auto') toast(`Копия без команд: ${ctx.reason}`);
+    if (mode === 'auto') toast(`Copy without commands: ${ctx.reason}`);
   }
   const plan = buildPlan(ctx, src.envCommands);
   if (mode === 'auto' || (!plan.lines.length && ctx.found)) return { prefill: plan.prefill ? prefill : '', startup: plan.lines, env: plan.env };

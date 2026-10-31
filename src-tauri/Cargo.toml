@@ -1,10 +1,11 @@
 [package]
 name = "d256shell"
-description = "d256 Shell — портативный SSH-клиент"
+description = "d256 Shell: portable SSH client"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true
 publish.workspace = true
+license.workspace = true
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }

@@ -16,8 +16,8 @@ export function chmodDialog(name: string, isDir: boolean, current: number | null
     let mode = current === null ? 0o644 : current & 0o7777;
     const octal = h('input', { type: 'text', value: mode.toString(8).padStart(3, '0'), 'data-testid': 'chmod-octal', maxlength: '4', spellcheck: 'false' }) as HTMLInputElement;
     const boxes: HTMLInputElement[] = [];
-    const labels = ['Чтение', 'Запись', 'Выполнение'];
-    const who = ['Владелец', 'Группа', 'Остальные'];
+    const labels = ['Read', 'Write', 'Running'];
+    const who = ['Owner', 'Group', 'Others'];
     const grid = h('div', { class: 'chmod-grid' }, h('span', {}));
     for (const l of labels) grid.append(h('span', { class: 'muted' }, l));
     for (let g = 0; g < 3; g++) {
@@ -40,7 +40,7 @@ export function chmodDialog(name: string, isDir: boolean, current: number | null
       boxes.forEach((cb, i) => (cb.checked = (mode & (1 << (8 - i))) !== 0));
     });
     const rec = h('input', { type: 'checkbox', 'data-testid': 'chmod-recursive' }) as HTMLInputElement;
-    const kind = h('select', { 'data-testid': 'chmod-kind' }, h('option', { value: 'both' }, 'файлам и папкам'), h('option', { value: 'files' }, 'только файлам'), h('option', { value: 'dirs' }, 'только папкам')) as HTMLSelectElement;
+    const kind = h('select', { 'data-testid': 'chmod-kind' }, h('option', { value: 'both' }, 'files and folders'), h('option', { value: 'files' }, 'files only'), h('option', { value: 'dirs' }, 'folders only')) as HTMLSelectElement;
     kind.disabled = true;
     rec.addEventListener('change', () => (kind.disabled = !rec.checked));
     return h(
@@ -55,34 +55,34 @@ export function chmodDialog(name: string, isDir: boolean, current: number | null
           close({ mode: parseInt(octal.value, 8), recursive: rec.checked, files: !rec.checked || k !== 'dirs', dirs: !rec.checked || k !== 'files' });
         },
       },
-      h('h3', {}, `Права доступа: ${name}`),
+      h('h3', {}, `Permissions: ${name}`),
       grid,
-      h('label', {}, 'Восьмеричное значение', octal),
+      h('label', {}, 'Octal value', octal),
       isDir
-        ? h('div', { class: 'col' }, h('label', { class: 'check' }, rec, ' Применить рекурсивно (символические ссылки не затрагиваются)'), h('label', {}, 'Применить', kind))
+        ? h('div', { class: 'col' }, h('label', { class: 'check' }, rec, ' Apply recursively (symbolic links are not touched)'), h('label', {}, 'Apply', kind))
         : null,
-      h('div', { class: 'row end' }, h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'chmod-cancel' }, 'Отмена'), h('button', { type: 'submit', class: 'primary', 'data-testid': 'chmod-ok' }, 'Применить')),
+      h('div', { class: 'row end' }, h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'chmod-cancel' }, 'Cancel'), h('button', { type: 'submit', class: 'primary', 'data-testid': 'chmod-ok' }, 'Apply')),
     );
   });
 }
 
 export function propertiesDialog(path: string, e: DirEntry): Promise<unknown> {
   const row = (k: string, v: string) => h('div', { class: 'prop-row' }, h('span', { class: 'muted' }, k), h('span', { class: 'sel' }, v));
-  const kind = e.kind === 'dir' ? 'Папка' : e.kind === 'symlink' ? (e.target_is_dir ? 'Ссылка на папку' : 'Символическая ссылка') : e.kind === 'file' ? 'Файл' : 'Особый файл';
+  const kind = e.kind === 'dir' ? 'Folder' : e.kind === 'symlink' ? (e.target_is_dir ? 'Link to a folder' : 'Symbolic link') : e.kind === 'file' ? 'File' : 'Special file';
   return modal<boolean>((close) =>
     h(
       'div',
       { role: 'dialog', 'data-testid': 'props-dialog' },
-      h('h3', {}, 'Свойства'),
-      row('Имя', e.name),
-      row('Путь', path),
-      row('Тип', kind),
-      row('Размер', e.kind === 'file' ? `${e.size} байт` : '—'),
-      row('Права', e.mode === null ? '—' : `${modeString(e.mode, e.kind)} (${(e.mode & 0o7777).toString(8)})`),
-      row('Владелец', e.owner ?? (e.uid === null ? '—' : String(e.uid))),
-      row('Группа', e.group ?? (e.gid === null ? '—' : String(e.gid))),
-      row('Изменён', e.mtime === null ? '—' : new Date(e.mtime * 1000).toLocaleString('ru-RU')),
-      h('div', { class: 'row end' }, h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'props-close' }, 'Закрыть')),
+      h('h3', {}, 'Properties'),
+      row('Name', e.name),
+      row('Path', path),
+      row('Type', kind),
+      row('Size', e.kind === 'file' ? `${e.size} bytes` : '—'),
+      row('Permissions', e.mode === null ? '—' : `${modeString(e.mode, e.kind)} (${(e.mode & 0o7777).toString(8)})`),
+      row('Owner', e.owner ?? (e.uid === null ? '—' : String(e.uid))),
+      row('Group', e.group ?? (e.gid === null ? '—' : String(e.gid))),
+      row('Modified', e.mtime === null ? '—' : new Date(e.mtime * 1000).toLocaleString('en-US')),
+      h('div', { class: 'row end' }, h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'props-close' }, 'Close')),
     ),
   );
 }

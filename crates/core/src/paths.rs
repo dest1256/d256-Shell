@@ -14,10 +14,10 @@ pub enum DataDirError {
 impl std::fmt::Display for DataDirError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NoExeDir => write!(f, "Не удалось определить папку программы."),
+            Self::NoExeDir => write!(f, "Could not determine the program folder."),
             Self::NotWritable { dir, source } => write!(
                 f,
-                "Папка данных недоступна для записи: {}\nПереместите программу в папку, где у вас есть права записи (не в Program Files), либо задайте папку данных через D256SHELL_DATA_DIR.\nПодробности: {}",
+                "The data folder is not writable: {}\nMove the program to a folder where you have write access (not Program Files), or set the data folder with D256SHELL_DATA_DIR.\nDetails: {}",
                 dir.display(),
                 source
             ),
@@ -223,7 +223,7 @@ mod tests {
         fs::write(&root, b"f").unwrap();
         let err = prepare(root.join("data")).unwrap_err();
         assert!(matches!(err, DataDirError::NotWritable { .. }));
-        assert!(err.to_string().contains("недоступна для записи"));
+        assert!(err.to_string().contains("is not writable"));
         fs::remove_file(root).unwrap();
     }
 

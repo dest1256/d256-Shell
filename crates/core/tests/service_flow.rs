@@ -276,7 +276,7 @@ fn server_without_sftp_still_gives_a_session() {
     assert_eq!(r["home"], json!(null));
     let msg = r["sftp_error"].as_str().expect("sftp_error is reported");
     assert!(
-        msg.contains("SFTP") && msg.contains("Терминал работает"),
+        msg.contains("SFTP") && msg.contains("The terminal works"),
         "{msg}"
     );
     let sid = r["session_id"].as_str().unwrap();

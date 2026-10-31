@@ -62,15 +62,15 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   let counter = 0;
 
   const list = h('ul', { class: 'servers', 'data-testid': 'server-list', role: 'listbox' });
-  const search = h('input', { type: 'search', placeholder: 'Поиск сессий', 'data-testid': 'search', 'aria-label': 'Поиск сессий' }) as HTMLInputElement;
-  const quick = h('input', { type: 'text', placeholder: 'user@host:порт — быстрое подключение', 'data-testid': 'quick', 'aria-label': 'Быстрое подключение', spellcheck: 'false' }) as HTMLInputElement;
+  const search = h('input', { type: 'search', placeholder: 'Search sessions', 'data-testid': 'search', 'aria-label': 'Search sessions' }) as HTMLInputElement;
+  const quick = h('input', { type: 'text', placeholder: 'user@host:port: quick connect', 'data-testid': 'quick', 'aria-label': 'Quick connect', spellcheck: 'false' }) as HTMLInputElement;
   const home = h('div', { class: 'home', 'data-testid': 'home' });
   const work = h('main', { class: 'work' }, home);
   const statusCount = h('span', { 'data-testid': 'status-count' });
   const statusSessions = h('span', { 'data-testid': 'status-sessions' });
 
   // ---------- tabs ----------
-  const homeTab: Tab = { id: 'home', title: 'Главная', icon: 'home', view: home, closable: false };
+  const homeTab: Tab = { id: 'home', title: 'Home', icon: 'home', view: home, closable: false };
   tabs.push(homeTab);
 
   function renderTabs(): void {
@@ -81,7 +81,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       { onSelect: activate, onAdd: () => void add(), onClose: (id) => void closeTab(id), onRename: (id) => void renameTab(id) },
     );
     const n = tabs.filter((t) => t.state === 'ok').length;
-    statusSessions.textContent = n ? `Подключено: ${n}` : '';
+    statusSessions.textContent = n ? `Connected: ${n}` : '';
   }
   let onActivate: (id: string) => void = () => undefined;
   function activate(id: string): void {
@@ -97,7 +97,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   async function renameTab(id: string): Promise<void> {
     const t = tabs.find((x) => x.id === id);
     if (!t) return;
-    const name = await promptDialog('Переименовать вкладку', 'Название', t.title, 'OK');
+    const name = await promptDialog('Rename tab', 'Name', t.title, 'OK');
     if (name?.trim()) {
       t.title = name.trim();
       renderTabs();
@@ -106,8 +106,8 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   async function closeTab(id: string): Promise<void> {
     const t = tabs.find((x) => x.id === id);
     if (!t || !t.closable) return;
-    const unsaved = t.dirty?.() ? ' В открытых файлах есть НЕСОХРАНЁННЫЕ изменения, они будут потеряны.' : '';
-    if ((t.state !== 'off' || unsaved) && !(await confirmDialog('Закрыть сеанс?', `Соединение с «${t.title}» будет закрыто, запущенные в нём программы прервутся.${unsaved}`, 'Закрыть', true))) return;
+    const unsaved = t.dirty?.() ? ' There are UNSAVED changes in open files, they will be lost.' : '';
+    if ((t.state !== 'off' || unsaved) && !(await confirmDialog('Close the session?', `Connection to “${t.title}” will be closed and the programs running in it will be interrupted.${unsaved}`, 'Close', true))) return;
     t.dispose?.();
     for (const s of t.sessions ?? []) void api.disconnect(s).catch(() => undefined);
     t.view.remove();
@@ -136,7 +136,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     const panes = new PaneSet();
     // mini task manager under the terminal (numbers, small graphs); a click opens the detailed pane
     const mon = new MonitorSource(() => tab.sessions![tab.sessions!.length - 1], () => activeId === id);
-    const bar = new MonitorBar(mon, () => openMonitor(), info.sftp_error ? 'Мониторинг недоступен: у сервера нет SFTP' : undefined);
+    const bar = new MonitorBar(mon, () => openMonitor(), info.sftp_error ? 'Monitoring is unavailable: the server has no SFTP' : undefined);
     bar.setVisible(getSettings().monitor_enabled);
     const offSettings = onSettings((st) => bar.setVisible(st.monitor_enabled));
     const sessionNow = () => tab.sessions![tab.sessions!.length - 1];
@@ -166,12 +166,12 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
         plan = await prepareClone(src);
       } catch (e) {
         // never fail silently: open the copy without commands and say why
-        toast(`Копия без команд: ${e instanceof Error ? e.message : String(e)}`);
+        toast(`Copy without commands: ${e instanceof Error ? e.message : String(e)}`);
         plan = { prefill: src.snapshot(), startup: [], env: src.envCommands };
       }
       if (!plan) return;
-      const hhmm = new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-      const note = `\r\n\x1b[2m──── копия терминала от ${hhmm}: ниже новая оболочка на том же сервере ────\x1b[0m\r\n`;
+      const hhmm = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+      const note = `\r\n\x1b[2m──── copy of the terminal from ${hhmm}: below is a new shell on the same server ────\x1b[0m\r\n`;
       const pid = `dup:${++copies}`;
       const copy: TerminalView = new TerminalView(
         sessionNow(),
@@ -182,7 +182,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       copy.el.addEventListener('focusin', () => (source = copy));
       side.add({
         id: pid,
-        title: `Копия ${hhmm}`,
+        title: `Copy ${hhmm}`,
         view: h('div', { class: 'session-term' }, copy.el),
         closable: true,
         onShow: () => {
@@ -193,7 +193,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
           if (source === copy) source = terminal;
           copy.dispose();
         },
-        beforeClose: () => confirmDialog('Закрыть копию терминала?', 'Соединение этой копии будет закрыто, запущенные в ней программы прервутся.', 'Закрыть', true),
+        beforeClose: () => confirmDialog('Close the terminal copy?', 'The connection of this copy will be closed and the programs running in it will be interrupted.', 'Close', true),
       });
       setSide(true);
       requestAnimationFrame(() => void copy.start());
@@ -216,7 +216,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       split.addEventListener('pointermove', move);
       split.addEventListener('pointerup', up);
     });
-    panes.add({ id: 'term', title: 'Терминал', view: h('div', { class: 'session-term', 'data-testid': 'session-term' }, h('div', { class: 'term-col' }, terminal.el, bar.el)), closable: false, onShow: () => terminal.show() });
+    panes.add({ id: 'term', title: 'Terminal', view: h('div', { class: 'session-term', 'data-testid': 'session-term' }, h('div', { class: 'term-col' }, terminal.el, bar.el)), closable: false, onShow: () => terminal.show() });
     // right column: copies of the terminal (hidden until the first copy), with a draggable divider
     const sideCol = h('div', { class: 'side-col', 'data-testid': 'side-col' }, side.el);
     const sideSplit = h('div', { class: 'splitter', role: 'separator', 'aria-orientation': 'vertical', 'data-testid': 'side-splitter' });
@@ -260,7 +260,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     function openMonitor(): void {
       if (panes.has('monitor')) return panes.activate('monitor');
       const detail = new MonitorDetail(mon);
-      panes.add({ id: 'monitor', title: 'Монитор', view: detail.el, closable: true, onShow: () => mon.start(), dispose: () => detail.dispose() });
+      panes.add({ id: 'monitor', title: 'Monitor', view: detail.el, closable: true, onShow: () => mon.start(), dispose: () => detail.dispose() });
     }
 
     // ---- built-in editor: one pane per open file next to the terminal
@@ -295,9 +295,9 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
         const e = failure;
         ed.dispose();
         if (e instanceof ApiError && (e.code === 'binary' || e.code === 'too_large')) {
-          if (await confirmDialog('Файл нельзя открыть в редакторе', `${e.message}
+          if (await confirmDialog('The file cannot be opened in the editor', `${e.message}
 
-Скачать «${path.split('/').pop()}»?`, 'Скачать…')) await explorer.downloadPaths([path]);
+Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downloadPaths([path]);
         } else toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
         return;
       }
@@ -309,7 +309,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
         closable: true,
         onShow: () => ed.focus(),
         dispose: () => ed.dispose(),
-        beforeClose: async () => !ed.dirty || (await confirmDialog('Закрыть без сохранения?', `В «${path}» есть несохранённые изменения. Они будут потеряны.`, 'Закрыть', true)),
+        beforeClose: async () => !ed.dirty || (await confirmDialog('Close without saving?', `“${path}” has unsaved changes. They will be lost.`, 'Close', true)),
       });
       ed.focus();
     }
@@ -333,7 +333,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
 
   async function connectQuick(): Promise<void> {
     const q = parseQuick(quick.value);
-    if (!q) return void toast('Введите адрес в формате user@host или user@host:порт.');
+    if (!q) return void toast('Enter the address as user@host or user@host:port.');
     const opts: ConnectOpts = { label: `${q.username}@${q.host}`, host: q.host, port: q.port, username: q.username };
     const info = await connectFlow(opts);
     if (info) {
@@ -349,7 +349,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     if (selected && !servers.some((s) => s.id === selected)) selected = null;
     renderList();
     renderHome();
-    statusCount.textContent = `Сессий: ${servers.length}`;
+    statusCount.textContent = `Sessions: ${servers.length}`;
   };
   const add = async () => (await serverForm()) && (await reload());
   const edit = async (s: ServerView) => (await serverForm(s)) && (await reload());
@@ -358,12 +358,12 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     await reload();
   };
   const del = async (s: ServerView) => {
-    if (!(await confirmDialog('Удалить сервер?', `«${s.name}» и сохранённый пароль будут удалены.`, 'Удалить', true))) return;
+    if (!(await confirmDialog('Delete server?', `“${s.name}” and the saved password will be deleted.`, 'Delete', true))) return;
     await api.deleteServer(s.id);
     await reload();
   };
   const lock = async (silent = false) => {
-    if (!silent && tabs.some((t) => t.sessions?.length) && !(await confirmDialog('Заблокировать хранилище?', 'Открытые сеансы будут закрыты, запущенные в них программы прервутся.', 'Заблокировать', true))) return;
+    if (!silent && tabs.some((t) => t.sessions?.length) && !(await confirmDialog('Lock the vault?', 'The open sessions will be closed and the programs running in them will be interrupted.', 'Lock', true))) return;
     for (const t of tabs) {
       t.dispose?.();
       for (const s of t.sessions ?? []) void api.disconnect(s).catch(() => undefined);
@@ -380,7 +380,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     const q = search.value.trim().toLowerCase();
     const shown = servers.filter((s) => !q || s.name.toLowerCase().includes(q) || s.host.toLowerCase().includes(q));
     if (!shown.length) {
-      list.append(h('li', { class: 'empty' }, servers.length ? 'Ничего не найдено.' : 'Сессий пока нет. Нажмите «Сессия» на панели.'));
+      list.append(h('li', { class: 'empty' }, servers.length ? 'Nothing found.' : 'No sessions yet. Click Session on the toolbar.'));
       return;
     }
     for (const s of shown) {
@@ -406,14 +406,14 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
             },
           },
           h('span', { class: 'srv-ico' }, icon('terminal', 16)),
-          h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, s.name), h('div', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " · ключ" : ""}`)),
+          h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, s.name), h('div', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " · key" : ""}`)),
           h(
             'div',
             { class: 'srv-actions' },
-            iconBtn('plug', 'Подключиться (Enter)', 'connect', () => void connectServer(s)),
-            iconBtn('edit', 'Изменить (F2)', 'edit', () => void edit(s)),
-            iconBtn('copy', 'Дублировать', 'dup', () => void dup(s)),
-            iconBtn('trash', 'Удалить (Del)', 'delete', () => void del(s)),
+            iconBtn('plug', 'Connect (Enter)', 'connect', () => void connectServer(s)),
+            iconBtn('edit', 'Edit (F2)', 'edit', () => void edit(s)),
+            iconBtn('copy', 'Duplicate', 'dup', () => void dup(s)),
+            iconBtn('trash', 'Delete (Del)', 'delete', () => void del(s)),
           ),
         ),
       );
@@ -426,14 +426,14 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       h(
         'div',
         { class: 'home-head' },
-        h('h1', {}, 'Добро пожаловать в d256 Shell'),
-        h('p', {}, 'Портативный SSH-клиент: терминал, проводник файлов и редактор в одном окне.'),
-        h('div', { class: 'row' }, h('button', { class: 'primary', 'data-testid': 'home-add', onclick: () => void add() }, icon('plus', 14), 'Новая сессия')),
+        h('h1', {}, 'Welcome to d256 Shell'),
+        h('p', {}, 'Portable SSH client: terminal, file explorer and editor in one window.'),
+        h('div', { class: 'row' }, h('button', { class: 'primary', 'data-testid': 'home-add', onclick: () => void add() }, icon('plus', 14), 'New session')),
       ),
-      h('h2', { class: 'section' }, 'Сессии'),
+      h('h2', { class: 'section' }, 'Sessions'),
     );
     if (!servers.length) {
-      home.append(h('div', { class: 'home-empty' }, 'Здесь появятся ваши серверы. Добавьте первый — пароль будет храниться в зашифрованном хранилище.'));
+      home.append(h('div', { class: 'home-empty' }, 'Your servers will appear here. Add the first one: its password will be kept in the encrypted vault.'));
       return;
     }
     const grid = h('div', { class: 'cards' });
@@ -443,7 +443,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
           'button',
           { class: 'card-srv', 'data-testid': 'home-card', ondblclick: () => void connectServer(s), onclick: () => ((selected = s.id), renderList()) },
           h('span', { class: 'srv-ico big' }, icon('terminal', 20)),
-          h('span', { class: 'grow left' }, h('strong', {}, s.name), h('span', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " · ключ" : ""}`)),
+          h('span', { class: 'grow left' }, h('strong', {}, s.name), h('span', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " · key" : ""}`)),
         ),
       );
     }
@@ -460,7 +460,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   const dupActive = () => {
     const t = tabs.find((x) => x.id === activeId);
     if (t?.duplicate) t.duplicate();
-    else toast('Откройте вкладку SSH: дублируется её терминал.');
+    else toast('Open an SSH tab: its terminal is duplicated.');
   };
   const toggleSidebar = () => {
     const hidden = sidebar.classList.toggle('hidden');
@@ -470,29 +470,29 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   const toolbar = h(
     'div',
     { class: 'toolbar', role: 'toolbar' },
-    tbtn('plus', 'Сессия', 'add', () => void add()),
-    tbtn('plug', 'Подключить', 'toolbar-connect', () => {
+    tbtn('plus', 'Session', 'add', () => void add()),
+    tbtn('plug', 'Connect', 'toolbar-connect', () => {
       const s = servers.find((x) => x.id === selected);
       if (s) void connectServer(s);
-      else toast('Выберите сессию в списке слева.');
+      else toast('Select a session in the list on the left.');
     }),
-    tbtn('sidebar', 'Панель', 'toggle-sidebar', toggleSidebar),
-    tbtn('copy', 'Дублировать', 'duplicate-term', () => dupActive()),
+    tbtn('sidebar', 'Panel', 'toggle-sidebar', toggleSidebar),
+    tbtn('copy', 'Duplicate', 'duplicate-term', () => dupActive()),
     h('div', { class: 'tool-sep' }),
-    tbtn('key', 'Мастер-пароль', 'change-master', () => void changeMasterDialog()),
-    tbtn('settings', 'Настройки', 'settings', () => void settingsDialog()),
+    tbtn('key', 'Master password', 'change-master', () => void changeMasterDialog()),
+    tbtn('settings', 'Settings', 'settings', () => void settingsDialog()),
     h('div', { class: 'grow' }),
-    tbtn('lock', 'Заблокировать', 'lock', () => void lock()),
+    tbtn('lock', 'Lock', 'lock', () => void lock()),
   );
 
   // ---------- left rail + sidebar + splitter ----------
   const rail = h(
     'nav',
-    { class: 'rail', 'aria-label': 'Разделы' },
-    h('button', { class: 'rail-btn active', title: 'Сессии', 'data-testid': 'rail-sessions' }, icon('server', 20)),
+    { class: 'rail', 'aria-label': 'Sections' },
+    h('button', { class: 'rail-btn active', title: 'Sessions', 'data-testid': 'rail-sessions' }, icon('server', 20)),
   );
   sidebar.append(
-    h('div', { class: 'side-head' }, h('span', {}, 'Сессии')),
+    h('div', { class: 'side-head' }, h('span', {}, 'Sessions')),
     h('div', { class: 'search' }, icon('plug', 14), quick),
     h('div', { class: 'search' }, icon('search', 14), search),
     list,
@@ -532,7 +532,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   const status = h(
     'footer',
     { class: 'statusbar' },
-    h('span', { class: 'st' }, icon('unlock', 12), 'Хранилище разблокировано'),
+    h('span', { class: 'st' }, icon('unlock', 12), 'Vault unlocked'),
     statusCount,
     statusSessions,
     h('div', { class: 'grow' }),
@@ -594,7 +594,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     void getCurrentWindow().onCloseRequested(async (ev) => {
       if (!anyDirty()) return;
       ev.preventDefault();
-      if (await confirmDialog('Закрыть d256 Shell?', 'В открытых файлах есть несохранённые изменения. Они будут потеряны.', 'Закрыть', true)) await getCurrentWindow().destroy();
+      if (await confirmDialog('Close d256 Shell?', 'There are unsaved changes in open files. They will be lost.', 'Close', true)) await getCurrentWindow().destroy();
     });
   }
 

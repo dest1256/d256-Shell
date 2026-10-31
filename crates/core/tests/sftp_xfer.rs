@@ -222,7 +222,7 @@ async fn upload_into_readonly_folder_fails_and_creates_nothing() {
     let e = put(&c, &l.join("n.txt"), &ro, "n.txt", Action::Skip)
         .await
         .unwrap_err();
-    assert!(e.to_string().contains("прав"), "{e}");
+    assert!(e.to_string().contains("access rights"), "{e}");
     assert!(c.list_dir(&ro).await.unwrap().is_empty());
     assert_clean(&c, &format!("{}/zone", c.home)).await;
 }
@@ -259,7 +259,7 @@ async fn foreign_owner_needs_a_decision() {
         .write_safe(&format!("{zone}/other_owner.txt"), &mut src, 4, &o, None)
         .await
         .unwrap_err();
-    assert!(e.to_string().contains("прав"), "{e}");
+    assert!(e.to_string().contains("access rights"), "{e}");
     assert_eq!(
         remote_bytes(&c, &format!("{zone}/other_owner.txt")).await,
         orig
@@ -517,7 +517,7 @@ async fn trees_deep_empty_and_cyclic_links() {
         .is_empty());
     #[cfg(unix)]
     assert!(
-        out.skipped.iter().any(|s| s.contains("цикл")),
+        out.skipped.iter().any(|s| s.contains("loop")),
         "{:?}",
         out.skipped
     );
@@ -547,7 +547,7 @@ async fn trees_deep_empty_and_cyclic_links() {
     .unwrap();
     assert_eq!(std::fs::read(dl.join("proj/top_link.txt")).unwrap(), b"top");
     assert!(!dl.join("proj/to_protected").exists());
-    assert!(out.skipped.iter().any(|s| s.contains("ссылка на папку")));
+    assert!(out.skipped.iter().any(|s| s.contains("link to a folder")));
     assert!(dl.join("proj/empty").is_dir());
     let mut p = dl.join("proj");
     for i in 0..20 {

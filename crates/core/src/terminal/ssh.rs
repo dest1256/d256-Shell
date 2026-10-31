@@ -76,13 +76,14 @@ pub fn detect(ssh: &Path) -> Result<SshVersion, String> {
     }
     let out = cmd
         .output()
-        .map_err(|e| format!("не удалось запустить {}: {e}", ssh.display()))?;
+        .map_err(|e| format!("could not start {}: {e}", ssh.display()))?;
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&out.stderr),
         String::from_utf8_lossy(&out.stdout)
     );
-    parse_version(&text).ok_or_else(|| format!("не удалось определить версию ssh: {}", text.trim()))
+    parse_version(&text)
+        .ok_or_else(|| format!("could not determine the ssh version: {}", text.trim()))
 }
 
 #[cfg(test)]

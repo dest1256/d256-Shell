@@ -30,6 +30,6 @@ perl -pi -e "s/(d256shell[_-])\d+\.\d+\.\d+([_-](?:amd64|linux))/\${1}$new\$2/g"
 # CHANGELOG: new heading on top (newest first)
 if ! grep -q "^## $new " CHANGELOG.md 2>/dev/null; then
   d=$(date +%F)
-  perl -CSDA -Mutf8 -0pi -e "s~(# Журнал изменений\n)~\$1\n## $new — $d\n- (опишите изменения: Добавлено, Изменено, Исправлено)\n~" CHANGELOG.md
+  perl -CSDA -Mutf8 -0pi -e "s~(# Changelog\n)~\$1\n## $new — $d\n- (describe the changes: Added, Changed, Fixed)\n~" CHANGELOG.md
 fi
 echo "Next: describe the changes in CHANGELOG.md, then build (make-dist.sh, build-linux.sh), commit and tag v$new."

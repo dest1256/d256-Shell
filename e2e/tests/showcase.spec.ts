@@ -147,7 +147,7 @@ test('showcase', async ({ page }) => {
   await page.getByTestId('f-keypath').fill('~/.ssh/id_ed25519');
   await shot(page, 'key-login');
   await page.getByTestId('form-cancel').click();
-  await page.getByRole('button', { name: 'Настройки' }).click();
+  await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByTestId('settings-dialog')).toBeVisible();
   await shot(page, 'settings');
 });

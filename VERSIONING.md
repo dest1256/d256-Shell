@@ -1,19 +1,19 @@
-# Версии
+# Versions
 
-Номер версии `МАЖОР.МИНОР.ПАТЧ` (семантическое версионирование, https://semver.org/lang/ru/):
+Version number `MAJOR.MINOR.PATCH` (semantic versioning, https://semver.org/):
 
-| Что изменилось | Какую часть увеличить | Пример |
+| What changed | Which part to raise | Example |
 |---|---|---|
-| Исправлены ошибки, ничего нового | **ПАТЧ** | 1.0.0 → 1.0.1 |
-| Добавлены функции, всё старое работает | **МИНОР** (патч обнуляется) | 1.0.1 → 1.1.0 |
-| Несовместимое изменение: старые данные не открываются без конвертации, убрана функция, изменилось поведение, на которое рассчитывали | **МАЖОР** (минор и патч обнуляются) | 1.4.2 → 2.0.0 |
+| Bugs fixed, nothing new | **PATCH** | 1.0.0 → 1.0.1 |
+| Features added, everything old still works | **MINOR** (patch is reset) | 1.0.1 → 1.1.0 |
+| Incompatible change: old data cannot be opened without conversion, a feature is removed, behavior that people relied on changed | **MAJOR** (minor and patch are reset) | 1.4.2 → 2.0.0 |
 
-Примеры для этого проекта:
-- ПАТЧ: правка вёрстки, исправление сбоя при сохранении файла, обновление зависимости без новых функций.
-- МИНОР: новая вкладка, новая кодировка, новая настройка, новый вид пакета.
-- МАЖОР: новый формат хранилища паролей (`vault.bin`), несовместимый со старым; удаление функции; смена папки данных без автоматического переноса.
+Examples for this project:
+- PATCH: a layout fix, a fix for a crash when saving a file, a dependency update without new features.
+- MINOR: a new tab, a new encoding, a new setting, a new package type.
+- MAJOR: a new password vault format (`vault.bin`) incompatible with the old one; removing a feature; changing the data folder without an automatic migration.
 
-Как поднять версию: `scripts/bump-version.sh patch|minor|major` (или `X.Y.Z`). Скрипт меняет номер сразу везде
-(`Cargo.toml` — единственный источник, плюс Tauri, npm, манифест Windows, lock-файлы, имена пакетов в README) и добавляет
-заголовок в `CHANGELOG.md`. Дальше: описать изменения в журнале, собрать пакеты, закоммитить и поставить тег `v<версия>`
-(тег `v*` запускает сборку релиза в GitHub Actions). Версия видна в «Настройки → О программе» и в свойствах exe.
+How to raise the version: `scripts/bump-version.sh patch|minor|major` (or `X.Y.Z`). The script changes the number everywhere at once
+(`Cargo.toml` is the single source, plus Tauri, npm, the Windows manifest, lock files, package names in the README) and adds a
+heading to `CHANGELOG.md`. Then: describe the changes in the changelog, build the packages, commit and tag `v<version>`
+(a `v*` tag starts the release build in GitHub Actions). The version is shown in Settings → About and in the exe properties.

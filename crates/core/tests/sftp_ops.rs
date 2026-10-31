@@ -60,9 +60,9 @@ async fn create_rename_copy_move_delete_chmod() {
 
     // copy: file, folder tree, repeated copy gets a new name
     let c1 = c.copy_entry(&f, &base).await.unwrap();
-    assert!(c1.ends_with("renamed — файл (копия).txt"), "{c1}");
+    assert!(c1.ends_with("renamed — файл (copy).txt"), "{c1}");
     let c2 = c.copy_entry(&f, &base).await.unwrap();
-    assert!(c2.ends_with("(копия 2).txt"), "{c2}");
+    assert!(c2.ends_with("(copy 2).txt"), "{c2}");
     let d = c
         .copy_entry(&format!("{base}/sub dir"), &base)
         .await

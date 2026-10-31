@@ -1,15 +1,15 @@
 # Maintainer: dest1256
 # Installs the prebuilt d256 Shell binary (built on Ubuntu 22.04: needs only glibc >= 2.34 and WebKitGTK 4.1).
-# Put this file next to d256shell-@VER@-linux-x86_64.tar.gz, desktop file and COPYRIGHT, then: makepkg -si
+# Put this file next to d256shell-@VER@-linux-x86_64.tar.gz, desktop file and LICENSE, then: makepkg -si
 pkgname=d256shell
 pkgver=@VER@
 pkgrel=1
 pkgdesc="Portable SSH client: terminal, SFTP explorer and editor"
 arch=('x86_64')
 url="https://github.com/dest1256"
-license=('custom:proprietary')
+license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'openssh')
-source=("d256shell-$pkgver-linux-x86_64.tar.gz" "d256shell.desktop" "COPYRIGHT")
+source=("d256shell-$pkgver-linux-x86_64.tar.gz" "d256shell.desktop" "LICENSE")
 sha256sums=('@SUM@' 'SKIP' 'SKIP')
 options=('!strip')
 
@@ -17,5 +17,5 @@ package() {
   install -Dm755 "$srcdir/d256shell/d256shell" "$pkgdir/usr/bin/d256shell"
   install -Dm644 "$srcdir/d256shell.desktop" "$pkgdir/usr/share/applications/d256shell.desktop"
   install -Dm644 "$srcdir/d256shell/128x128.png" "$pkgdir/usr/share/icons/hicolor/128x128/apps/d256shell.png"
-  install -Dm644 "$srcdir/COPYRIGHT" "$pkgdir/usr/share/licenses/$pkgname/COPYRIGHT"
+  install -Dm644 "$srcdir/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
 }

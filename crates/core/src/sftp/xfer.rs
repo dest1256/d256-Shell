@@ -36,11 +36,11 @@ impl std::fmt::Display for XferError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Msg(m) => f.write_str(m),
-            Self::Cancelled => f.write_str("Отменено."),
-            Self::NoPerm => f.write_str("Нет прав доступа."),
-            Self::Exists => f.write_str("Файл уже существует."),
+            Self::Cancelled => f.write_str("Cancelled."),
+            Self::NoPerm => f.write_str("No access rights."),
+            Self::Exists => f.write_str("The file already exists."),
             Self::ForeignOwner => {
-                f.write_str("Файл принадлежит другому пользователю: при замене владелец изменится.")
+                f.write_str("The file belongs to another user: replacing it will change the owner.")
             }
         }
     }
@@ -176,19 +176,19 @@ where
         if let Some(c) = ctl {
             c.check()?;
         }
-        let n = src.read(&mut buf).await.map_err(|e| io_err("Чтение", e))?;
+        let n = src.read(&mut buf).await.map_err(|e| io_err("Read", e))?;
         if n == 0 {
             break;
         }
         dst.write_all(&buf[..n])
             .await
-            .map_err(|e| io_err("Запись", e))?;
+            .map_err(|e| io_err("Write", e))?;
         total += n as u64;
         if let Some(c) = ctl {
             c.done.fetch_add(n as u64, Ordering::Relaxed);
         }
     }
-    dst.flush().await.map_err(|e| io_err("Запись", e))?;
+    dst.flush().await.map_err(|e| io_err("Write", e))?;
     Ok(total)
 }
 
@@ -213,7 +213,7 @@ impl SftpConnection {
                 return Ok(cand);
             }
         }
-        Err(XferError::Msg("Не удалось подобрать свободное имя.".into()))
+        Err(XferError::Msg("Could not find a free name.".into()))
     }
 
     /// Remove leftover temporary files of earlier failed transfers (the link was gone when they failed).
@@ -251,12 +251,12 @@ impl SftpConnection {
             .sftp
             .canonicalize(target)
             .await
-            .map_err(|_| XferError::Msg("Символическая ссылка указывает в никуда.".into()))?;
+            .map_err(|_| XferError::Msg("The symbolic link points to nothing.".into()))?;
         match self.exists_lstat(&real).await? {
             Some(m) => Ok((real, Some(m))),
             // some servers resolve a dangling link to its would-be target: never create files through it
             None => Err(XferError::Msg(
-                "Символическая ссылка указывает в никуда.".into(),
+                "The symbolic link points to nothing.".into(),
             )),
         }
     }
@@ -274,7 +274,7 @@ impl SftpConnection {
         Rd: AsyncRead + Unpin,
     {
         if !target.starts_with('/') {
-            return Err(XferError::Msg(format!("Недопустимый путь: {target}")));
+            return Err(XferError::Msg(format!("Invalid path: {target}")));
         }
         let (real, old) = self.resolve_target(target).await?;
         if let Some(m) = &old {
@@ -283,7 +283,7 @@ impl SftpConnection {
             }
             if !m.file_type().is_file() {
                 return Err(XferError::Msg(
-                    "Цель — не обычный файл (папка или спецфайл): запись отменена.".into(),
+                    "The target is not a regular file (a folder or a special file): the write was cancelled.".into(),
                 ));
             }
             if !o.allow_foreign
@@ -303,7 +303,7 @@ impl SftpConnection {
                 .await
                 .map_err(sftp_err)?;
             pump(src, &mut f, ctl).await?;
-            f.shutdown().await.map_err(|e| io_err("Запись", e))?;
+            f.shutdown().await.map_err(|e| io_err("Write", e))?;
             let got = self
                 .sftp
                 .metadata(real.clone())
@@ -312,7 +312,7 @@ impl SftpConnection {
                 .size;
             if got != Some(size) {
                 return Err(XferError::Msg(
-                    "Размер файла после записи не совпал; файл на сервере мог быть повреждён, повторите сохранение.".into(),
+                    "The file size after writing did not match; the file on the server may be damaged, save again.".into(),
                 ));
             }
             return Ok(());
@@ -351,7 +351,7 @@ impl SftpConnection {
             self.drop_remote_tmp(&tmp).await;
             let mut msg = describe(e);
             if !restored {
-                msg.push_str(&format!(" Оригинал сохранён как «{bak}»."));
+                msg.push_str(&format!(" The original was saved as “{bak}”."));
             }
             return Err(XferError::Msg(msg));
         }
@@ -382,7 +382,7 @@ impl SftpConnection {
             .await
             .map_err(sftp_err)?;
         pump(src, &mut f, ctl).await?;
-        f.shutdown().await.map_err(|e| io_err("Запись", e))?;
+        f.shutdown().await.map_err(|e| io_err("Write", e))?;
         let got = self
             .sftp
             .metadata(tmp.to_string())
@@ -391,7 +391,7 @@ impl SftpConnection {
             .size;
         if got != Some(size) {
             return Err(XferError::Msg(format!(
-                "Размер на сервере ({}) не совпал с локальным ({size}): передача отменена, оригинал не тронут.",
+                "Size on the server ({}) did not match the local one ({size}): the transfer was cancelled, the original is untouched.",
                 got.map_or("?".to_string(), |g| g.to_string())
             )));
         }
@@ -444,7 +444,7 @@ impl SftpConnection {
         risk: (bool, bool),
     ) -> R<bool> {
         if !remote_path::is_valid_name(name) {
-            return Err(XferError::Msg(format!("Недопустимое имя: {name}")));
+            return Err(XferError::Msg(format!("Invalid name: {name}")));
         }
         let mut target_name = name.to_string();
         let mut o = WriteOpts {
@@ -465,7 +465,7 @@ impl SftpConnection {
             .map_err(|e| io_err(&local.display().to_string(), e))?;
         if !meta.is_file() {
             return Err(XferError::Msg(format!(
-                "{}: не обычный файл.",
+                "{}: not a regular file.",
                 local.display()
             )));
         }
@@ -528,13 +528,12 @@ impl SftpConnection {
         Box::pin(async move {
             ctl.check()?;
             if depth > MAX_DEPTH {
-                return Err(XferError::Msg("Слишком глубокая вложенность.".into()));
+                return Err(XferError::Msg("Nesting is too deep.".into()));
             }
             let real = std::fs::canonicalize(local)
                 .map_err(|e| io_err(&local.display().to_string(), e))?;
             if !seen.insert(real.clone()) {
-                out.skipped
-                    .push(format!("{}: цикл ссылок", local.display()));
+                out.skipped.push(format!("{}: link loop", local.display()));
                 return Ok(());
             }
             let dest = join(remote_dir, name);
@@ -549,10 +548,16 @@ impl SftpConnection {
                         .map(|m| m.file_type().is_dir())
                         .unwrap_or(false);
                     if !ok {
-                        return Err(XferError::Msg(format!("«{name}» на сервере — не папка.")));
+                        return Err(XferError::Msg(format!(
+                            "“{name}” on the server is not a folder."
+                        )));
                     }
                 }
-                Some(_) => return Err(XferError::Msg(format!("«{name}» на сервере — не папка."))),
+                Some(_) => {
+                    return Err(XferError::Msg(format!(
+                        "“{name}” on the server is not a folder."
+                    )))
+                }
                 None => self.sftp.create_dir(dest.clone()).await.map_err(sftp_err)?,
             }
             let mut entries: Vec<_> = std::fs::read_dir(local)
@@ -564,12 +569,12 @@ impl SftpConnection {
                 let n = e.file_name().to_string_lossy().into_owned();
                 let p = e.path();
                 let Ok(m) = std::fs::metadata(&p) else {
-                    out.skipped.push(format!("{}: недоступно", p.display()));
+                    out.skipped.push(format!("{}: unavailable", p.display()));
                     continue;
                 };
                 if !remote_path::is_valid_name(&n) || e.file_name().to_str().is_none() {
                     out.skipped
-                        .push(format!("{}: недопустимое имя для сервера", p.display()));
+                        .push(format!("{}: invalid name for a server", p.display()));
                     continue;
                 }
                 if m.is_dir() {
@@ -582,7 +587,7 @@ impl SftpConnection {
                     {
                         out.files += 1;
                     } else {
-                        out.skipped.push(format!("{n}: уже есть"));
+                        out.skipped.push(format!("{n}: already exists"));
                     }
                 }
             }
@@ -605,7 +610,7 @@ impl SftpConnection {
     ) -> R<()> {
         if !local_name_ok(name) {
             return Err(XferError::Msg(format!(
-                "Имя «{name}» нельзя использовать как имя файла в Windows."
+                "Name “{name}” cannot be used as a file name on Windows."
             )));
         }
         let dest = dir.join(name);
@@ -619,7 +624,7 @@ impl SftpConnection {
             .await
             .map_err(sftp_err)?;
         if !rm.file_type().is_file() {
-            return Err(XferError::Msg(format!("«{name}» — не обычный файл.")));
+            return Err(XferError::Msg(format!("“{name}” is not a regular file.")));
         }
         let size = rm.size.unwrap_or(0);
         let tmp = dir.join(format!(".{name}.d256shell-{}.part", rand_id()));
@@ -629,14 +634,14 @@ impl SftpConnection {
                 .await
                 .map_err(|e| io_err(&tmp.display().to_string(), e))?;
             pump(&mut src, &mut dst, Some(ctl)).await?;
-            dst.sync_all().await.map_err(|e| io_err("Запись", e))?;
+            dst.sync_all().await.map_err(|e| io_err("Write", e))?;
             drop(dst);
             let got = std::fs::metadata(&tmp)
-                .map_err(|e| io_err("Проверка", e))?
+                .map_err(|e| io_err("Check", e))?
                 .len();
             if got != size {
                 return Err(XferError::Msg(format!(
-                    "Размер файла ({got}) не совпал с серверным ({size}): файл не сохранён."
+                    "File size ({got}) did not match the server one ({size}): the file was not saved."
                 )));
             }
             ctl.check()?;
@@ -720,11 +725,10 @@ impl SftpConnection {
         Box::pin(async move {
             ctl.check()?;
             if depth > MAX_DEPTH {
-                return Err(XferError::Msg("Слишком глубокая вложенность.".into()));
+                return Err(XferError::Msg("Nesting is too deep.".into()));
             }
             if !local_name_ok(name) {
-                out.skipped
-                    .push(format!("{name}: недопустимое имя в Windows"));
+                out.skipped.push(format!("{name}: invalid name on Windows"));
                 return Ok(());
             }
             let dir = local_parent.join(name);
@@ -737,7 +741,7 @@ impl SftpConnection {
             {
                 let n = e.file_name();
                 if n.contains('\u{FFFD}') {
-                    out.skipped.push(format!("{remote}/{n}: не-UTF-8 имя"));
+                    out.skipped.push(format!("{remote}/{n}: non-UTF-8 name"));
                     continue;
                 }
                 let child = join(remote, &n);
@@ -747,17 +751,17 @@ impl SftpConnection {
                     match self.sftp.metadata(child.clone()).await {
                         Ok(t) if t.file_type().is_dir() => {
                             out.skipped
-                                .push(format!("{child}: ссылка на папку (не обходится)"));
+                                .push(format!("{child}: a link to a folder (not followed)"));
                             continue;
                         }
                         Ok(t) if t.file_type().is_file() => is_dir = false,
                         _ => {
-                            out.skipped.push(format!("{child}: битая ссылка"));
+                            out.skipped.push(format!("{child}: broken link"));
                             continue;
                         }
                     }
                 } else if !ft.is_dir() && !ft.is_file() {
-                    out.skipped.push(format!("{child}: специальный файл"));
+                    out.skipped.push(format!("{child}: special file"));
                     continue;
                 }
                 if is_dir {
@@ -768,7 +772,7 @@ impl SftpConnection {
                         match (dir.join(&n).symlink_metadata().is_ok(), action) {
                             (false, _) => (n.clone(), false),
                             (true, Action::Skip) => {
-                                out.skipped.push(format!("{n}: уже есть"));
+                                out.skipped.push(format!("{n}: already exists"));
                                 continue;
                             }
                             (true, Action::Replace) => (n.clone(), true),

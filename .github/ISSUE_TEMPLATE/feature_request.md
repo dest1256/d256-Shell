@@ -1,9 +1,9 @@
 ---
-name: Идея
-about: Предложить новую возможность
+name: Idea
+about: Suggest a new feature
 labels: enhancement
 ---
 
-**Что нужно и зачем**
+**What is needed and why**
 
-**Как это должно выглядеть**
+**What it should look like**

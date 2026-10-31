@@ -32,7 +32,7 @@ pub struct SshTarget<'a> {
 fn known_hosts_value(p: &Path) -> Result<String, ArgsError> {
     let s = p.to_string_lossy().replace('\\', "/");
     if s.contains(['"', '\n', '\r', '\0']) {
-        return err("Путь к known_hosts содержит недопустимые символы.");
+        return err("The path to known_hosts contains invalid characters.");
     }
     Ok(if s.contains(char::is_whitespace) {
         format!("\"{s}\"")
@@ -68,7 +68,7 @@ pub fn split_extra(s: &str) -> Result<Vec<String>, ArgsError> {
         }
     }
     if quote.is_some() {
-        return err("Незакрытая кавычка в дополнительных аргументах ssh.");
+        return err("Unclosed quote in the extra ssh arguments.");
     }
     if has {
         out.push(cur);
@@ -111,11 +111,11 @@ fn check_option(spec: &str) -> Result<(), ArgsError> {
         .unwrap_or("")
         .to_ascii_lowercase();
     if key.is_empty() {
-        return err("Пустая опция -o.");
+        return err("Empty -o option.");
     }
     if FORBIDDEN_OPTIONS.contains(&key.as_str()) {
         return err(format!(
-            "Опция «{key}» запрещена: она ослабляет проверку ключа сервера или меняет поведение терминала."
+            "Option “{key}” is forbidden: it weakens the server key check or changes the behaviour of the terminal."
         ));
     }
     Ok(())
@@ -129,16 +129,16 @@ pub fn validate_extra(extra: &str) -> Result<Vec<String>, ArgsError> {
     while i < toks.len() {
         let t = &toks[i];
         if t.contains(['\0', '\n', '\r']) {
-            return err("Недопустимые символы в дополнительных аргументах ssh.");
+            return err("Invalid characters in the extra ssh arguments.");
         }
         let Some(flag) = t.strip_prefix('-') else {
             return err(format!(
-                "Недопустимый аргумент «{t}»: разрешены только опции ssh (команды и адреса задавать нельзя)."
+                "Invalid argument “{t}”: only ssh options are allowed (commands and addresses cannot be set)."
             ));
         };
         let mut chars = flag.chars();
         let Some(c) = chars.next() else {
-            return err("Одиночный «-» недопустим.");
+            return err("A single “-” is not allowed.");
         };
         let rest: String = chars.collect();
         if c == 'o' {
@@ -146,7 +146,7 @@ pub fn validate_extra(extra: &str) -> Result<Vec<String>, ArgsError> {
                 i += 1;
                 match toks.get(i) {
                     Some(v) => v.clone(),
-                    None => return err("После -o нужно указать опцию."),
+                    None => return err("An option must follow -o."),
                 }
             } else {
                 rest
@@ -159,7 +159,7 @@ pub fn validate_extra(extra: &str) -> Result<Vec<String>, ArgsError> {
                 i += 1;
                 match toks.get(i) {
                     Some(v) => v.clone(),
-                    None => return err(format!("После -{c} нужно указать значение.")),
+                    None => return err(format!("After -{c} a value is required.")),
                 }
             } else {
                 rest
@@ -171,7 +171,7 @@ pub fn validate_extra(extra: &str) -> Result<Vec<String>, ArgsError> {
             out.push(t.clone());
         } else {
             return err(format!(
-                "Опция -{c} не поддерживается в дополнительных аргументах (для терминала разрешены -o, -L, -R, -D, -J, -i, -c, -m и -4 -6 -A -a -C -g -K -k -q -v -X -x -Y)."
+                "Option -{c} is not supported in extra arguments (the terminal allows -o, -L, -R, -D, -J, -i, -c, -m and -4 -6 -A -a -C -g -K -k -q -v -X -x -Y)."
             ));
         }
         i += 1;
@@ -181,13 +181,13 @@ pub fn validate_extra(extra: &str) -> Result<Vec<String>, ArgsError> {
 
 pub fn build_args(t: &SshTarget, known_hosts: &Path) -> Result<Vec<String>, ArgsError> {
     if t.host.is_empty() || t.host.starts_with('-') || t.host.contains(char::is_whitespace) {
-        return err("Некорректный адрес сервера.");
+        return err("Invalid server address.");
     }
     if t.username.is_empty()
         || t.username.starts_with('-')
         || t.username.contains(char::is_whitespace)
     {
-        return err("Некорректное имя пользователя.");
+        return err("Invalid user name.");
     }
     let extra = validate_extra(t.extra)?;
     let o = |s: String| ["-o".to_string(), s];

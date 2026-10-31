@@ -121,7 +121,7 @@ mod tests {
 
     #[test]
     fn names() {
-        for ok in ["a", "файл", "with space", "-dash", ".hidden", "it's $x *"] {
+        for ok in ["a", "file", "with space", "-dash", ".hidden", "it's $x *"] {
             assert!(is_valid_name(ok), "{ok:?}");
         }
         for bad in ["", ".", "..", "a/b", "a\0b", "a\nb", &"x".repeat(256)] {

@@ -23,7 +23,7 @@ async fn api(
         .unwrap_or_else(|e| {
             Err(ApiError {
                 code: "internal",
-                message: format!("Внутренняя ошибка: {e}"),
+                message: format!("Internal error: {e}"),
                 details: None,
             })
         })
@@ -78,12 +78,12 @@ fn drag_out(
         let pb = std::path::PathBuf::from(p);
         if !pb.starts_with(&root) || pb.components().any(|c| c.as_os_str() == "..") || !pb.exists()
         {
-            return Err("Недопустимый путь для перетаскивания.".into());
+            return Err("Invalid path for dragging.".into());
         }
         files.push(pb);
     }
     if files.is_empty() {
-        return Err("Нечего перетаскивать.".into());
+        return Err("Nothing to drag.".into());
     }
     let icon = include_bytes!("../icons/32x32.png").to_vec();
     let dirs: Vec<std::path::PathBuf> = files
@@ -114,7 +114,7 @@ fn drag_out(
         },
         drag::Options::default(),
     )
-    .map_err(|e| format!("Не удалось начать перетаскивание: {e}"))
+    .map_err(|e| format!("Could not start the drag: {e}"))
 }
 
 fn fatal(msg: &str) -> ! {

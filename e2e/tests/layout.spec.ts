@@ -5,7 +5,7 @@ import { acceptHostKey, addServer, connectFirst, createVault, PASS } from '../he
 let bridge: Bridge;
 test.afterEach(async () => bridge?.stop());
 
-test('компоновка: заголовок с вкладками, панель, рейка, сессии, строка состояния', async ({ page }) => {
+test('layout: title bar with tabs, panel, rail, sessions, status bar', async ({ page }) => {
   bridge = await startBridge();
   await page.goto(bridge.url);
   await page.screenshot({ path: 'screenshots/10-setup.png' });
@@ -13,16 +13,16 @@ test('компоновка: заголовок с вкладками, панел
   await page.getByTestId('master2').fill('layout-test-pass');
   await page.getByTestId('create').click();
 
-  // вкладка «Главная» в заголовке, кнопка «+»
+  // the Home tab in the title bar, the + button
   await expect(page.getByTestId('tab-home')).toBeVisible();
   await expect(page.getByTestId('tab-add')).toBeVisible();
   await expect(page.getByTestId('rail-sessions')).toBeVisible();
   await expect(page.getByTestId('sidebar')).toBeVisible();
-  await expect(page.getByTestId('status-count')).toHaveText('Сессий: 0');
-  await expect(page.getByTestId('home')).toContainText('Добро пожаловать');
+  await expect(page.getByTestId('status-count')).toHaveText('Sessions: 0');
+  await expect(page.getByTestId('home')).toContainText('Welcome');
 
-  // добавим две сессии через «+»
-  for (const [name, host] of [['Web-01', '203.0.113.1'], ['DB-главный', '203.0.113.2']]) {
+  // add two sessions via +
+  for (const [name, host] of [['Web-01', '203.0.113.1'], ['DB-main', '203.0.113.2']]) {
     await page.getByTestId('tab-add').click();
     await page.getByTestId('f-name').fill(name);
     await page.getByTestId('f-host').fill(host);
@@ -32,14 +32,14 @@ test('компоновка: заголовок с вкладками, панел
   }
   await expect(page.getByTestId('server-item')).toHaveCount(2);
   await expect(page.getByTestId('home-card')).toHaveCount(2);
-  await expect(page.getByTestId('status-count')).toHaveText('Сессий: 2');
+  await expect(page.getByTestId('status-count')).toHaveText('Sessions: 2');
 
-  // выбор в списке
+  // choosing in the list
   await page.getByTestId('server-item').first().click();
   await expect(page.getByTestId('server-item').first()).toHaveClass(/selected/);
   await page.screenshot({ path: 'screenshots/11-shell.png' });
 
-  // сплиттер меняет ширину боковой панели
+  // the splitter changes the width of the side panel
   const w0 = (await page.getByTestId('sidebar').boundingBox())!.width;
   const sp = (await page.getByTestId('splitter').boundingBox())!;
   await page.mouse.move(sp.x + 2, sp.y + 100);
@@ -49,23 +49,23 @@ test('компоновка: заголовок с вкладками, панел
   const w1 = (await page.getByTestId('sidebar').boundingBox())!.width;
   expect(w1).toBeGreaterThan(w0 + 60);
 
-  // Ctrl+B / кнопка «Панель» скрывают и показывают боковую панель
+  // Ctrl+B / the Panel button hide and show the side panel
   await page.keyboard.press('Control+b');
   await expect(page.getByTestId('sidebar')).toBeHidden();
   await page.getByTestId('toggle-sidebar').click();
   await expect(page.getByTestId('sidebar')).toBeVisible();
 
-  // горизонтального скролла страницы нет
+  // there is no horizontal scrolling of the page
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
   expect(overflow).toBe(false);
 
-  // узкое окно не ломает раскладку
+  // a narrow window does not break the layout
   await page.setViewportSize({ width: 800, height: 500 });
   await expect(page.getByTestId('tab-home')).toBeVisible();
   await page.screenshot({ path: 'screenshots/12-narrow.png' });
 });
 
-test('боковая панель сессий скрывается во вкладке SSH и возвращается на главной', async ({ page }) => {
+test('the sessions side panel hides in an SSH tab and comes back on the home tab', async ({ page }) => {
   const b = await startBridge();
   try {
     await page.goto(b.url);

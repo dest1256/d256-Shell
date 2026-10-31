@@ -5,7 +5,7 @@ import { acceptHostKey, addServer, connectFirst, createVault, PASS } from '../he
 let bridge: Bridge;
 test.afterEach(async () => bridge?.stop());
 
-test('монитор: цифры под терминалом, мини-графики, подробное окно, отключение в настройках', async ({ page }) => {
+test('monitor: numbers under the terminal, mini charts, detailed window, switching off in settings', async ({ page }) => {
   bridge = await startBridge();
   await page.goto(bridge.url);
   await createVault(page);
@@ -16,38 +16,38 @@ test('монитор: цифры под терминалом, мини-граф�
 
   const bar = page.getByTestId('monitor-bar');
   await expect(bar).toBeVisible();
-  // цифры появляются после второго замера
+  // the numbers appear after the second sample
   await expect(page.getByTestId('mon-cpu')).toContainText(/\d+%/, { timeout: 15_000 });
-  await expect(page.getByTestId('mon-mem')).toContainText(/\d+%.*из/);
+  await expect(page.getByTestId('mon-mem')).toContainText(/\d+%.*of/);
   await expect(page.getByTestId('mon-net')).toContainText('↓');
-  // цифры слева, графики правее (после промежутка)
+  // numbers on the left, charts on the right (after a gap)
   const nums = await page.getByTestId('mon-nums').boundingBox();
   const spark = await bar.locator('canvas').first().boundingBox();
   expect(spark!.x).toBeGreaterThan(nums!.x + nums!.width - 1);
   await page.screenshot({ path: 'screenshots/55-monitor-bar.png' });
 
-  // терминал не перекрыт панелью
+  // the terminal is not covered by the bar
   const term = await page.getByTestId('terminal').boundingBox();
   const barBox = await bar.boundingBox();
   expect(term!.y + term!.height).toBeLessThanOrEqual(barBox!.y + 1);
 
-  // немного нагрузки на диск, чтобы на скриншоте были ненулевые значения
+  // a bit of disk load so that the screenshot has non-zero values
   await page.getByTestId('terminal').click();
   await page.keyboard.type('dd if=/dev/zero of=$HOME/ddtest bs=1M count=600 oflag=direct 2>/dev/null; rm -f $HOME/ddtest');
   await page.keyboard.press('Enter');
 
-  // клик открывает подробное окно во вкладке рядом с терминалом
+  // a click opens the detailed window in a tab next to the terminal
   await bar.click();
   await expect(page.getByTestId('monitor')).toBeVisible();
-  // как «Производительность» в диспетчере задач Windows: слева список ресурсов, справа подробности
+  // like Performance in the Windows task manager: the list of resources on the left, details on the right
   const side = page.getByTestId('md-side');
   await expect(side.getByTestId('md-item-cpu')).toBeVisible();
   await expect(side.getByTestId('md-item-mem')).toBeVisible();
   await expect(side.locator('[data-testid^="md-item-disk-"]').first()).toBeVisible();
   await expect(side.locator('[data-testid^="md-item-net-"]').first()).toBeVisible();
-  // ЦП: отдельные диаграммы по ядрам, использование, скорость, потоки, время работы
-  await expect(page.getByTestId('md-title')).toHaveText('ЦП');
-  await expect(page.locator('.tm-model')).not.toBeEmpty(); // модель процессора справа
+  // CPU: separate charts per core, usage, speed, threads, uptime
+  await expect(page.getByTestId('md-title')).toHaveText('CPU');
+  await expect(page.locator('.tm-model')).not.toBeEmpty(); // the processor model on the right
   await expect(page.locator('[data-testid="md-cores"] canvas').first()).toBeVisible();
   await expect(page.getByTestId('stat-cpu-util')).toContainText('%');
   await expect(page.getByTestId('stat-cpu-threads')).toContainText(/\d+/);
@@ -55,7 +55,7 @@ test('монитор: цифры под терминалом, мини-граф�
   await page.getByTestId('md-cpu-total').click();
   await expect(page.getByTestId('md-chart-cpu')).toBeVisible();
   await page.getByTestId('md-cpu-total').click();
-  // частота обновления: пауза останавливает графики, «каждую секунду» возобновляет, выбор сохраняется
+  // refresh rate: pause stops the charts, “every second” resumes them, the choice is saved
   await page.getByTestId('md-rate').selectOption('pause');
   const frozen = await page.getByTestId('stat-cpu-uptime').textContent();
   await page.waitForTimeout(3500);
@@ -66,7 +66,7 @@ test('монитор: цифры под терминалом, мини-граф�
   await expect(page.getByTestId('md-rate')).toHaveValue('5000');
   expect(JSON.parse(await page.evaluate(async () => JSON.stringify(await (await fetch('/rpc', { method: 'POST', body: JSON.stringify({ method: 'get_settings', params: {} }) })).json()))).result.monitor_interval_ms).toBe(5000);
   await page.getByTestId('md-rate').selectOption('2000');
-  // своя частота в миллисекундах (минимум 100 мс): допустимое значение применяется, недопустимое отклоняется
+  // custom rate in milliseconds (minimum 100 ms): a valid value is applied, an invalid one is rejected
   await page.getByTestId('md-rate').selectOption('custom');
   await page.getByTestId('md-rate-ms').fill('50');
   await page.getByTestId('md-rate-ms').press('Enter');
@@ -77,36 +77,36 @@ test('монитор: цифры под терминалом, мини-граф�
   await expect.poll(async () => JSON.parse(await page.evaluate(async () => JSON.stringify(await (await fetch('/rpc', { method: 'POST', body: JSON.stringify({ method: 'get_settings', params: {} }) })).json()))).result.monitor_interval_ms).toBe(100);
   const before = await page.getByTestId('stat-cpu-uptime').textContent();
   await expect.poll(() => page.getByTestId('stat-cpu-uptime').textContent(), { timeout: 5000 }).not.toBe(before);
-  await page.waitForTimeout(1500); // ~15 выборок: интерфейс не должен зависнуть
+  await page.waitForTimeout(1500); // ~15 samples: the interface must not hang
   await expect(page.getByTestId('stat-cpu-util')).toContainText('%');
   await page.getByTestId('md-rate').selectOption('2000');
-  await page.waitForTimeout(4500); // накопить несколько точек
+  await page.waitForTimeout(4500); // collect a few points
   await page.screenshot({ path: 'screenshots/56-monitor-detail.png' });
-  // память
+  // memory
   await side.getByTestId('md-item-mem').click();
-  await expect(page.getByTestId('md-title')).toHaveText('Память');
+  await expect(page.getByTestId('md-title')).toHaveText('Memory');
   await expect(page.getByTestId('stat-mem-used')).toContainText('%');
-  await expect(page.getByTestId('stat-mem-avail')).toContainText(/ГБ|МБ/);
+  await expect(page.getByTestId('stat-mem-avail')).toContainText(/GB|MB/);
   await expect(page.getByTestId('md-membar')).toBeVisible();
   await page.screenshot({ path: 'screenshots/65-monitor-memory.png' });
-  // диск: активное время, время ответа, скорости, ёмкость и тип из /sys
+  // disk: active time, response time, speeds, capacity and type from /sys
   await side.locator('[data-testid^="md-item-disk-"]').first().click();
-  await expect(page.getByTestId('md-title')).toContainText('Диск');
+  await expect(page.getByTestId('md-title')).toContainText('Disk');
   await expect(page.getByTestId('stat-disk-active')).toContainText('%');
-  await expect(page.getByTestId('stat-disk-resp')).toContainText('мс');
-  await expect(page.getByTestId('stat-disk-read')).toContainText(/(Б|КБ|МБ)\/с/);
-  // ёмкость, тип и модель реально прочитаны из /sys (а не «—»)
+  await expect(page.getByTestId('stat-disk-resp')).toContainText('ms');
+  await expect(page.getByTestId('stat-disk-read')).toContainText(/(B|KB|MB)\/s/);
+  // capacity, type and model were really read from /sys (not “—”)
   const val = (k: string) => page.locator('.tm-tk', { hasText: k }).locator('+ .tm-tv');
-  await expect(val('Ёмкость')).toHaveText(/\d.*(МБ|ГБ|ТБ)/);
-  await expect(val('Тип')).toHaveText(/HDD|SSD/);
-  await expect(val('Модель')).not.toHaveText('—');
+  await expect(val('Capacity')).toHaveText(/\d.*(MB|GB|TB)/);
+  await expect(val('Type')).toHaveText(/HDD|SSD/);
+  await expect(val('Model')).not.toHaveText('—');
   await page.screenshot({ path: 'screenshots/66-monitor-disk.png' });
-  // сеть: отправка и получение в бит/с
+  // network: send and receive in bit/s
   await side.locator('[data-testid^="md-item-net-"]').first().click();
-  await expect(page.getByTestId('stat-net-send')).toContainText('бит/с');
-  await expect(page.getByTestId('stat-net-recv')).toContainText('бит/с');
+  await expect(page.getByTestId('stat-net-send')).toContainText('bit/s');
+  await expect(page.getByTestId('stat-net-recv')).toContainText('bit/s');
   await page.screenshot({ path: 'screenshots/67-monitor-net.png' });
-  // графики реально нарисованы (не пустой холст)
+  // the charts are really drawn (not an empty canvas)
   const painted = await page.locator('[data-testid^="md-chart-net-"]').first().evaluate((c: HTMLCanvasElement) => {
     const d = c.getContext('2d')!.getImageData(0, 0, c.width, c.height).data;
     for (let i = 3; i < d.length; i += 4) if (d[i] > 0) return true;
@@ -116,19 +116,19 @@ test('монитор: цифры под терминалом, мини-граф�
   await page.getByTestId('pane-close-monitor').click();
   await expect(page.getByTestId('monitor')).toHaveCount(0);
 
-  // выключение в настройках прячет панель
-  await page.getByRole('button', { name: 'Настройки' }).click();
+  // switching off in settings hides the panel
+  await page.getByRole('button', { name: 'Settings' }).click();
   await page.getByTestId('set-mon').uncheck();
   await page.getByTestId('settings-save').click();
   await expect(bar).toBeHidden();
 });
 
-test('монитор: сервер без SFTP — понятное сообщение, терминал работает', async ({ page }) => {
+test('monitor: server without SFTP: a clear message, the terminal works', async ({ page }) => {
   bridge = await startBridge();
   await page.goto(bridge.url);
   await createVault(page);
   await addServer(page, { name: 'NoSftp', host: 'sshd-nosftp', password: PASS });
   await connectFirst(page);
   await acceptHostKey(page);
-  await expect(page.getByTestId('mon-off')).toContainText('нет SFTP');
+  await expect(page.getByTestId('mon-off')).toContainText('no SFTP');
 });

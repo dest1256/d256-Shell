@@ -1,5 +1,5 @@
 //! Write operations of the file explorer. Every operation refuses to overwrite anything: a name clash
-//! is an error (or, for copies, a new "name (копия)" name), so nothing is lost by a misclick.
+//! is an error (or, for copies, a new "name (copy)" name), so nothing is lost by a misclick.
 use super::conn::{describe, SftpConnection};
 use crate::remote_path::{self, is_same_or_inside, is_valid_name, join};
 use russh_sftp::protocol::{FileAttributes, OpenFlags};
@@ -11,7 +11,7 @@ const CHUNK: usize = 128 * 1024;
 const MAX_DEPTH: usize = 64;
 
 fn bad(path: &str) -> String {
-    format!("Недопустимый путь: {path}")
+    format!("Invalid path: {path}")
 }
 
 fn check_abs(path: &str) -> R<()> {
@@ -50,7 +50,7 @@ fn check_not_top(path: &str) -> R<()> {
                     | "/sys"
             )
     {
-        return Err(format!("Операция с «{n}» запрещена."));
+        return Err(format!("Operation on “{n}” is forbidden."));
     }
     Ok(())
 }
@@ -71,11 +71,11 @@ impl SftpConnection {
     pub async fn mkdir(&self, parent: &str, name: &str) -> R<String> {
         check_abs(parent)?;
         if !is_valid_name(name) {
-            return Err("Недопустимое имя.".into());
+            return Err("Invalid name.".into());
         }
         let p = join(parent, name);
         if self.exists(&p).await? {
-            return Err(format!("«{name}» уже существует."));
+            return Err(format!("“{name}” already exists."));
         }
         self.sftp.create_dir(p.clone()).await.map_err(describe)?;
         Ok(p)
@@ -85,11 +85,11 @@ impl SftpConnection {
     pub async fn create_file(&self, parent: &str, name: &str) -> R<String> {
         check_abs(parent)?;
         if !is_valid_name(name) {
-            return Err("Недопустимое имя.".into());
+            return Err("Invalid name.".into());
         }
         let p = join(parent, name);
         if self.exists(&p).await? {
-            return Err(format!("«{name}» уже существует."));
+            return Err(format!("“{name}” already exists."));
         }
         let mut f = self
             .sftp
@@ -106,14 +106,14 @@ impl SftpConnection {
     pub async fn rename_entry(&self, path: &str, new_name: &str) -> R<String> {
         check_not_top(path)?;
         if !is_valid_name(new_name) {
-            return Err("Недопустимое имя.".into());
+            return Err("Invalid name.".into());
         }
         let to = join(&remote_path::parent(path), new_name);
         if to == path {
             return Ok(to);
         }
         if self.exists(&to).await? {
-            return Err(format!("«{new_name}» уже существует."));
+            return Err(format!("“{new_name}” already exists."));
         }
         self.sftp.rename(path, to.clone()).await.map_err(describe)?;
         Ok(to)
@@ -124,7 +124,7 @@ impl SftpConnection {
         check_not_top(path)?;
         check_abs(dest_dir)?;
         if is_same_or_inside(dest_dir, path) {
-            return Err("Нельзя переместить папку в саму себя.".into());
+            return Err("A folder cannot be moved into itself.".into());
         }
         let name = remote_path::file_name(path);
         let to = join(dest_dir, name);
@@ -132,13 +132,15 @@ impl SftpConnection {
             return Ok(to);
         }
         if self.exists(&to).await? {
-            return Err(format!("«{name}» уже есть в папке назначения."));
+            return Err(format!(
+                "“{name}” already exists in the destination folder."
+            ));
         }
         self.sftp.rename(path, to.clone()).await.map_err(describe)?;
         Ok(to)
     }
 
-    /// Free name in `dir`: `name`, `name (копия)`, `name (копия 2)` ... (extension is kept).
+    /// Free name in `dir`: `name`, `name (copy)`, `name (copy 2)` ... (extension is kept).
     async fn free_name(&self, dir: &str, name: &str) -> R<String> {
         if !self.exists(&join(dir, name)).await? {
             return Ok(join(dir, name));
@@ -149,15 +151,15 @@ impl SftpConnection {
         };
         for n in 1..1000 {
             let cand = if n == 1 {
-                format!("{stem} (копия){ext}")
+                format!("{stem} (copy){ext}")
             } else {
-                format!("{stem} (копия {n}){ext}")
+                format!("{stem} (copy {n}){ext}")
             };
             if !self.exists(&join(dir, &cand)).await? {
                 return Ok(join(dir, &cand));
             }
         }
-        Err("Не удалось подобрать свободное имя.".into())
+        Err("Could not find a free name.".into())
     }
 
     /// Copy a file or folder tree into `dest_dir` (through this machine: SFTP has no server-side copy).
@@ -169,7 +171,7 @@ impl SftpConnection {
         if is_same_or_inside(dest_dir, path)
             && remote_path::normalize(dest_dir) != remote_path::parent(path)
         {
-            return Err("Нельзя скопировать папку внутрь самой себя.".into());
+            return Err("A folder cannot be copied into itself.".into());
         }
         let to = self.free_name(dest_dir, name).await?;
         self.copy_tree(path, &to, 0).await?;
@@ -184,7 +186,7 @@ impl SftpConnection {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = R<()>> + Send + 'a>> {
         Box::pin(async move {
             if depth > MAX_DEPTH {
-                return Err("Слишком глубокая вложенность.".into());
+                return Err("Nesting is too deep.".into());
             }
             let m = self.sftp.symlink_metadata(from).await.map_err(describe)?;
             let ft = m.file_type();
@@ -235,7 +237,7 @@ impl SftpConnection {
                     let _ = self.sftp.set_metadata(to, a).await;
                 }
             } else {
-                return Err("Специальные файлы копировать нельзя.".into());
+                return Err("Special files cannot be copied.".into());
             }
             Ok(())
         })
@@ -247,7 +249,7 @@ impl SftpConnection {
         // the home folder itself, and anything that contains it, can only be removed by hand in a terminal
         if is_same_or_inside(&self.home, path) {
             return Err(format!(
-                "«{path}» — домашняя папка или её родитель: удалять такое можно только вручную в терминале."
+                "“{path}” is a home folder or its parent: such things can only be deleted by hand in a terminal."
             ));
         }
         self.delete_tree(path, 0).await
@@ -260,7 +262,7 @@ impl SftpConnection {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = R<()>> + Send + 'a>> {
         Box::pin(async move {
             if depth > MAX_DEPTH {
-                return Err("Слишком глубокая вложенность.".into());
+                return Err("Nesting is too deep.".into());
             }
             let m = self.sftp.symlink_metadata(path).await.map_err(describe)?;
             if m.file_type().is_dir() {
@@ -268,7 +270,7 @@ impl SftpConnection {
                     let n = e.file_name();
                     if n.contains('\u{FFFD}') {
                         return Err(format!(
-                            "В «{path}» есть файл с не-UTF-8 именем; удалите его в терминале."
+                            "“{path}” contains a file with a non-UTF-8 name; delete it in the terminal."
                         ));
                     }
                     self.delete_tree(&join(path, &n), depth + 1).await?;
@@ -296,7 +298,7 @@ impl SftpConnection {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = R<()>> + Send + 'a>> {
         Box::pin(async move {
             if depth > MAX_DEPTH {
-                return Err("Слишком глубокая вложенность.".into());
+                return Err("Nesting is too deep.".into());
             }
             let m = self.sftp.symlink_metadata(path).await.map_err(describe)?;
             if m.file_type().is_dir() {
@@ -323,7 +325,7 @@ impl SftpConnection {
     ) -> R<u64> {
         check_abs(path)?;
         if mode > 0o7777 {
-            return Err("Недопустимые права.".into());
+            return Err("Invalid permissions.".into());
         }
         let mut n = 0;
         self.chmod_inner(path, mode, recursive, files, dirs, 0, &mut n)
@@ -344,7 +346,7 @@ impl SftpConnection {
     ) -> std::pin::Pin<Box<dyn std::future::Future<Output = R<()>> + Send + 'a>> {
         Box::pin(async move {
             if depth > MAX_DEPTH {
-                return Err("Слишком глубокая вложенность.".into());
+                return Err("Nesting is too deep.".into());
             }
             let m = self.sftp.symlink_metadata(path).await.map_err(describe)?;
             let ft = m.file_type();

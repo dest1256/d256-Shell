@@ -26,7 +26,7 @@ export interface TabHandlers {
 export class Titlebar {
   readonly el: HTMLElement;
   private tabsEl = h('div', { class: 'tabs', role: 'tablist' });
-  private addEl = h('button', { class: 'tab-add', title: 'Новая сессия (Ctrl+T)', 'data-testid': 'tab-add' }, icon('plus'));
+  private addEl = h('button', { class: 'tab-add', title: 'New session (Ctrl+T)', 'data-testid': 'tab-add' }, icon('plus'));
   private onAdd: (() => void) | null = null;
 
   constructor() {
@@ -63,7 +63,7 @@ export class Titlebar {
           },
         },
         icon(t.icon, 14),
-        t.state ? h('span', { class: `dot ${t.state}`, title: { busy: 'Подключение…', ok: 'Подключено', off: 'Отключено' }[t.state], 'data-testid': `tab-state-${t.id}`, 'data-state': t.state }) : null,
+        t.state ? h('span', { class: `dot ${t.state}`, title: { busy: 'Connecting…', ok: 'Connected', off: 'Disconnected' }[t.state], 'data-testid': `tab-state-${t.id}`, 'data-state': t.state }) : null,
         h('span', { class: 'tab-title' }, t.title),
       );
       if (t.closable) {
@@ -72,8 +72,8 @@ export class Titlebar {
             'button',
             {
               class: 'tab-close',
-              title: 'Закрыть вкладку (Ctrl+W)',
-              'aria-label': 'Закрыть вкладку',
+              title: 'Close tab (Ctrl+W)',
+              'aria-label': 'Close tab',
               'data-testid': `tab-close-${t.id}`,
               onclick: (e) => (e.stopPropagation(), hd.onClose?.(t.id)),
             },
@@ -89,20 +89,20 @@ export class Titlebar {
 
   private captionButtons(): HTMLElement {
     const win = getCurrentWindow();
-    const maxBtn = h('button', { class: 'cap', title: 'Развернуть', onclick: () => void win.toggleMaximize() }, icon('max', 12));
+    const maxBtn = h('button', { class: 'cap', title: 'Maximize', onclick: () => void win.toggleMaximize() }, icon('max', 12));
     const sync = async () => {
       const m = await win.isMaximized().catch(() => false);
       maxBtn.replaceChildren(icon(m ? 'restore' : 'max', 12));
-      maxBtn.title = m ? 'Восстановить' : 'Развернуть';
+      maxBtn.title = m ? 'Restore' : 'Maximize';
     };
     void win.onResized(sync);
     void sync();
     return h(
       'div',
       { class: 'caption' },
-      h('button', { class: 'cap', title: 'Свернуть', onclick: () => void win.minimize() }, icon('min', 12)),
+      h('button', { class: 'cap', title: 'Minimize', onclick: () => void win.minimize() }, icon('min', 12)),
       maxBtn,
-      h('button', { class: 'cap close', title: 'Закрыть', onclick: () => void win.close() }, icon('close', 12)),
+      h('button', { class: 'cap close', title: 'Close', onclick: () => void win.close() }, icon('close', 12)),
     );
   }
 }
