@@ -3,6 +3,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { inTauri } from './api';
 import { clear, h } from './dom';
 import { icon } from './icons';
+import { iconFor } from './iconkit';
+import { t as tr } from './i18n';
 
 /** Linux (WebKitGTK) windows keep the native title bar and resize borders. */
 export const NATIVE_FRAME = typeof navigator !== 'undefined' && /Linux/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
@@ -11,6 +13,8 @@ export interface Tab {
   id: string;
   title: string;
   icon: string;
+  /** settings.icons key: a custom icon chosen by the user replaces `icon`. */
+  iconKey?: string;
   closable?: boolean;
   /** Connection indicator shown on the tab: busy (connecting), ok, off (session ended). */
   state?: 'busy' | 'ok' | 'off';
@@ -26,7 +30,7 @@ export interface TabHandlers {
 export class Titlebar {
   readonly el: HTMLElement;
   private tabsEl = h('div', { class: 'tabs', role: 'tablist' });
-  private addEl = h('button', { class: 'tab-add', title: 'New session (Ctrl+T)', 'data-testid': 'tab-add' }, icon('plus'));
+  private addEl = h('button', { class: 'tab-add', title: tr('New session (Ctrl+T)'), 'data-testid': 'tab-add' }, icon('plus'));
   private onAdd: (() => void) | null = null;
 
   constructor() {
@@ -35,6 +39,11 @@ export class Titlebar {
     this.el = h('div', { class: 'titlebar', 'data-tauri-drag-region': true }, mark, this.tabsEl, this.addEl, h('div', { class: 'drag', 'data-tauri-drag-region': true }));
     // own caption buttons only where the window has no native frame (Windows); Linux keeps the system title bar
     if (inTauri && !NATIVE_FRAME) this.el.append(this.captionButtons());
+  }
+
+  /** Tabs live in the left column instead of the title bar. */
+  setVertical(on: boolean): void {
+    this.el.classList.toggle('tabs-left', on);
   }
 
   /** Replace the tab strip. Without `onAdd` the "+" button is hidden (e.g. on the unlock screen). */
@@ -62,8 +71,8 @@ export class Titlebar {
             if ((e as MouseEvent).button === 1 && t.closable) hd.onClose?.(t.id);
           },
         },
-        icon(t.icon, 14),
-        t.state ? h('span', { class: `dot ${t.state}`, title: { busy: 'Connecting…', ok: 'Connected', off: 'Disconnected' }[t.state], 'data-testid': `tab-state-${t.id}`, 'data-state': t.state }) : null,
+        t.iconKey ? iconFor(t.iconKey, t.icon, 14) : icon(t.icon, 14),
+        t.state ? h('span', { class: `dot ${t.state}`, title: { busy: tr('Connecting…'), ok: tr('Connected'), off: tr('Disconnected') }[t.state], 'data-testid': `tab-state-${t.id}`, 'data-state': t.state }) : null,
         h('span', { class: 'tab-title' }, t.title),
       );
       if (t.closable) {
@@ -72,8 +81,8 @@ export class Titlebar {
             'button',
             {
               class: 'tab-close',
-              title: 'Close tab (Ctrl+W)',
-              'aria-label': 'Close tab',
+              title: tr('Close tab (Ctrl+W)'),
+              'aria-label': tr('Close tab'),
               'data-testid': `tab-close-${t.id}`,
               onclick: (e) => (e.stopPropagation(), hd.onClose?.(t.id)),
             },
@@ -89,20 +98,20 @@ export class Titlebar {
 
   private captionButtons(): HTMLElement {
     const win = getCurrentWindow();
-    const maxBtn = h('button', { class: 'cap', title: 'Maximize', onclick: () => void win.toggleMaximize() }, icon('max', 12));
+    const maxBtn = h('button', { class: 'cap', title: tr('Maximize'), onclick: () => void win.toggleMaximize() }, icon('max', 12));
     const sync = async () => {
       const m = await win.isMaximized().catch(() => false);
       maxBtn.replaceChildren(icon(m ? 'restore' : 'max', 12));
-      maxBtn.title = m ? 'Restore' : 'Maximize';
+      maxBtn.title = m ? tr('Restore') : tr('Maximize');
     };
     void win.onResized(sync);
     void sync();
     return h(
       'div',
       { class: 'caption' },
-      h('button', { class: 'cap', title: 'Minimize', onclick: () => void win.minimize() }, icon('min', 12)),
+      h('button', { class: 'cap', title: tr('Minimize'), onclick: () => void win.minimize() }, icon('min', 12)),
       maxBtn,
-      h('button', { class: 'cap close', title: 'Close', onclick: () => void win.close() }, icon('close', 12)),
+      h('button', { class: 'cap close', title: tr('Close'), onclick: () => void win.close() }, icon('close', 12)),
     );
   }
 }

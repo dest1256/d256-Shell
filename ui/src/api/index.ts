@@ -2,13 +2,15 @@
 // Tauri `invoke` inside the app, HTTP JSON-RPC against devbridge in a plain browser (e2e tests).
 import { Channel, invoke } from '@tauri-apps/api/core';
 
+import { tm } from '../i18n';
+
 export class ApiError extends Error {
   constructor(
     public code: string,
     message: string,
     public details?: Record<string, unknown>,
   ) {
-    super(message);
+    super(tm(message));
   }
 }
 
@@ -116,6 +118,12 @@ export interface Settings {
   clone_mode: 'ask' | 'auto' | 'view';
   monitor_enabled: boolean;
   monitor_interval_ms: number;
+  language: string;
+  shell_profiles: CustomProfile[];
+  startup_profile: string;
+  script_links: string[];
+  icons: Record<string, string>;
+  tabs_position: string;
   paste_warn_lines: number;
   paste_warn_bytes: number;
 }
@@ -187,6 +195,22 @@ export const api = {
   termWrite: (term_id: string, bytes: Uint8Array) => call<object>('term_write', { term_id, data_b64: toBase64(bytes) }),
   termResize: (term_id: string, cols: number, rows: number) => call<object>('term_resize', { term_id, cols, rows }),
   termClose: (term_id: string) => call<object>('term_close', { term_id }),
+  shellProfiles: () => call<{ profiles: ShellProfile[]; startup: string }>('shell_profiles'),
+  localOpen: (profile_id: string, cols: number, rows: number) => call<{ term_id: string }>('local_term_open', { profile_id, cols, rows }),
+  scriptsList: () => call<{ scripts: ScriptItem[] }>('scripts_list'),
+  scriptRead: (id: string) => call<ScriptText>('script_read', { id }),
+  scriptWrite: (p: { id: string; text: string; eol: string; bom: boolean; encoding: string }) => call<object>('script_write', p),
+  scriptCreate: (name: string, text: string) => call<{ id: string }>('script_create', { name, text }),
+  scriptDelete: (id: string) => call<object>('script_delete', { id }),
+  scriptLinkAdd: (paths: string[]) => call<{ added: number; skipped: string[] }>('script_link_add', { paths }),
+  scriptLinkMove: (old: string, next: string) => call<{ id: string }>('script_link_move', { old, new: next }),
+  scriptRun: (id: string, cols: number, rows: number) => call<{ term_id: string }>('script_run', { id, cols, rows }),
+  noteList: () => call<{ notes: NoteItem[] }>('note_list'),
+  noteGet: (id: string) => call<NoteFull>('note_get', { id }),
+  noteSave: (p: { id?: string; title: string; text: string }) => call<{ id: string; updated: number }>('note_save', p),
+  noteDelete: (id: string) => call<object>('note_delete', { id }),
+  iconImport: (path: string) => call<{ name: string }>('icon_import', { path }),
+  iconGet: (name: string) => call<{ data_url: string }>('icon_get', { name }),
 };
 
 function toBase64(b: Uint8Array): string {
@@ -337,4 +361,49 @@ export interface TermContext {
   root?: boolean;
   /** The user went deeper (su, sudo -i, bash ...): the command that started the nested shell. */
   nested?: { launcher: string[]; shell: string } | null;
+}
+
+export interface ShellProfile {
+  id: string;
+  name: string;
+  kind: string;
+  program: string;
+  args: string[];
+  cwd: string;
+  custom: boolean;
+}
+export interface CustomProfile {
+  id: string;
+  name: string;
+  program: string;
+  args: string[];
+  cwd: string;
+}
+export interface ScriptItem {
+  id: string;
+  name: string;
+  ext: string;
+  kind: 'own' | 'link';
+  path: string;
+  exists: boolean;
+}
+export interface ScriptText {
+  id: string;
+  path: string;
+  text: string;
+  eol: 'lf' | 'crlf';
+  bom: boolean;
+  encoding: string;
+}
+export interface NoteItem {
+  id: string;
+  title: string;
+  updated: number;
+  size: number;
+}
+export interface NoteFull {
+  id: string;
+  title: string;
+  text: string;
+  updated: number;
 }

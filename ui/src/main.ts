@@ -4,7 +4,8 @@ import { clear, h, toast } from './dom';
 import { icon } from './icons';
 import { showShell } from './shell';
 import { Titlebar } from './titlebar';
-import { loadSettings } from './settings';
+import { getSettings, loadSettings } from './settings';
+import { applyLanguage, t } from './i18n';
 import { errText, pwField } from './util';
 
 const app = document.getElementById('app')!;
@@ -28,12 +29,12 @@ async function openShell(): Promise<void> {
 function showSetup(): void {
   authTabs();
   clear(screen);
-  const p1 = pwField('master1', 'Master password (at least 8 characters)', 'new-password');
-  const p2 = pwField('master2', 'Repeat the master password', 'new-password');
+  const p1 = pwField('master1', t('Master password (at least 8 characters)'), 'new-password');
+  const p2 = pwField('master2', t('Repeat the master password'), 'new-password');
   const err = h('div', { class: 'error', 'data-testid': 'error' });
   const submit = async () => {
     err.textContent = '';
-    if (p1.value !== p2.value) return void (err.textContent = 'The passwords do not match.');
+    if (p1.value !== p2.value) return void (err.textContent = t('The passwords do not match.'));
     try {
       await api.createVault(p1.value);
       await openShell();
@@ -49,13 +50,13 @@ function showSetup(): void {
         'form',
         { class: 'auth-card', onsubmit: (e) => (e.preventDefault(), void submit()) },
         logo(),
-        h('h1', {}, 'Create a master password'),
-        h('p', {}, 'It encrypts the passwords of your servers. The data folder can be moved to another computer.'),
-        h('p', { class: 'warn' }, 'The master password cannot be recovered: if you forget it, the saved passwords will be lost.'),
+        h('h1', {}, t('Create a master password')),
+        h('p', {}, t('It encrypts the passwords of your servers. The data folder can be moved to another computer.')),
+        h('p', { class: 'warn' }, t('The master password cannot be recovered: if you forget it, the saved passwords will be lost.')),
         p1,
         p2,
         err,
-        h('button', { class: 'primary', type: 'submit', 'data-testid': 'create' }, 'Create vault'),
+        h('button', { class: 'primary', type: 'submit', 'data-testid': 'create' }, t('Create vault')),
       ),
     ),
   );
@@ -66,7 +67,7 @@ function showSetup(): void {
 function showUnlock(backupExists: boolean, note = ''): void {
   authTabs();
   clear(screen);
-  const pw = pwField('master', 'Master password');
+  const pw = pwField('master', t('Master password'));
   const err = h('div', { class: 'error', 'data-testid': 'error' }, note);
   const actions = h('div', { class: 'col' });
   const offerRestore = () => {
@@ -80,14 +81,14 @@ function showUnlock(backupExists: boolean, note = ''): void {
           onclick: async () => {
             try {
               await api.restoreBackup(pw.value);
-              toast('The vault was restored from the backup.');
+              toast(t('The vault was restored from the backup.'));
               await openShell();
             } catch (e) {
               err.textContent = errText(e);
             }
           },
         },
-        'Restore from the backup (vault.bin.bak)',
+        t('Restore from the backup (vault.bin.bak)'),
       ),
     );
   };
@@ -110,10 +111,10 @@ function showUnlock(backupExists: boolean, note = ''): void {
         { class: 'auth-card', onsubmit: (e) => (e.preventDefault(), void submit()) },
         logo(),
         h('h1', {}, 'd256 Shell'),
-        h('p', {}, 'Enter the master password to open the vault.'),
+        h('p', {}, t('Enter the master password to open the vault.')),
         pw,
         err,
-        h('button', { class: 'primary', type: 'submit', 'data-testid': 'unlock' }, 'Unlock'),
+        h('button', { class: 'primary', type: 'submit', 'data-testid': 'unlock' }, t('Unlock')),
         actions,
       ),
     ),
@@ -124,13 +125,14 @@ function showUnlock(backupExists: boolean, note = ''): void {
 
 async function start(): Promise<void> {
   await loadSettings().catch(() => undefined);
+  if (applyLanguage(getSettings().language)) return location.reload();
   try {
     const st = await api.status();
     if (st.state === 'no_vault') return showSetup();
     if (st.state === 'unlocked') return void (await openShell());
     showUnlock(st.backup_exists);
   } catch (e) {
-    screen.textContent = `Start error: ${errText(e)}`;
+    screen.textContent = t('Start error: {0}', errText(e));
   }
 }
 

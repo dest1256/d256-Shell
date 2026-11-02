@@ -22,7 +22,7 @@ import { MergeView } from '@codemirror/merge';
 import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from '@codemirror/search';
 import { Compartment, EditorState, Extension, Text } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
-import { tags as t } from '@lezer/highlight';
+import { tags as tg } from '@lezer/highlight';
 import { ApiError, editor as api_, EditBase, EditOpened } from './api';
 import { h, modal, toast } from './dom';
 import { encodingTitle, ENCODINGS, supportsBom } from './encodings';
@@ -30,6 +30,7 @@ import { icon } from './icons';
 import { schemeById } from './schemes';
 import { getSettings } from './settings';
 import { gotoLine } from './editor-goto';
+import { t } from './i18n';
 
 /** Language by file name / extension (sh, conf/ini, nginx, yaml, json, toml, xml/html, js/ts, py, php, sql, Dockerfile, md, systemd units...). */
 export function languageFor(path: string): Extension {
@@ -62,7 +63,7 @@ export function languageFor(path: string): Extension {
 }
 
 /** Colours follow the terminal colour scheme, so the editor looks like part of the terminal. */
-function themeExtensions(): Extension {
+export function themeExtensions(): Extension {
   const th = schemeById(getSettings().scheme).theme;
   const bg = th.background ?? '#0c0c0c';
   const fg = th.foreground ?? '#cccccc';
@@ -84,17 +85,17 @@ function themeExtensions(): Extension {
     { dark: true },
   );
   const hl = HighlightStyle.define([
-    { tag: [t.keyword, t.operatorKeyword, t.modifier], color: col('brightMagenta', '#b4009e') },
-    { tag: [t.string, t.special(t.string)], color: col('green', '#13a10e') },
-    { tag: [t.number, t.bool, t.null], color: col('brightYellow', '#f9f1a5') },
-    { tag: [t.comment, t.lineComment, t.blockComment], color: col('brightBlack', '#767676'), fontStyle: 'italic' },
-    { tag: [t.function(t.variableName), t.function(t.propertyName), t.labelName], color: col('brightBlue', '#3b78ff') },
-    { tag: [t.typeName, t.className, t.namespace], color: col('brightCyan', '#61d6d6') },
-    { tag: [t.propertyName, t.attributeName], color: col('cyan', '#3a96dd') },
-    { tag: [t.tagName, t.heading], color: col('brightRed', '#e74856'), fontWeight: 'bold' },
-    { tag: [t.operator, t.punctuation, t.separator], color: fg },
-    { tag: [t.link, t.url], color: col('blue', '#0037da'), textDecoration: 'underline' },
-    { tag: t.invalid, color: col('red', '#c50f1f') },
+    { tag: [tg.keyword, tg.operatorKeyword, tg.modifier], color: col('brightMagenta', '#b4009e') },
+    { tag: [tg.string, tg.special(tg.string)], color: col('green', '#13a10e') },
+    { tag: [tg.number, tg.bool, tg.null], color: col('brightYellow', '#f9f1a5') },
+    { tag: [tg.comment, tg.lineComment, tg.blockComment], color: col('brightBlack', '#767676'), fontStyle: 'italic' },
+    { tag: [tg.function(tg.variableName), tg.function(tg.propertyName), tg.labelName], color: col('brightBlue', '#3b78ff') },
+    { tag: [tg.typeName, tg.className, tg.namespace], color: col('brightCyan', '#61d6d6') },
+    { tag: [tg.propertyName, tg.attributeName], color: col('cyan', '#3a96dd') },
+    { tag: [tg.tagName, tg.heading], color: col('brightRed', '#e74856'), fontWeight: 'bold' },
+    { tag: [tg.operator, tg.punctuation, tg.separator], color: fg },
+    { tag: [tg.link, tg.url], color: col('blue', '#0037da'), textDecoration: 'underline' },
+    { tag: tg.invalid, color: col('red', '#c50f1f') },
   ]);
   return [view, syntaxHighlighting(hl), syntaxHighlighting(defaultHighlightStyle, { fallback: true })];
 }
@@ -116,7 +117,7 @@ export class EditorPane {
   private base: EditBase | null = null;
   private bom = false;
   private encoding = 'UTF-8';
-  private encButton = h('button', { class: 'tool-sm', 'data-testid': 'ed-enc', title: 'File encoding: reread, or save in another one', onclick: () => void this.chooseEncoding() }, 'UTF-8');
+  private encButton = h('button', { class: 'tool-sm', 'data-testid': 'ed-enc', title: t('File encoding: reread, or save in another one'), onclick: () => void this.chooseEncoding() }, 'UTF-8');
   private eol: 'lf' | 'crlf' | 'mixed' = 'lf';
   private chosenEol: 'lf' | 'crlf' | null = null;
   private isNew = false;
@@ -130,7 +131,7 @@ export class EditorPane {
     private hooks: EditorHooks,
   ) {
     const name = path.split('/').pop() ?? path;
-    const wrapBtn = h('button', { class: 'tool-sm', 'data-testid': 'ed-wrap', title: 'Wrap lines', onclick: () => this.toggleWrap(wrapBtn) }, 'Wrap');
+    const wrapBtn = h('button', { class: 'tool-sm', 'data-testid': 'ed-wrap', title: t('Wrap lines'), onclick: () => this.toggleWrap(wrapBtn) }, t('Wrap'));
     this.el = h(
       'div',
       { class: 'editor', 'data-testid': 'editor', 'data-path': path },
@@ -141,8 +142,8 @@ export class EditorPane {
         h('span', { class: 'ed-dir muted' }, path.slice(0, path.length - name.length)),
         h('span', { class: 'ed-spacer' }),
         wrapBtn,
-        h('button', { class: 'tool-sm', 'data-testid': 'ed-find', onclick: () => openSearchPanel(this.view), title: 'Find and replace (Ctrl+F / Ctrl+H)' }, icon('search', 13)),
-        h('button', { class: 'tool-sm primary', 'data-testid': 'ed-save', onclick: () => void this.save(), title: 'Save to the server (Ctrl+S)' }, 'Save'),
+        h('button', { class: 'tool-sm', 'data-testid': 'ed-find', onclick: () => openSearchPanel(this.view), title: t('Find and replace (Ctrl+F / Ctrl+H)') }, icon('search', 13)),
+        h('button', { class: 'tool-sm primary', 'data-testid': 'ed-save', onclick: () => void this.save(), title: t('Save to the server (Ctrl+S)') }, t('Save')),
       ),
       h('div', { class: 'ed-host', 'data-testid': 'ed-host' }),
       h('div', { class: 'ed-statusbar' }, this.status, h('span', { class: 'ed-spacer' }), this.info, this.encButton),
@@ -158,9 +159,9 @@ export class EditorPane {
     this.view = new EditorView({ state, parent: host });
     this.savedDoc = state.doc;
     this.updateInfo();
-    this.status.textContent = isNew ? 'New file: it will be created on the first save' : '';
-    if (o.eol === 'mixed') this.status.textContent = 'The file has mixed line endings: when saving you will choose LF or CRLF.';
-    else if (o.guessed) this.status.textContent = `The encoding was detected automatically: ${o.encoding}. If the text is wrong, choose the encoding at the bottom right.`;
+    this.status.textContent = isNew ? t('New file: it will be created on the first save') : '';
+    if (o.eol === 'mixed') this.status.textContent = t('The file has mixed line endings: when saving you will choose LF or CRLF.');
+    else if (o.guessed) this.status.textContent = t('The encoding was detected automatically: {0}. If the text is wrong, choose the encoding at the bottom right.', o.encoding);
   }
 
   private apply(o: EditOpened): void {
@@ -220,14 +221,14 @@ export class EditorPane {
     if (d === this.dirty) return;
     this.dirty = d;
     this.hooks.onDirty(d);
-    if (d) this.status.textContent = 'Modified';
+    if (d) this.status.textContent = t('Modified');
   }
 
   private updateInfo(): void {
     const s = this.view.state;
     const line = s.doc.lineAt(s.selection.main.head);
     const eol = this.eol === 'mixed' ? (this.chosenEol ?? 'mixed').toString().toUpperCase() : this.eol.toUpperCase();
-    this.info.textContent = `Line ${line.number}, column ${s.selection.main.head - line.from + 1} · ${this.encoding}${this.bom ? ' BOM' : ''} · ${eol}`;
+    this.info.textContent = t('Line {0}, column {1} · {2}{3} · {4}', line.number, s.selection.main.head - line.from + 1, this.encoding, this.bom ? ' ' + t('BOM') : '', eol);
   }
 
   text(): string {
@@ -241,9 +242,9 @@ export class EditorPane {
       h(
         'div',
         { role: 'dialog', 'data-testid': 'eol-dialog' },
-        h('h3', {}, 'Mixed line endings'),
-        h('p', {}, 'The file has both LF and CRLF. All lines will be saved in one style. Which one to choose?'),
-        h('div', { class: 'row end' }, h('button', { onclick: () => close(null as never), 'data-testid': 'eol-cancel' }, 'Cancel'), h('button', { onclick: () => close('lf'), 'data-testid': 'eol-lf' }, 'LF (Linux)'), h('button', { class: 'primary', onclick: () => close('crlf'), 'data-testid': 'eol-crlf' }, 'CRLF (Windows)')),
+        h('h3', {}, t('Mixed line endings')),
+        h('p', {}, t('The file has both LF and CRLF. All lines will be saved in one style. Which one to choose?')),
+        h('div', { class: 'row end' }, h('button', { onclick: () => close(null as never), 'data-testid': 'eol-cancel' }, t('Cancel')), h('button', { onclick: () => close('lf'), 'data-testid': 'eol-lf' }, t('LF (Linux)')), h('button', { class: 'primary', onclick: () => close('crlf'), 'data-testid': 'eol-crlf' }, t('CRLF (Windows)'))),
       ),
     );
     if (r) this.chosenEol = r;
@@ -256,7 +257,7 @@ export class EditorPane {
     const eol = await this.chooseEol();
     if (!eol) return false;
     this.saving = true;
-    this.status.textContent = 'Saving…';
+    this.status.textContent = t('Saving…');
     const text = this.text();
     const doc = this.view.state.doc;
     try {
@@ -265,7 +266,7 @@ export class EditorPane {
       this.isNew = false;
       this.savedDoc = doc;
       this.setDirty(!this.view.state.doc.eq(doc));
-      this.status.textContent = 'Saved';
+      this.status.textContent = t('Saved');
       this.el.dispatchEvent(new CustomEvent('saved', { bubbles: true }));
       return true;
     } catch (e) {
@@ -286,14 +287,14 @@ export class EditorPane {
       case 'connection_lost':
       case 'no_session': {
         if (!retried && (await this.hooks.reconnect())) return this.save(opts, true);
-        this.fail('Connection lost. The content is kept in the editor; reconnect and press Ctrl+S again.');
+        this.fail(t('Connection lost. The content is kept in the editor; reconnect and press Ctrl+S again.'));
         return false;
       }
       case 'conflict': {
         const remote = (e.details?.remote_text as string | null | undefined) ?? null;
         const choice = await this.conflictDialog(remote, text);
         if (choice === 'force') return this.save({ ...opts, force: true }, retried);
-        this.status.textContent = 'Not saved: the file changed on the server';
+        this.status.textContent = t('Not saved: the file changed on the server');
         return false;
       }
       case 'deleted': {
@@ -301,9 +302,9 @@ export class EditorPane {
           h(
             'div',
             { role: 'dialog', 'data-testid': 'deleted-dialog' },
-            h('h3', {}, 'The file was deleted on the server'),
-            h('p', {}, `“${this.path}” no longer exists. Create it again with the current content?`),
-            h('div', { class: 'row end' }, h('button', { onclick: () => close(false), 'data-testid': 'deleted-cancel' }, 'Cancel'), h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'deleted-create' }, 'Create again')),
+            h('h3', {}, t('The file was deleted on the server')),
+            h('p', {}, t('“{0}” no longer exists. Create it again with the current content?', this.path)),
+            h('div', { class: 'row end' }, h('button', { onclick: () => close(false), 'data-testid': 'deleted-cancel' }, t('Cancel')), h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'deleted-create' }, t('Create again'))),
           ),
         );
         if (ok) return this.save({ ...opts, force: true }, retried);
@@ -315,13 +316,13 @@ export class EditorPane {
           h(
             'div',
             { role: 'dialog', 'data-testid': 'inplace-dialog' },
-            h('h3', {}, e.code === 'foreign_owner' ? 'A file of another user' : 'The folder is not writable'),
+            h('h3', {}, e.code === 'foreign_owner' ? t('A file of another user') : t('The folder is not writable')),
             h('p', {}, e.message),
-            h('div', { class: 'row end' }, h('button', { onclick: () => close(false), 'data-testid': 'inplace-cancel' }, 'Cancel'), h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'inplace-ok' }, 'Write in place')),
+            h('div', { class: 'row end' }, h('button', { onclick: () => close(false), 'data-testid': 'inplace-cancel' }, t('Cancel')), h('button', { class: 'primary', onclick: () => close(true), 'data-testid': 'inplace-ok' }, t('Write in place'))),
           ),
         );
         if (ok) return this.save({ ...opts, in_place: true }, retried);
-        this.status.textContent = 'Not saved';
+        this.status.textContent = t('Not saved');
         return false;
       }
       default:
@@ -331,7 +332,7 @@ export class EditorPane {
   }
 
   private fail(msg: string, detail?: string): void {
-    this.status.textContent = `Error: ${msg}`;
+    this.status.textContent = t('Error: {0}', msg);
     toast(msg, detail);
   }
 
@@ -342,7 +343,7 @@ export class EditorPane {
       const showDiff = () => {
         if (diffHost.childElementCount) return;
         if (remote === null) {
-          diffHost.textContent = 'The file on the server is too large to show differences.';
+          diffHost.textContent = t('The file on the server is too large to show differences.');
           return;
         }
         const common = [EditorView.editable.of(false), EditorState.readOnly.of(true), themeExtensions(), lineNumbers()];
@@ -351,15 +352,15 @@ export class EditorPane {
       const box = h(
         'div',
         { role: 'dialog', 'data-testid': 'conflict-save-dialog', class: 'wide' },
-        h('h3', {}, 'The file changed on the server'),
-        h('p', {}, 'Since the file was opened it has changed on the server. Left: the version on the server, right: yours.'),
+        h('h3', {}, t('The file changed on the server')),
+        h('p', {}, t('Since the file was opened it has changed on the server. Left: the version on the server, right: yours.')),
         diffHost,
         h(
           'div',
           { class: 'row end wrap' },
-          h('button', { type: 'button', onclick: () => close('cancel'), 'data-testid': 'cs-cancel' }, 'Cancel'),
-          h('button', { type: 'button', onclick: showDiff, 'data-testid': 'cs-diff' }, 'Show differences'),
-          h('button', { type: 'button', class: 'danger', onclick: () => close('force'), 'data-testid': 'cs-force' }, 'Overwrite anyway'),
+          h('button', { type: 'button', onclick: () => close('cancel'), 'data-testid': 'cs-cancel' }, t('Cancel')),
+          h('button', { type: 'button', onclick: showDiff, 'data-testid': 'cs-diff' }, t('Show differences')),
+          h('button', { type: 'button', class: 'danger', onclick: () => close('force'), 'data-testid': 'cs-force' }, t('Overwrite anyway')),
         ),
       );
       return box;
@@ -373,7 +374,7 @@ export class EditorPane {
       for (const [n, t] of ENCODINGS) sel.append(h('option', { value: n, selected: n === this.encoding }, t));
       const bom = h('input', { type: 'checkbox', 'data-testid': 'enc-bom' }) as HTMLInputElement;
       bom.checked = this.bom;
-      const bomRow = h('label', { class: 'check' }, bom, ' Write a BOM (byte order mark)');
+      const bomRow = h('label', { class: 'check' }, bom, ' ' + t('Write a BOM (byte order mark)'));
       const sync = () => (bomRow.style.display = supportsBom(sel.value) ? '' : 'none');
       sel.addEventListener('change', sync);
       sync();
@@ -383,12 +384,12 @@ export class EditorPane {
           type: 'button',
           'data-testid': 'enc-reread',
           onclick: async () => {
-            if (this.dirty && !window.confirm('Unsaved changes will be lost. Reread the file?')) return;
+            if (this.dirty && !window.confirm(t('Unsaved changes will be lost. Reread the file?'))) return;
             close(null);
             await this.reread(sel.value);
           },
         },
-        'Reread in this encoding',
+        t('Reread in this encoding'),
       );
       if (this.isNew) reread.setAttribute('disabled', '');
       const saveAs = h(
@@ -403,20 +404,20 @@ export class EditorPane {
             this.encButton.textContent = this.encoding;
             this.updateInfo();
             this.setDirty(true);
-            this.status.textContent = `The file will be saved in the encoding ${this.encoding}`;
+            this.status.textContent = t('The file will be saved in the encoding {0}', this.encoding);
             close(null);
           },
         },
-        'Save as this',
+        t('Save as this'),
       );
       return h(
         'div',
         { role: 'dialog', 'data-testid': 'enc-dialog' },
-        h('h3', {}, 'Encoding'),
-        h('p', {}, `Now: ${encodingTitle(this.encoding)}. “Reread” decodes the file from the server again (if the text is shown as garbage). “Save as” writes the current text in the chosen encoding: this converts the file.`),
+        h('h3', {}, t('Encoding')),
+        h('p', {}, t('Now: {0}. “Reread” decodes the file from the server again (if the text is shown as garbage). “Save as” writes the current text in the chosen encoding: this converts the file.', encodingTitle(this.encoding))),
         sel,
         bomRow,
-        h('div', { class: 'row end wrap' }, h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'enc-cancel' }, 'Cancel'), reread, saveAs),
+        h('div', { class: 'row end wrap' }, h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'enc-cancel' }, t('Cancel')), reread, saveAs),
       );
     }).then(() => {
       setTimeout(() => this.view.focus(), 0);
@@ -433,7 +434,7 @@ export class EditorPane {
       this.savedDoc = state.doc;
       this.setDirty(false);
       this.updateInfo();
-      this.status.textContent = `The file was reread in the encoding ${o.encoding}`;
+      this.status.textContent = t('The file was reread in the encoding {0}', o.encoding);
     } catch (e) {
       this.fail(e instanceof ApiError ? e.message : String(e));
     }
@@ -452,10 +453,10 @@ export function pickEncoding(reason: string): Promise<string | null> {
     return h(
       'div',
       { role: 'dialog', 'data-testid': 'enc-pick-dialog' },
-      h('h3', {}, 'Choose an encoding'),
+      h('h3', {}, t('Choose an encoding')),
       h('p', {}, reason),
       sel,
-      h('div', { class: 'row end' }, h('button', { onclick: () => close(null), 'data-testid': 'enc-pick-cancel' }, 'Cancel'), h('button', { class: 'primary', onclick: () => close(sel.value), 'data-testid': 'enc-pick-ok' }, 'Open')),
+      h('div', { class: 'row end' }, h('button', { onclick: () => close(null), 'data-testid': 'enc-pick-cancel' }, t('Cancel')), h('button', { class: 'primary', onclick: () => close(sel.value), 'data-testid': 'enc-pick-ok' }, t('Open'))),
     );
   });
 }

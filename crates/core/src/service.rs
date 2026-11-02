@@ -11,6 +11,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::sync::Mutex;
 
+mod local;
+
 #[derive(Debug, Serialize)]
 pub struct ApiError {
     pub code: &'static str,
@@ -443,6 +445,22 @@ impl Service {
             }
             "set_settings" => self.set_settings(&params),
             "ssh_info" => Ok(self.ssh_info()),
+            "shell_profiles" => Ok(self.shell_profiles()),
+            "local_term_open" => self.local_term_open(&params),
+            "scripts_list" => self.scripts_list(),
+            "script_read" => self.script_read(&need("id")?),
+            "script_write" => self.script_write(&params),
+            "script_create" => self.script_create(&params),
+            "script_delete" => self.script_delete(&need("id")?),
+            "script_link_add" => self.script_link_add(&params),
+            "script_link_move" => self.script_link_move(&params),
+            "script_run" => self.script_run(&params),
+            "note_list" => self.note_list(),
+            "note_get" => self.note_get(&need("id")?),
+            "note_save" => self.note_save(&params),
+            "note_delete" => self.note_delete(&need("id")?),
+            "icon_import" => self.icon_import(&need("path")?),
+            "icon_get" => self.icon_get(&need("name")?),
             "term_open" => self.term_open(&params),
             "term_read" => {
                 let wait = params

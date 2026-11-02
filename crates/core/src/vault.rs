@@ -123,6 +123,26 @@ impl Drop for Server {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultData {
     pub servers: Vec<Server>,
+    /// Free-form notes, encrypted with everything else. Programs older than 1.1 ignore this field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub notes: Vec<Note>,
+}
+
+/// A note the user keeps in the vault (any title, any text).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Note {
+    pub id: String,
+    pub title: String,
+    pub text: String,
+    pub created: u64,
+    pub updated: u64,
+}
+
+impl Drop for Note {
+    fn drop(&mut self) {
+        self.text.zeroize();
+        self.title.zeroize();
+    }
 }
 
 pub struct Vault {

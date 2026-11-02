@@ -341,6 +341,7 @@ fn wrong_saved_password_means_one_failed_attempt_and_a_question_for_the_user() {
         cols: 80,
         rows: 24,
         expect_password: None,
+        cwd: None,
     })
     .unwrap();
     *victim.lock().unwrap() = Some(Arc::downgrade(&s));

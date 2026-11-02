@@ -35,7 +35,7 @@ test('layout: title bar with tabs, panel, rail, sessions, status bar', async ({ 
   await expect(page.getByTestId('status-count')).toHaveText('Sessions: 2');
 
   // choosing in the list
-  await page.getByTestId('server-item').first().click();
+  await page.getByTestId('server-item').first().locator('.srv-name').click(); // the hover buttons sit on the right
   await expect(page.getByTestId('server-item').first()).toHaveClass(/selected/);
   await page.screenshot({ path: 'screenshots/11-shell.png' });
 

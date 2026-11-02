@@ -4,6 +4,7 @@
 import { api, ApiError } from './api';
 import { clear, h } from './dom';
 import { getSettings } from './settings';
+import { t, locale } from './i18n';
 
 export interface Sample {
   cpu: [number, number] | null;
@@ -80,7 +81,7 @@ export function fmtBytes(n: number): string {
     v /= 1024;
     i++;
   }
-  return `${v.toLocaleString('en-US', { maximumFractionDigits: v >= 100 || i === 0 ? 0 : 1 })} ${u[i]}`;
+  return `${v.toLocaleString(locale(), { maximumFractionDigits: v >= 100 || i === 0 ? 0 : 1 })} ${u[i]}`;
 }
 
 export function fmtRate(n: number): string {
@@ -97,7 +98,7 @@ export function fmtBits(bytesPerSec: number): string {
     v /= 1000;
     i++;
   }
-  return `${v.toLocaleString('en-US', { maximumFractionDigits: v >= 100 || i === 0 ? 0 : 1 })} ${u[i]}`;
+  return `${v.toLocaleString(locale(), { maximumFractionDigits: v >= 100 || i === 0 ? 0 : 1 })} ${u[i]}`;
 }
 
 /** d:hh:mm:ss, the uptime format of the task manager. */
@@ -112,7 +113,7 @@ export function fmtUptime(sec: number | null): string {
   const d = Math.floor(sec / 86400);
   const hh = Math.floor((sec % 86400) / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  return d ? `${d} d ${hh} h` : hh ? `${hh} h ${m} min` : `${m} min`;
+  return d ? `${d} d ${hh} h` : hh ? t('{0} h {1} min', hh, m) : t('{0} min', m);
 }
 
 /** Polls the server and keeps the history. One per SSH tab; pauses while the tab is not visible. */
@@ -337,9 +338,9 @@ export class MonitorBar {
   readonly el: HTMLElement;
   private nums = h('div', { class: 'mon-nums', 'data-testid': 'mon-nums' });
   private graphs = h('div', { class: 'mon-graphs' });
-  private cCpu = h('canvas', { class: 'mon-spark', title: 'Processor load' }) as HTMLCanvasElement;
-  private cMem = h('canvas', { class: 'mon-spark', title: 'Memory' }) as HTMLCanvasElement;
-  private cNet = h('canvas', { class: 'mon-spark', title: 'Network' }) as HTMLCanvasElement;
+  private cCpu = h('canvas', { class: 'mon-spark', title: t('Processor load') }) as HTMLCanvasElement;
+  private cMem = h('canvas', { class: 'mon-spark', title: t('Memory') }) as HTMLCanvasElement;
+  private cNet = h('canvas', { class: 'mon-spark', title: t('Network') }) as HTMLCanvasElement;
   private off: () => void;
   private raf = 0;
 
@@ -349,7 +350,7 @@ export class MonitorBar {
     private unavailable?: string,
   ) {
     this.graphs.append(this.cCpu, this.cMem, this.cNet);
-    this.el = h('div', { class: 'mon-bar', role: 'button', tabindex: '0', title: 'Click to open the detailed monitor', 'data-testid': 'monitor-bar', onclick: onOpen, onkeydown: (e) => ((e as KeyboardEvent).key === 'Enter' && onOpen()) }, this.nums, h('div', { class: 'mon-gap' }), this.graphs);
+    this.el = h('div', { class: 'mon-bar', role: 'button', tabindex: '0', title: t('Click to open the detailed monitor'), 'data-testid': 'monitor-bar', onclick: onOpen, onkeydown: (e) => ((e as KeyboardEvent).key === 'Enter' && onOpen()) }, this.nums, h('div', { class: 'mon-gap' }), this.graphs);
     this.off = src.subscribe(() => this.schedule());
     this.render();
     new ResizeObserver(() => this.schedule()).observe(this.el);
@@ -391,7 +392,7 @@ export class MonitorBar {
     }
     this.graphs.style.display = '';
     if (!s) {
-      this.nums.append(h('span', { class: 'mon-off' }, 'Collecting data…'));
+      this.nums.append(h('span', { class: 'mon-off' }, t('Collecting data…')));
       return;
     }
     const mem = s.mem;
@@ -400,10 +401,10 @@ export class MonitorBar {
     this.nums.append(
       this.item('CPU', p?.cpu == null ? '…' : `${Math.round(p.cpu)}%`, level(p?.cpu ?? null), 'mon-cpu'),
       this.item('RAM', memPct === null || !mem ? '—' : `${Math.round(memPct)}% · ${fmtBytes(used)} of ${fmtBytes(mem.total)}`, level(memPct), 'mon-mem'),
-      ...(mem && mem.swap_total > 0 ? [this.item('Swap', `${Math.round(p?.swap ?? ((mem.swap_total - mem.swap_free) / mem.swap_total) * 100)}%`, level(p?.swap ?? null))] : []),
-      ...(s.load ? [this.item('Load', `${s.load.l1.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '', 'mon-load')] : []),
-      this.item('Network', p ? `↓ ${fmtRate(p.rx)}  ↑ ${fmtRate(p.tx)}` : '…', '', 'mon-net'),
-      this.item('Uptime', fmtUptime(s.uptime)),
+      ...(mem && mem.swap_total > 0 ? [this.item(t('Swap'), `${Math.round(p?.swap ?? ((mem.swap_total - mem.swap_free) / mem.swap_total) * 100)}%`, level(p?.swap ?? null))] : []),
+      ...(s.load ? [this.item(t('Load'), `${s.load.l1.toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '', 'mon-load')] : []),
+      this.item(t('Network'), p ? `↓ ${fmtRate(p.rx)}  ↑ ${fmtRate(p.tx)}` : '…', '', 'mon-net'),
+      this.item(t('Uptime'), fmtUptime(s.uptime)),
     );
     const hist = this.src.history;
     drawChart(this.cCpu, [{ data: hist.map((x) => x.cpu), color: COLORS.cpu, fill: true }], { max: 100 });

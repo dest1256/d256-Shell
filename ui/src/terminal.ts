@@ -13,6 +13,7 @@ import { h, modal, toast } from './dom';
 import { icon } from './icons';
 import { schemeById } from './schemes';
 import { getSettings, onSettings, updateSettings } from './settings';
+import { t } from './i18n';
 
 export type TermState = 'busy' | 'ok' | 'off';
 
@@ -51,21 +52,21 @@ export async function copyText(text: string): Promise<void> {
  * box (remove a dangerous line, fix a command) and what is left is what gets pasted. null = cancelled.
  */
 async function confirmPaste(text: string, lines: number): Promise<string | null> {
-  const count = (t: string) => {
-    const n = t.split(/\r\n|\r|\n/).length;
-    const size = t.length > 1024 ? `${(t.length / 1024).toFixed(1)} KB` : `${t.length} chars`;
+  const count = (str: string) => {
+    const n = str.split(/\r\n|\r|\n/).length;
+    const size = str.length > 1024 ? `${(str.length / 1024).toFixed(1)} KB` : t('{0} chars', str.length);
     return { n, size };
   };
   const r = await modal<string | null>((close) => {
-    const ta = h('textarea', { class: 'paste-edit', 'data-testid': 'paste-text', spellcheck: 'false', rows: String(Math.min(14, Math.max(5, lines + 1))), wrap: 'off', 'aria-label': 'Pasted text' }) as HTMLTextAreaElement;
+    const ta = h('textarea', { class: 'paste-edit', 'data-testid': 'paste-text', spellcheck: 'false', rows: String(Math.min(14, Math.max(5, lines + 1))), wrap: 'off', 'aria-label': t('Pasted text') }) as HTMLTextAreaElement;
     ta.value = text;
-    const title = h('h3', {}, lines > 1 ? `Paste ${lines} lines?` : 'Paste a large fragment?');
-    const warn = h('p', { class: 'warn', 'data-testid': 'paste-warning' }, `The pasted text may run as commands (${count(text).size}). It can be edited.`);
+    const title = h('h3', {}, lines > 1 ? t('Paste {0} lines?', lines) : t('Paste a large fragment?'));
+    const warn = h('p', { class: 'warn', 'data-testid': 'paste-warning' }, t('The pasted text may run as commands ({0}). It can be edited.', count(text).size));
     const done = () => close(ta.value.length ? ta.value : null);
     ta.addEventListener('input', () => {
       const c = count(ta.value);
-      title.textContent = c.n > 1 ? `Paste ${c.n} lines?` : 'Paste text?';
-      warn.textContent = `The pasted text may run as commands (${c.size}). It can be edited.`;
+      title.textContent = c.n > 1 ? t('Paste {0} lines?', c.n) : t('Paste text?');
+      warn.textContent = t('The pasted text may run as commands ({0}). It can be edited.', c.size);
     });
     ta.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) (e.preventDefault(), done());
@@ -80,7 +81,7 @@ async function confirmPaste(text: string, lines: number): Promise<string | null>
       title,
       warn,
       ta,
-      h('div', { class: 'row end wrap' }, h('span', { class: 'muted small paste-hint' }, 'Ctrl+Enter pastes'), h('button', { onclick: () => close(null), 'data-testid': 'paste-cancel' }, 'Cancel'), h('button', { class: 'primary', onclick: done, 'data-testid': 'paste-ok' }, 'Paste')),
+      h('div', { class: 'row end wrap' }, h('span', { class: 'muted small paste-hint' }, 'Ctrl+Enter pastes'), h('button', { onclick: () => close(null), 'data-testid': 'paste-cancel' }, t('Cancel')), h('button', { class: 'primary', onclick: done, 'data-testid': 'paste-ok' }, t('Paste'))),
     );
   });
   return r;
@@ -120,13 +121,16 @@ export class TerminalView {
   private raf = 0;
   private fontSave: number | undefined;
   private unsub: () => void;
+  /** Set for a local shell / script: no SSH session behind this terminal. */
+  private local: { profile?: string; script?: string } | null;
 
   constructor(
     private sessionId: string,
     private serverId: string | undefined,
     private hooks: TerminalHooks,
-    opts: { prefill?: string; testid?: string; startup?: string[]; env?: string[] } = {},
+    opts: { prefill?: string; testid?: string; startup?: string[]; env?: string[]; local?: { profile?: string; script?: string } } = {},
   ) {
+    this.local = opts.local ?? null;
     this.host = h('div', { class: 'term-host', 'data-testid': opts.testid ?? 'terminal' });
     this.prefill = opts.prefill ?? null;
     this.startup = opts.startup ?? [];
@@ -150,14 +154,14 @@ export class TerminalView {
     this.term.unicode.activeVersion = '11';
     this.term.loadAddon(new WebLinksAddon((_e, uri) => void openLink(uri)));
 
-    this.searchInput = h('input', { type: 'text', placeholder: 'Search in the output', 'data-testid': 'term-search-input', spellcheck: 'false' }) as HTMLInputElement;
+    this.searchInput = h('input', { type: 'text', placeholder: t('Search in the output'), 'data-testid': 'term-search-input', spellcheck: 'false' }) as HTMLInputElement;
     this.searchBar = h(
       'div',
       { class: 'term-search', 'data-testid': 'term-search' },
       this.searchInput,
-      h('button', { class: 'icon-btn', title: 'Previous (Shift+Enter)', onclick: () => this.search.findPrevious(this.searchInput.value) }, icon('up', 14)),
-      h('button', { class: 'icon-btn', title: 'Next (Enter)', onclick: () => this.search.findNext(this.searchInput.value) }, icon('down', 14)),
-      h('button', { class: 'icon-btn', title: 'Close (Esc)', onclick: () => this.toggleSearch(false) }, icon('close', 12)),
+      h('button', { class: 'icon-btn', title: t('Previous (Shift+Enter)'), onclick: () => this.search.findPrevious(this.searchInput.value) }, icon('up', 14)),
+      h('button', { class: 'icon-btn', title: t('Next (Enter)'), onclick: () => this.search.findNext(this.searchInput.value) }, icon('down', 14)),
+      h('button', { class: 'icon-btn', title: t('Close (Esc)'), onclick: () => this.toggleSearch(false) }, icon('close', 12)),
     );
     this.searchBar.style.display = 'none';
     this.searchInput.addEventListener('keydown', (e) => {
@@ -207,7 +211,7 @@ export class TerminalView {
         void copyText(sel);
         this.term.clearSelection();
       } else {
-        void navigator.clipboard.readText().then((t) => this.paste(t)).catch(() => toast('Could not read the clipboard.'));
+        void navigator.clipboard.readText().then((t) => this.paste(t)).catch(() => toast(t('Could not read the clipboard.')));
       }
     });
     this.host.addEventListener(
@@ -251,14 +255,18 @@ export class TerminalView {
         this.term.write(this.prefill);
         this.prefill = null;
       }
-      const r = await api.termOpen(this.sessionId, this.term.cols, this.term.rows);
+      const r = this.local?.script
+        ? await api.scriptRun(this.local.script, this.term.cols, this.term.rows)
+        : this.local
+          ? await api.localOpen(this.local.profile ?? '', this.term.cols, this.term.rows)
+          : await api.termOpen(this.sessionId, this.term.cols, this.term.rows);
       this.termId = r.term_id;
       this.exited = false;
       this.startedAt = Date.now();
       this.armStartup();
       // askpass may ask questions (2FA code, a second password) while ssh logs in
       this.stopPrompts?.();
-      this.stopPrompts = watchPrompts(r.term_id, { serverId: this.serverId, maxMs: 120_000 });
+      this.stopPrompts = this.local ? null : watchPrompts(r.term_id, { serverId: this.serverId, maxMs: 120_000 });
       this.stopStream?.();
       this.stopStream = termStream(
         r.term_id,
@@ -275,7 +283,7 @@ export class TerminalView {
       this.exited = true;
       this.hooks.onState('off');
       const msg = e instanceof ApiError ? e.message : String(e);
-      this.term.write(`\r\n\x1b[31m${msg}\x1b[0m\r\n\x1b[90m[Enter retries, Esc closes the tab]\x1b[0m\r\n`);
+      this.term.write(`\r\n\x1b[31m${msg}\x1b[0m\r\n\x1b[90m[${t('Enter retries, Esc closes the tab')}]\x1b[0m\r\n`);
     } finally {
       this.starting = false;
     }
@@ -286,7 +294,7 @@ export class TerminalView {
     this.stopPrompts?.();
     this.stopPrompts = null;
     this.hooks.onState('off');
-    this.term.write(`\r\n\x1b[90m[Session ended, code ${code}. Enter reconnects, Esc closes the tab]\x1b[0m\r\n`);
+    this.term.write(`\r\n\x1b[90m[${t('Session ended, code {0}. Enter reconnects, Esc closes the tab', code)}]\x1b[0m\r\n`);
   }
 
   /** The tab became visible: refit and focus. */
@@ -449,7 +457,7 @@ export class TerminalView {
         return false;
       }
       if (k === 'v') {
-        void navigator.clipboard.readText().then((t) => this.paste(t)).catch(() => toast('Could not read the clipboard.'));
+        void navigator.clipboard.readText().then((t) => this.paste(t)).catch(() => toast(t('Could not read the clipboard.')));
         return false;
       }
       if (k === 'f') {

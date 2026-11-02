@@ -23,6 +23,8 @@ pub struct TermOptions {
     pub rows: u16,
     /// Password for the expect fallback (typed once, only when it is safe).
     pub expect_password: Option<String>,
+    /// Start folder (local shells); None = the default.
+    pub cwd: Option<PathBuf>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -72,6 +74,9 @@ impl TermSession {
         let mut cmd = CommandBuilder::new(&o.program);
         for a in &o.args {
             cmd.arg(a);
+        }
+        if let Some(dir) = &o.cwd {
+            cmd.cwd(dir);
         }
         cmd.env("TERM", "xterm-256color");
         for (k, v) in &o.env {
@@ -275,6 +280,7 @@ mod tests {
             cols: 80,
             rows: 24,
             expect_password: None,
+            cwd: None,
         })
         .unwrap()
     }
@@ -376,6 +382,7 @@ mod tests {
             cols: 80,
             rows: 24,
             expect_password: Some("s3cret".into()),
+            cwd: None,
         })
         .unwrap();
         let (out, _) = collect(&s, Duration::from_secs(6));
@@ -404,6 +411,7 @@ mod tests {
             cols: 80,
             rows: 24,
             expect_password: Some("s3cret".into()),
+            cwd: None,
         })
         .unwrap();
         s.write(b" ").unwrap(); // the user typed something before the prompt

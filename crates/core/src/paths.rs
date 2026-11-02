@@ -49,6 +49,14 @@ impl DataDirs {
     pub fn webview(&self) -> PathBuf {
         self.root.join("webview")
     }
+    /// Scripts written in the built-in editor (plain files).
+    pub fn scripts(&self) -> PathBuf {
+        self.root.join("scripts")
+    }
+    /// Custom icons imported by the user.
+    pub fn icons(&self) -> PathBuf {
+        self.root.join("icons")
+    }
     pub fn staging(&self) -> PathBuf {
         self.root.join("staging")
     }

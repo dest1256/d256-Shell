@@ -5,6 +5,7 @@ import { api, ApiError, TermContext } from './api';
 import { h, modal, toast } from './dom';
 import { getSettings, updateSettings } from './settings';
 import { TerminalView } from './terminal';
+import { t } from './i18n';
 
 /** Quote one word for a POSIX shell (ash, bash, zsh). */
 export function shq(s: string): string {
@@ -32,35 +33,35 @@ export function buildPlan(ctx: TermContext, typedEnv: string[]): ClonePlan {
   let env: string[] = [];
   const nested = ctx.nested;
   const launcher = nested ? nested.launcher.map(shq).join(' ') : '';
-  if (launcher) summary.push(`login: ${nested!.launcher.join(' ')}`);
+  if (launcher) summary.push(t('login: {0}', nested!.launcher.join(' ')));
   if (ctx.cwd) {
     lines.push(`cd ${shq(ctx.cwd)}`);
-    summary.push(`folder ${ctx.cwd}`);
+    summary.push(t('folder {0}', ctx.cwd));
   }
   const e = ctx.env ?? {};
   if (e.VIRTUAL_ENV) {
     env = [`. ${shq(e.VIRTUAL_ENV + '/bin/activate')}`];
-    summary.push(`venv ${e.VIRTUAL_ENV}`);
+    summary.push(t('venv {0}', e.VIRTUAL_ENV));
   } else if (e.CONDA_DEFAULT_ENV) {
     env = [`conda activate ${shq(e.CONDA_DEFAULT_ENV)}`];
-    summary.push(`conda ${e.CONDA_DEFAULT_ENV}`);
+    summary.push(t('conda {0}', e.CONDA_DEFAULT_ENV));
   } else if (typedEnv.length) {
     env = typedEnv;
-    summary.push('the environment you activated in this terminal');
+    summary.push(t('the environment you activated in this terminal'));
   }
   lines.push(...env);
   const fg = ctx.fg;
   const comm = (ctx.fg_comm ?? '').trim();
   if (fg?.length && !fg[0].startsWith('-') && !SHELLS.has(comm) && !SHELLS.has(fg[0].split('/').pop() ?? '')) {
     lines.push(fg.map(shq).join(' '));
-    summary.push(`running: ${fg.join(' ')}`);
+    summary.push(t('running: {0}', fg.join(' ')));
   }
   const prog = (fg?.[0] ?? '').split('/').pop() ?? '';
   if (launcher) {
     if (ctx.root) lines.unshift(launcher);
     else {
       // su / sudo / ssh as an ordinary user ask for a password: nothing may be typed after the launcher
-      summary.push('next (folder, environment, program) are typed manually after the password');
+      summary.push(t('next (folder, environment, program) are typed manually after the password'));
       lines.splice(0, lines.length, launcher);
     }
   }
@@ -82,24 +83,24 @@ function confirmPlan(ctx: TermContext, plan: ClonePlan): Promise<{ lines: string
     };
     const found = ctx.found
       ? plan.summary.length
-        ? `Found on the server: ${plan.summary.join(' · ')}.`
-        : 'The shell was found: it is at the prompt in the home folder, nothing to repeat.'
-      : `Could not determine the state of the terminal: ${ctx.reason ?? ''}`;
+        ? t('Found on the server: {0}.', plan.summary.join(' · '))
+        : t('The shell was found: it is at the prompt in the home folder, nothing to repeat.')
+      : t('Could not determine the state of the terminal: {0}', ctx.reason ?? '');
     return h(
       'form',
       { role: 'dialog', 'data-testid': 'clone-dialog', class: 'wide', onsubmit: (e) => (e.preventDefault(), void done(ta.value.split('\n').map((s) => s.trim()).filter(Boolean))) },
-      h('h3', {}, 'Duplicate terminal'),
+      h('h3', {}, t('Duplicate terminal')),
       h('p', {}, found),
-      h('p', { class: 'muted' }, 'These commands will be typed into the copy, one per line. You can change or remove them. The state of the running program (its internal data) is not copied: it will start again.'),
+      h('p', { class: 'muted' }, t('These commands will be typed into the copy, one per line. You can change or remove them. The state of the running program (its internal data) is not copied: it will start again.')),
       ta,
-      h('label', { class: 'check' }, showOld, ' Show the earlier terminal output on top'),
-      h('label', { class: 'check' }, remember, ' Do not ask again (can be restored in Settings)'),
+      h('label', { class: 'check' }, showOld, ' ' + t('Show the earlier terminal output on top')),
+      h('label', { class: 'check' }, remember, ' ' + t('Do not ask again (can be restored in Settings)')),
       h(
         'div',
         { class: 'row end wrap' },
-        h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'clone-cancel' }, 'Cancel'),
-        h('button', { type: 'button', onclick: () => void done([]), 'data-testid': 'clone-view' }, 'Output only, no commands'),
-        h('button', { type: 'submit', class: 'primary', 'data-testid': 'clone-ok' }, 'Duplicate'),
+        h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'clone-cancel' }, t('Cancel')),
+        h('button', { type: 'button', onclick: () => void done([]), 'data-testid': 'clone-view' }, t('Output only, no commands')),
+        h('button', { type: 'submit', class: 'primary', 'data-testid': 'clone-ok' }, t('Duplicate')),
       ),
     );
   });
@@ -121,14 +122,14 @@ export async function prepareClone(src: TerminalView): Promise<CloneResult | nul
   let ctx: TermContext;
   try {
     // a busy server (hundreds of processes) takes a moment: say so, and never wait forever
-    toast('Finding out what is going on in the terminal…');
+    toast(t('Finding out what is going on in the terminal…'));
     ctx = await Promise.race([
       api.termContext(src.id),
-      new Promise<never>((_, rej) => setTimeout(() => rej(new Error('the server takes too long to respond')), 25_000)),
+      new Promise<never>((_, rej) => setTimeout(() => rej(new Error(t('the server takes too long to respond'))), 25_000)),
     ]);
   } catch (e) {
     ctx = { found: false, reason: e instanceof ApiError ? e.message : String(e) };
-    if (mode === 'auto') toast(`Copy without commands: ${ctx.reason}`);
+    if (mode === 'auto') toast(t('Copy without commands: {0}', ctx.reason));
   }
   const plan = buildPlan(ctx, src.envCommands);
   if (mode === 'auto' || (!plan.lines.length && ctx.found)) return { prefill: plan.prefill ? prefill : '', startup: plan.lines, env: plan.env };

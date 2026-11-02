@@ -19,6 +19,12 @@ const DEFAULTS: Settings = {
   clone_mode: 'ask',
   monitor_enabled: true,
   monitor_interval_ms: 2000,
+  language: 'auto',
+  shell_profiles: [],
+  startup_profile: 'home',
+  script_links: [],
+  icons: {},
+  tabs_position: 'top',
   paste_warn_lines: 2,
   paste_warn_bytes: 5 * 1024,
 };

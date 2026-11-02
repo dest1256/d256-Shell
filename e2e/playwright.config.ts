@@ -6,5 +6,5 @@ export default defineConfig({
   timeout: 60_000,
   workers: 1,
   reporter: [['list']],
-  use: { browserName: 'chromium', viewport: { width: 1200, height: 780 }, locale: 'ru-RU' },
+  use: { browserName: 'chromium', viewport: { width: 1200, height: 780 }, locale: 'en-US' },
 });

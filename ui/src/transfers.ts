@@ -3,6 +3,7 @@
 import { ApiError, ConflictAction, TransferView, transfers } from './api';
 import { clear, h, modal, toast } from './dom';
 import { icon } from './icons';
+import { t, tm } from './i18n';
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -25,11 +26,11 @@ function askConflict(name: string, isDir: boolean, where: string): Promise<{ act
     return h(
       'div',
       { role: 'dialog', 'data-testid': 'conflict-dialog' },
-      h('h3', {}, isDir ? 'The folder already exists' : 'The file already exists'),
-      h('p', {}, `“${name}” already exists ${where}.`),
-      isDir ? h('p', { class: 'muted' }, 'The contents of the folders will be merged; for files with the same name the chosen action applies.') : null,
-      h('label', { class: 'check' }, all, ' Apply to all'),
-      h('div', { class: 'row end wrap' }, b('Cancel', 'cancel'), b('Skip', 'skip'), b('Keep both', 'rename'), b(isDir ? 'Merge and replace' : 'Replace', 'replace', 'primary')),
+      h('h3', {}, isDir ? t('The folder already exists') : t('The file already exists')),
+      h('p', {}, t('“{0}” already exists {1}.', name, where)),
+      isDir ? h('p', { class: 'muted' }, t('The contents of the folders will be merged; for files with the same name the chosen action applies.')) : null,
+      h('label', { class: 'check' }, all, ' ' + t('Apply to all')),
+      h('div', { class: 'row end wrap' }, b(t('Cancel'), 'cancel'), b(t('Skip'), 'skip'), b(t('Keep both'), 'rename'), b(isDir ? t('Merge and replace') : t('Replace'), 'replace', 'primary')),
     );
   }).then((v) => v ?? { action: 'cancel', all: false });
 }
@@ -51,7 +52,7 @@ export async function startTransfer(sessionId: string, kind: 'upload' | 'downloa
     if (it.exists) {
       if (remembered) action = remembered;
       else {
-        const r = await askConflict(it.name, it.is_dir, kind === 'upload' ? 'on the server' : 'in the selected folder');
+        const r = await askConflict(it.name, it.is_dir, kind === 'upload' ? t('on the server') : t('in the selected folder'));
         if (r.action === 'cancel') return null;
         action = r.action;
         if (r.all) remembered = action;
@@ -61,7 +62,7 @@ export async function startTransfer(sessionId: string, kind: 'upload' | 'downloa
     items.push({ path: it.path, action });
   }
   if (!items.length) {
-    toast('Everything was skipped: nothing to transfer.');
+    toast(t('Everything was skipped: nothing to transfer.'));
     return null;
   }
   try {
@@ -125,25 +126,25 @@ export class TransferPanel {
     this.timer = window.setTimeout(tick, 50);
   }
 
-  private async askForeign(t: TransferView): Promise<void> {
+  private async askForeign(tv: TransferView): Promise<void> {
     const choice = await modal<'in_place' | 'replace' | 'cancel'>((close) =>
       h(
         'div',
         { role: 'dialog', 'data-testid': 'foreign-dialog' },
-        h('h3', {}, 'The file belongs to another user'),
-        h('p', {}, `“${t.label}”: with a normal (atomic) replacement the file owner will change to you. You can write straight into the existing file (not atomic: the file may be damaged if the connection drops) or replace the file and change its owner.`),
+        h('h3', {}, t('The file belongs to another user')),
+        h('p', {}, t('“{0}”: with a normal (atomic) replacement the file owner will change to you. You can write straight into the existing file (not atomic: the file may be damaged if the connection drops) or replace the file and change its owner.', tv.label)),
         h(
           'div',
           { class: 'row end wrap' },
-          h('button', { type: 'button', onclick: () => close('cancel'), 'data-testid': 'foreign-cancel' }, 'Cancel'),
-          h('button', { type: 'button', onclick: () => close('replace'), 'data-testid': 'foreign-replace' }, 'Replace'),
-          h('button', { type: 'button', class: 'primary', onclick: () => close('in_place'), 'data-testid': 'foreign-inplace' }, 'Write in place'),
+          h('button', { type: 'button', onclick: () => close('cancel'), 'data-testid': 'foreign-cancel' }, t('Cancel')),
+          h('button', { type: 'button', onclick: () => close('replace'), 'data-testid': 'foreign-replace' }, t('Replace')),
+          h('button', { type: 'button', class: 'primary', onclick: () => close('in_place'), 'data-testid': 'foreign-inplace' }, t('Write in place')),
         ),
       ),
     );
     if (!choice || choice === 'cancel') return;
     try {
-      await transfers.retry(t.id, { session_id: this.hooks.currentSession(), ...(choice === 'in_place' ? { in_place: true } : { allow_foreign: true }) });
+      await transfers.retry(tv.id, { session_id: this.hooks.currentSession(), ...(choice === 'in_place' ? { in_place: true } : { allow_foreign: true }) });
       this.kick();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : String(e));
@@ -155,9 +156,9 @@ export class TransferPanel {
     clear(this.head);
     const running = jobs.filter((j) => j.state === 'running' || j.state === 'queued').length;
     this.head.append(
-      h('span', { class: 'xf-title' }, `Transfers${running ? ` · active: ${running}` : ''}`),
-      h('button', { class: 'icon-btn', title: 'Clear finished', 'data-testid': 'xfer-clear', onclick: () => void transfers.clear().then(() => this.kick()) }, icon('trash', 14)),
-      h('button', { class: 'icon-btn', title: this.collapsed ? 'Maximize' : 'Minimize', onclick: () => ((this.collapsed = !this.collapsed), this.render(jobs)) }, icon(this.collapsed ? 'up' : 'down', 14)),
+      h('span', { class: 'xf-title' }, (running ? t('Transfers · active: {0}', running) : t('Transfers'))),
+      h('button', { class: 'icon-btn', title: t('Clear finished'), 'data-testid': 'xfer-clear', onclick: () => void transfers.clear().then(() => this.kick()) }, icon('trash', 14)),
+      h('button', { class: 'icon-btn', title: this.collapsed ? t('Maximize') : t('Minimize'), onclick: () => ((this.collapsed = !this.collapsed), this.render(jobs)) }, icon(this.collapsed ? 'up' : 'down', 14)),
     );
     this.list.style.display = this.collapsed ? 'none' : '';
     clear(this.list);
@@ -171,14 +172,14 @@ export class TransferPanel {
     const bar = h('div', { class: 'xf-bar' }, h('div', { class: 'xf-fill ' + j.state, style: `width:${pct}%` }));
     const btns: HTMLElement[] = [];
     if (j.state === 'running' || j.state === 'queued') {
-      btns.push(h('button', { class: 'icon-btn', title: 'Cancel', 'data-testid': 'xfer-cancel', onclick: () => void transfers.cancel(j.id).then(() => this.kick()) }, icon('close', 13)));
+      btns.push(h('button', { class: 'icon-btn', title: t('Cancel'), 'data-testid': 'xfer-cancel', onclick: () => void transfers.cancel(j.id).then(() => this.kick()) }, icon('close', 13)));
     } else if (j.state === 'error' || j.state === 'cancelled') {
-      btns.push(h('button', { class: 'icon-btn', title: 'Retry', 'data-testid': 'xfer-retry', onclick: () => void transfers.retry(j.id, { session_id: this.hooks.currentSession() }).then(() => this.kick()).catch((e) => toast(String(e instanceof Error ? e.message : e))) }, icon('refresh', 13)));
+      btns.push(h('button', { class: 'icon-btn', title: t('Retry'), 'data-testid': 'xfer-retry', onclick: () => void transfers.retry(j.id, { session_id: this.hooks.currentSession() }).then(() => this.kick()).catch((e) => toast(String(e instanceof Error ? e.message : e))) }, icon('refresh', 13)));
     }
     const notes: HTMLElement[] = [];
-    if (j.error) notes.push(h('div', { class: 'xf-err', 'data-testid': 'xfer-error' }, j.error));
+    if (j.error) notes.push(h('div', { class: 'xf-err', 'data-testid': 'xfer-error' }, tm(j.error)));
     if (j.state === 'done' && j.skipped.length) {
-      notes.push(h('div', { class: 'xf-note', title: j.skipped.join('\n'), 'data-testid': 'xfer-skipped' }, `Skipped: ${j.skipped.length} (hover to see)`));
+      notes.push(h('div', { class: 'xf-note', title: j.skipped.join('\n'), 'data-testid': 'xfer-skipped' }, t('Skipped: {0} (hover to see)', j.skipped.length)));
     }
     return h(
       'div',
@@ -194,10 +195,10 @@ export class TransferPanel {
   static async wait(id: string, onProgress?: (t: TransferView) => void, signal?: { aborted: boolean }): Promise<TransferView> {
     for (;;) {
       const all = await transfers.list();
-      const t = all.find((x) => x.id === id);
-      if (!t) throw new Error('Transfer not found.');
-      onProgress?.(t);
-      if (t.state === 'done' || t.state === 'error' || t.state === 'cancelled') return t;
+      const job = all.find((x) => x.id === id);
+      if (!job) throw new Error(t('Transfer not found.'));
+      onProgress?.(job);
+      if (job.state === 'done' || job.state === 'error' || job.state === 'cancelled') return job;
       if (signal?.aborted) {
         await transfers.cancel(id);
       }

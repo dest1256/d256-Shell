@@ -765,6 +765,7 @@ impl Hub {
             cols,
             rows,
             expect_password,
+            cwd: None,
         })
         .map_err(|m| api_err("spawn", m))?;
         *victim.lock().expect("lock") = Some(Arc::downgrade(&session));
@@ -774,6 +775,37 @@ impl Hub {
                 session,
                 ssh_session: session_id.to_string(),
                 _askpass: server,
+            }),
+        );
+        Ok(term_id)
+    }
+
+    /// Start a local program (a shell, a script) in a PTY; no SSH session is involved.
+    pub fn local_open(
+        &self,
+        program: PathBuf,
+        args: Vec<String>,
+        cwd: Option<PathBuf>,
+        cols: u16,
+        rows: u16,
+    ) -> Result<String, ApiError> {
+        let session = TermSession::spawn(TermOptions {
+            program,
+            args,
+            env: Vec::new(),
+            cols,
+            rows,
+            expect_password: None,
+            cwd,
+        })
+        .map_err(|m| api_err("spawn", m))?;
+        let term_id = new_id();
+        self.terms.lock().expect("lock").insert(
+            term_id.clone(),
+            Arc::new(TermEntry {
+                session,
+                ssh_session: String::new(),
+                _askpass: None,
             }),
         );
         Ok(term_id)

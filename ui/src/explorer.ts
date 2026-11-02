@@ -7,6 +7,7 @@ import { startTransfer, TransferPanel } from './transfers';
 import { clear, confirmDialog, h, modal, promptDialog, toast } from './dom';
 import { icon } from './icons';
 import { pref } from './util';
+import { t, tm, locale } from './i18n';
 
 const ROW = 26;
 
@@ -47,7 +48,7 @@ export function modeString(mode: number | null, kind: DirEntry['kind']): string 
 
 function formatTime(sec: number | null): string {
   if (sec === null) return '';
-  return new Date(sec * 1000).toLocaleString('en-US', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+  return new Date(sec * 1000).toLocaleString(locale(), { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 const isDirLike = (e: DirEntry) => e.kind === 'dir' || (e.kind === 'symlink' && e.target_is_dir === true);
@@ -81,7 +82,7 @@ export class Explorer {
   private cursor = -1;
   private seq = 0;
 
-  private pathInput = h('input', { class: 'path-input', 'data-testid': 'path-input', spellcheck: 'false', 'aria-label': 'Path' }) as HTMLInputElement;
+  private pathInput = h('input', { class: 'path-input', 'data-testid': 'path-input', spellcheck: 'false', 'aria-label': t('Path') }) as HTMLInputElement;
   private body = h('div', { class: 'vbody', tabindex: '0', 'data-testid': 'explorer-list' });
   private size = h('div', { class: 'vsize' });
   private status = h('div', { class: 'ex-status', 'data-testid': 'explorer-status' });
@@ -112,7 +113,7 @@ export class Explorer {
     this.banner.append(h('span', { 'data-testid': 'sftp-unavailable' }, message));
     this.entries = [];
     this.rebuild();
-    this.status.textContent = 'File panel unavailable';
+    this.status.textContent = t('File panel unavailable');
   }
 
   constructor(
@@ -121,7 +122,7 @@ export class Explorer {
   ) {
     const btn = (name: string, title: string, testid: string, fn: () => void) =>
       h('button', { class: 'icon-btn', title, 'aria-label': title, 'data-testid': testid, onclick: fn }, icon(name, 15));
-    this.hiddenBtn = btn('eye', 'Show hidden files', 'hidden-toggle', () => {
+    this.hiddenBtn = btn('eye', t('Show hidden files'), 'hidden-toggle', () => {
       this.showHidden = !this.showHidden;
       pref.set('show-hidden', this.showHidden ? '1' : '0');
       this.hiddenBtn.classList.toggle('on', this.showHidden);
@@ -131,7 +132,7 @@ export class Explorer {
       const el = h('button', { class: 'th', 'data-testid': `sort-${key}`, onclick: () => this.setSort(key) }, label);
       return el;
     };
-    this.headers = { name: col('name', 'Name'), size: col('size', 'Size'), mtime: col('mtime', 'Modified'), mode: col('mode', 'Permissions') };
+    this.headers = { name: col('name', t('Name')), size: col('size', t('Size')), mtime: col('mtime', t('Modified')), mode: col('mode', t('Permissions')) };
 
     this.pathInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') void this.load(this.pathInput.value.trim());
@@ -158,19 +159,19 @@ export class Explorer {
       h(
         'div',
         { class: 'ex-bar' },
-        btn('up', 'Up (Backspace)', 'up', () => void this.load(this.path + '/..')),
-        btn('home', 'Home folder', 'ex-home', () => void this.load()),
-        btn('refresh', 'Refresh (F5)', 'refresh', () => void this.load(this.path)),
+        btn('up', t('Up (Backspace)'), 'up', () => void this.load(this.path + '/..')),
+        btn('home', t('Home folder'), 'ex-home', () => void this.load()),
+        btn('refresh', t('Refresh (F5)'), 'refresh', () => void this.load(this.path)),
         this.pathInput,
         this.hiddenBtn,
       ),
       h(
         'div',
         { class: 'ex-bar ex-actions' },
-        btn('folder-plus', 'New folder (Ctrl+Shift+N)', 'new-folder', () => void this.newFolder()),
-        btn('file-plus', 'New file (Ctrl+N)', 'new-file', () => void this.newFile()),
-        btn('upload', 'Upload files to the server…', 'upload', () => void this.uploadHere('files')),
-        btn('download', 'Download selected…', 'download', () => void this.downloadSelected()),
+        btn('folder-plus', t('New folder (Ctrl+Shift+N)'), 'new-folder', () => void this.newFolder()),
+        btn('file-plus', t('New file (Ctrl+N)'), 'new-file', () => void this.newFile()),
+        btn('upload', t('Upload files to the server…'), 'upload', () => void this.uploadHere('files')),
+        btn('download', t('Download selected…'), 'download', () => void this.downloadSelected()),
       ),
       this.crumbs,
       this.banner,
@@ -200,7 +201,7 @@ export class Explorer {
   }
 
   private updateHeaders(): void {
-    const label: Record<SortKey, string> = { name: 'Name', size: 'Size', mtime: 'Modified', mode: 'Permissions' };
+    const label: Record<SortKey, string> = { name: t('Name'), size: t('Size'), mtime: t('Modified'), mode: t('Permissions') };
     for (const k of Object.keys(this.headers) as SortKey[]) {
       this.headers[k].textContent = label[k] + (k === this.sortKey ? (this.asc ? ' ▲' : ' ▼') : '');
     }
@@ -241,7 +242,7 @@ export class Explorer {
   private showLost(): void {
     clear(this.banner);
     this.banner.classList.add('show');
-    this.banner.append(h('span', {}, 'Connection to the server lost.'), h('button', { class: 'link', onclick: () => this.hooks.onReconnect?.(), 'data-testid': 'reconnect' }, 'Reconnect'));
+    this.banner.append(h('span', {}, t('Connection to the server lost.')), h('button', { class: 'link', onclick: () => this.hooks.onReconnect?.(), 'data-testid': 'reconnect' }, t('Reconnect')));
   }
 
   private rebuild(): void {
@@ -275,11 +276,11 @@ export class Explorer {
   private updateStatus(): void {
     const real = this.view.filter((e) => e.name !== UP).length;
     const hidden = this.entries.length - real;
-    let t = `Objects: ${real}`;
-    if (!this.showHidden && hidden > 0) t += ` (hidden: ${hidden})`;
+    let txt = t('Objects: {0}', real);
+    if (!this.showHidden && hidden > 0) txt += t(' (hidden: {0})', hidden);
     const sel = [...this.selected].filter((n) => n !== UP).length;
-    if (sel) t += ` · selected: ${sel}`;
-    this.status.textContent = t;
+    if (sel) txt += t(' · selected: {0}', sel);
+    this.status.textContent = txt;
   }
 
   private scheduleRender(): void {
@@ -312,7 +313,7 @@ export class Explorer {
         'data-name': e.name,
         'data-kind': e.kind,
         'data-droppable': dirLike && !e.name_lossy ? '1' : '0',
-        title: e.name === UP ? 'One level up (Backspace)' : e.name_lossy ? 'The name contains bytes that are not UTF-8. Operations on such a file are unavailable.' : e.name,
+        title: e.name === UP ? t('One level up (Backspace)') : e.name_lossy ? t('The name contains bytes that are not UTF-8. Operations on such a file are unavailable.') : e.name,
         onclick: (ev) => this.onClickRow(i, ev as MouseEvent),
         ondblclick: () => this.open(e),
         oncontextmenu: (ev) => {
@@ -334,7 +335,7 @@ export class Explorer {
           this.showMenu((ev as MouseEvent).clientX, (ev as MouseEvent).clientY, true);
         },
       },
-      h('div', { class: 'c-name' }, h('span', { class: 'fi ' + (dirLike ? 'dir' : '') }, icon(ico, 15)), h('span', { class: 'nm' }, e.name), e.kind === 'symlink' ? h('span', { class: 'tag' }, '→') : null, e.name_lossy ? h('span', { class: 'tag warn', title: 'non-UTF-8 name' }, '⚠') : null),
+      h('div', { class: 'c-name' }, h('span', { class: 'fi ' + (dirLike ? 'dir' : '') }, icon(ico, 15)), h('span', { class: 'nm' }, e.name), e.kind === 'symlink' ? h('span', { class: 'tag' }, '→') : null, e.name_lossy ? h('span', { class: 'tag warn', title: t('non-UTF-8 name') }, '⚠') : null),
       h('div', { class: 'c-size' }, e.kind === 'file' ? formatSize(e.size) : ''),
       h('div', { class: 'c-time' }, formatTime(e.mtime)),
       h('div', { class: 'c-mode' }, modeString(e.mode, e.kind)),
@@ -370,11 +371,11 @@ export class Explorer {
   private open(e: DirEntry): void {
     if (e.name === UP) return void this.load(this.path + '/..');
     if (e.name_lossy) {
-      toast('The file name contains bytes that are not UTF-8: operations on it are unavailable so that another file is not affected.');
+      toast(t('The file name contains bytes that are not UTF-8: operations on it are unavailable so that another file is not affected.'));
       return;
     }
     if (isDirLike(e)) void this.load(this.join(e.name));
-    else if (e.kind === 'symlink' && e.target_is_dir === null) toast('The link points to nothing (a broken link).');
+    else if (e.kind === 'symlink' && e.target_is_dir === null) toast(t('The link points to nothing (a broken link).'));
     else this.hooks.onOpenFile?.(this.join(e.name), e);
   }
 
@@ -451,7 +452,7 @@ export class Explorer {
   }
 
   private usable(list: DirEntry[]): DirEntry[] {
-    if (list.some((e) => e.name_lossy)) toast('The name contains bytes that are not UTF-8: operations on such a file are unavailable.');
+    if (list.some((e) => e.name_lossy)) toast(t('The name contains bytes that are not UTF-8: operations on such a file are unavailable.'));
     return list.filter((e) => !e.name_lossy);
   }
 
@@ -481,21 +482,21 @@ export class Explorer {
   private report(verb: string, r: BatchResult): void {
     if (!r.errors.length) return;
     const first = r.errors[0];
-    toast(`${verb}: errors ${r.errors.length} of ${r.done.length + r.errors.length}. “${first.path.split('/').pop()}”: ${first.message}`, r.errors.map((e) => `${e.path}: ${e.message}`).join('\n'));
+    toast(t('{0}: errors {1} of {2}. “{3}”: {4}', verb, r.errors.length, r.done.length + r.errors.length, first.path.split('/').pop(), first.message), r.errors.map((e) => `${e.path}: ${e.message}`).join('\n'));
   }
 
   async newFolder(): Promise<void> {
-    const name = await promptDialog('New folder', 'Folder name', 'New folder');
+    const name = await promptDialog(t('New folder'), t('Folder name'), t('New folder'));
     if (!name) return;
     const r = await this.run(() => api.fs<{ path: string }>(this.sessionId, 'mkdir', { parent: this.path, name: name.trim() }));
     if (r) await this.reloadSelect(r.path);
   }
 
   async newFile(): Promise<void> {
-    const name = await promptDialog('New file', 'File name', 'new file.txt', 'Create', [0, 'new file'.length]);
+    const name = await promptDialog(t('New file'), t('File name'), 'new file.txt', t('Create'), [0, 'new file'.length]);
     if (!name) return;
     const n = name.trim();
-    if (!n || n.includes('/') || n === '.' || n === '..') return void toast('Invalid file name.');
+    if (!n || n.includes('/') || n === '.' || n === '..') return void toast(t('Invalid file name.'));
     // the file is created by the first save in the editor, not here
     this.hooks.onNewFile?.(this.join(n));
   }
@@ -504,7 +505,7 @@ export class Explorer {
     const [e] = this.usable(this.selectedEntries());
     if (!e) return;
     const dot = e.kind === 'file' ? e.name.lastIndexOf('.') : -1;
-    const name = await promptDialog('Rename', 'New name', e.name, 'Rename', [0, dot > 0 ? dot : e.name.length]);
+    const name = await promptDialog(t('Rename'), t('New name'), e.name, t('Rename'), [0, dot > 0 ? dot : e.name.length]);
     if (!name || name === e.name) return;
     const r = await this.run(() => api.fs<{ path: string }>(this.sessionId, 'rename', { path: this.join(e.name), name: name.trim() }));
     if (r) await this.reloadSelect(r.path);
@@ -517,13 +518,13 @@ export class Explorer {
     // count first: what exactly is about to disappear
     const c = await this.run(() => api.fs<{ files: number; dirs: number }>(this.sessionId, 'count', { paths }));
     if (!c) return;
-    const examples = list.slice(0, 5).map((e) => paths[list.indexOf(e)]).join('\n') + (list.length > 5 ? `\n… plus ${list.length - 5}` : '');
+    const examples = list.slice(0, 5).map((e) => paths[list.indexOf(e)]).join('\n') + (list.length > 5 ? t('\n… plus {0}', list.length - 5) : '');
     const stat = `${c.files} ${c.files === 1 ? 'file' : 'files'}${c.dirs ? `, ${c.dirs} ${c.dirs === 1 ? 'folder' : 'folders'}` : ''}`;
-    const text = `Permanently deleted on the server: ${stat}.\n\n${examples}`;
-    if (!(await confirmDialog('Delete?', text, 'Delete', true))) return;
+    const text = t('Permanently deleted on the server: {0}.\n\n{1}', stat, examples);
+    if (!(await confirmDialog(t('Delete?'), text, t('Delete'), true))) return;
     const r = await this.run(() => api.fs<BatchResult>(this.sessionId, 'delete', { paths }));
     if (r) {
-      this.report('Deleting', r);
+      this.report(t('Deleting'), r);
       await this.load(this.path);
     }
   }
@@ -532,20 +533,20 @@ export class Explorer {
     const list = this.usable(this.selectedEntries());
     if (!list.length) return;
     Explorer.clipboard = { session: this.sessionId, cut, dir: this.path, names: list.map((e) => e.name) };
-    toast(`${cut ? 'Cut' : 'Copied'}: ${list.length}. Open the destination folder and paste (Ctrl+V).`);
+    toast(cut ? t('Cut: {0}. Open the destination folder and paste (Ctrl+V).', list.length) : t('Copied: {0}. Open the destination folder and paste (Ctrl+V).', list.length));
   }
 
   async paste(dest = this.path): Promise<void> {
     const c = Explorer.clipboard;
     if (!c) return;
     if (c.session !== this.sessionId) {
-      toast('Copying between different servers is not available yet.');
+      toast(t('Copying between different servers is not available yet.'));
       return;
     }
     const paths = c.names.map((n) => (c.dir === '/' ? `/${n}` : `${c.dir}/${n}`));
     const r = await this.run(() => api.fs<BatchResult>(this.sessionId, c.cut ? 'move' : 'copy', { paths, dest }));
     if (!r) return;
-    this.report(c.cut ? 'Moving' : 'Copying', r);
+    this.report(c.cut ? t('Moving') : t('Copying'), r);
     if (c.cut && !r.errors.length) Explorer.clipboard = null;
     await this.load(this.path);
     const last = r.done[r.done.length - 1];
@@ -559,7 +560,7 @@ export class Explorer {
     if (!r0) return;
     const r = await this.run(() => api.fs<{ changed: number }>(this.sessionId, 'chmod', { path: this.join(e.name), mode: r0.mode, recursive: r0.recursive, files: r0.files, dirs: r0.dirs }));
     if (r) {
-      if (r0.recursive) toast(`Permissions changed: ${r.changed}.`);
+      if (r0.recursive) toast(t('Permissions changed: {0}.', r.changed));
       await this.reloadSelect(this.join(e.name));
     }
   }
@@ -569,7 +570,7 @@ export class Explorer {
     const p = e ? this.join(e.name) : this.path;
     try {
       await navigator.clipboard.writeText(p);
-      toast('Path copied.');
+      toast(t('Path copied.'));
     } catch {
       toast(p);
     }
@@ -613,30 +614,30 @@ export class Explorer {
     if (onRow) {
       const isFile = one && sel[0].kind !== 'dir' && !isDirLike(sel[0]);
       const dirOne = one && isDirLike(sel[0]);
-      if (dirOne) items.push(['Open', 'Enter', 'folder', true, () => this.open(sel[0])]);
-      if (isFile) items.push(['Edit', 'Enter', 'edit', true, () => this.open(sel[0])]);
-      items.push(['Download…', '', 'download', true, () => void this.downloadSelected()]);
-      if (dirOne) items.push(['Upload here…', '', 'upload', true, () => void this.uploadHere('files', this.join(sel[0].name))]);
+      if (dirOne) items.push([t('Open'), 'Enter', 'folder', true, () => this.open(sel[0])]);
+      if (isFile) items.push([t('Edit'), 'Enter', 'edit', true, () => this.open(sel[0])]);
+      items.push([t('Download…'), '', 'download', true, () => void this.downloadSelected()]);
+      if (dirOne) items.push([t('Upload here…'), '', 'upload', true, () => void this.uploadHere('files', this.join(sel[0].name))]);
       items.push(null);
-      items.push(['Copy', 'Ctrl+C', 'copy', true, () => this.copySelected(false)]);
-      items.push(['Cut', 'Ctrl+X', 'cut', true, () => this.copySelected(true)]);
-      if (dirOne) items.push(['Paste into folder', '', 'paste', hasClip, () => void this.paste(this.join(sel[0].name))]);
+      items.push([t('Copy'), 'Ctrl+C', 'copy', true, () => this.copySelected(false)]);
+      items.push([t('Cut'), 'Ctrl+X', 'cut', true, () => this.copySelected(true)]);
+      if (dirOne) items.push([t('Paste into folder'), '', 'paste', hasClip, () => void this.paste(this.join(sel[0].name))]);
       items.push(null);
-      items.push(['Rename', 'F2', 'rename', one, () => void this.renameSelected()]);
-      items.push(['Permissions…', '', 'key', one, () => void this.chmodSelected()]);
-      items.push(['Copy path', '', 'link', one, () => void this.copyPath()]);
-      items.push(['Properties', '', 'info', one, () => void propertiesDialog(this.join(sel[0].name), sel[0])]);
+      items.push([t('Rename'), 'F2', 'rename', one, () => void this.renameSelected()]);
+      items.push([t('Permissions…'), '', 'key', one, () => void this.chmodSelected()]);
+      items.push([t('Copy path'), '', 'link', one, () => void this.copyPath()]);
+      items.push([t('Properties'), '', 'info', one, () => void propertiesDialog(this.join(sel[0].name), sel[0])]);
       items.push(null);
-      items.push(['Delete', 'Del', 'trash', true, () => void this.deleteSelected()]);
+      items.push([t('Delete'), 'Del', 'trash', true, () => void this.deleteSelected()]);
     } else {
-      items.push(['New folder', 'Ctrl+Shift+N', 'folder-plus', true, () => void this.newFolder()]);
-      items.push(['New file', 'Ctrl+N', 'file-plus', true, () => void this.newFile()]);
-      items.push(['Upload files…', '', 'upload', true, () => void this.uploadHere('files')]);
-      items.push(['Upload folder…', '', 'upload', true, () => void this.uploadHere('folder')]);
-      items.push(['Paste', 'Ctrl+V', 'paste', hasClip, () => void this.paste()]);
+      items.push([t('New folder'), 'Ctrl+Shift+N', 'folder-plus', true, () => void this.newFolder()]);
+      items.push([t('New file'), 'Ctrl+N', 'file-plus', true, () => void this.newFile()]);
+      items.push([t('Upload files…'), '', 'upload', true, () => void this.uploadHere('files')]);
+      items.push([t('Upload folder…'), '', 'upload', true, () => void this.uploadHere('folder')]);
+      items.push([t('Paste'), 'Ctrl+V', 'paste', hasClip, () => void this.paste()]);
       items.push(null);
-      items.push(['Copy path', '', 'link', true, () => void this.copyPath()]);
-      items.push(['Refresh', 'F5', 'refresh', true, () => void this.load(this.path)]);
+      items.push([t('Copy path'), '', 'link', true, () => void this.copyPath()]);
+      items.push([t('Refresh'), 'F5', 'refresh', true, () => void this.load(this.path)]);
     }
     const menu = h('div', { class: 'ctx-menu', role: 'menu', 'data-testid': 'ctx-menu' });
     for (const it of items) {
@@ -660,9 +661,9 @@ export class Explorer {
 
   // ------------------------------------------------------------ transfers
 
-  private onTransferFinished(t: import('./api').TransferView): void {
-    if (t.kind === 'upload' && (t.dest === this.path || t.dest.startsWith(this.path === '/' ? '/' : this.path + '/'))) void this.load(this.path);
-    if (t.state === 'done') toast(`${t.kind === 'upload' ? 'Uploaded' : 'Downloaded'}: “${t.label}”${t.files > 1 ? ` (files: ${t.files})` : ''}.`);
+  private onTransferFinished(tv: import('./api').TransferView): void {
+    if (tv.kind === 'upload' && (tv.dest === this.path || tv.dest.startsWith(this.path === '/' ? '/' : this.path + '/'))) void this.load(this.path);
+    if (tv.state === 'done') toast(`${tv.kind === 'upload' ? t('Uploaded') : t('Downloaded')}: “${tv.label}”${tv.files > 1 ? t(' (files: {0})', tv.files) : ''}.`);
   }
 
   async uploadHere(kind: 'files' | 'folder', dest = this.path): Promise<void> {
@@ -685,7 +686,7 @@ export class Explorer {
 
   async downloadSelected(): Promise<void> {
     const list = this.usable(this.selectedEntries());
-    if (!list.length) return void toast('Select files or folders to download.');
+    if (!list.length) return void toast(t('Select files or folders to download.'));
     await this.downloadPaths(list.map((e) => this.join(e.name)));
   }
 
@@ -768,7 +769,7 @@ export class Explorer {
             this.updateStatus();
           }
           names = this.selectedEntries().filter((s) => !s.name_lossy).map((s) => s.name);
-          ghost = h('div', { class: 'drag-ghost', 'data-testid': 'drag-ghost' }, names.length === 1 ? names[0] : `${names.length} objects`);
+          ghost = h('div', { class: 'drag-ghost', 'data-testid': 'drag-ghost' }, names.length === 1 ? names[0] : t('{0} objects', names.length));
           document.body.append(ghost);
           try {
             this.body.setPointerCapture(pid);
@@ -832,10 +833,10 @@ export class Explorer {
         return h(
           'div',
           { role: 'dialog', 'data-testid': 'move-confirm' },
-          h('h3', {}, 'Move?'),
-          h('p', {}, `Move ${names.length === 1 ? `“${names[0]}”` : `objects (${names.length})`} to ${dest}?`),
-          h('label', { class: 'check' }, cb, ' Do not ask again in this session'),
-          h('div', { class: 'row end' }, h('button', { type: 'button', onclick: () => close({ ok: false, remember: false }), 'data-testid': 'move-cancel' }, 'Cancel'), h('button', { type: 'button', class: 'primary', onclick: () => close({ ok: true, remember: cb.checked }), 'data-testid': 'move-ok' }, 'Move')),
+          h('h3', {}, t('Move?')),
+          h('p', {}, (names.length === 1 ? t('Move “{0}” to {1}?', names[0], dest) : t('Move objects ({0}) to {1}?', names.length, dest))),
+          h('label', { class: 'check' }, cb, ' ' + t('Do not ask again in this session')),
+          h('div', { class: 'row end' }, h('button', { type: 'button', onclick: () => close({ ok: false, remember: false }), 'data-testid': 'move-cancel' }, t('Cancel')), h('button', { type: 'button', class: 'primary', onclick: () => close({ ok: true, remember: cb.checked }), 'data-testid': 'move-ok' }, t('Move'))),
         );
       });
       if (!r?.ok) return;
@@ -844,7 +845,7 @@ export class Explorer {
     const paths = names.map((n) => this.join(n));
     const res = await this.run(() => api.fs<BatchResult>(this.sessionId, 'move', { paths, dest }));
     if (res) {
-      this.report('Moving', res);
+      this.report(t('Moving'), res);
       await this.load(this.path);
     }
   }
@@ -855,27 +856,27 @@ export class Explorer {
     const abort = { aborted: false };
     this.dragOutAbort = abort;
     const bar = h('div', { class: 'xf-fill running', style: 'width:0%' });
-    const note = h('div', { class: 'muted' }, 'Preparing files…');
-    const overlay = h('div', { class: 'stage-overlay', 'data-testid': 'stage-overlay' }, h('div', {}, h('strong', {}, 'Preparing… do not release the mouse button'), note, h('div', { class: 'xf-bar' }, bar)));
+    const note = h('div', { class: 'muted' }, t('Preparing files…'));
+    const overlay = h('div', { class: 'stage-overlay', 'data-testid': 'stage-overlay' }, h('div', {}, h('strong', {}, t('Preparing… do not release the mouse button')), note, h('div', { class: 'xf-bar' }, bar)));
     document.body.append(overlay);
     let dest = '';
     try {
       const r = await transfers.start({ session_id: this.sessionId, kind: 'download', items: paths.map((p) => ({ path: p, action: 'replace' as const })), stage: true });
       dest = r.dest;
-      const t = await TransferPanel.wait(
+      const job = await TransferPanel.wait(
         r.id,
         (v) => {
           bar.style.width = `${v.total ? Math.min(100, Math.round((v.done / v.total) * 100)) : 0}%`;
-          note.textContent = v.current || 'Preparing files…';
+          note.textContent = v.current || t('Preparing files…');
         },
         abort,
       );
-      if (abort.aborted || t.state === 'cancelled') {
+      if (abort.aborted || job.state === 'cancelled') {
         await transfers.stageClear(dest).catch(() => undefined);
         return;
       }
-      if (t.state === 'error') {
-        toast(t.error ?? 'Could not prepare the files.');
+      if (job.state === 'error') {
+        toast(job.error ? tm(job.error) : t('Could not prepare the files.'));
         await transfers.stageClear(dest).catch(() => undefined);
         return;
       }

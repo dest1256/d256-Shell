@@ -2,6 +2,7 @@
 pub mod hub;
 pub mod keyfile;
 pub mod known_hosts;
+pub mod localshell;
 pub mod logging;
 pub mod monitor;
 pub mod paths;

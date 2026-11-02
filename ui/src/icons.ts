@@ -34,6 +34,18 @@ const P: Record<string, string> = {
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 8h.01M11 12h1v5',
   activity: 'M3 12h4l3-8 4 16 3-8h4',
   plug: 'M9 3v5M15 3v5M6 8h12v3a6 6 0 0 1-12 0zM12 17v4',
+  script: 'M7 3h10v18H7zM10 8h4M10 12h4M10 16h2',
+  note: 'M5 4h14v16H5zM8 9h8M8 13h8M8 17h5',
+  bolt: 'M13 3L5 14h6l-1 7 8-11h-6z',
+  star: 'M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z',
+  globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18',
+  database: 'M5 6c0-1.7 3.1-3 7-3s7 1.3 7 3-3.1 3-7 3-7-1.3-7-3zM5 6v12c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12c0 1.7 3.1 3 7 3s7-1.3 7-3',
+  cloud: 'M7 18a4 4 0 0 1-.6-8A5.5 5.5 0 0 1 17 8.5 4.8 4.8 0 0 1 17 18z',
+  cpu: 'M7 7h10v10H7zM10 3v4M14 3v4M10 17v4M14 17v4M3 10h4M3 14h4M17 10h4M17 14h4',
+  box: 'M4 8l8-4 8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8',
+  shield: 'M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z',
+  image: 'M4 5h16v14H4zM8 10a1.5 1.5 0 1 0 0 .01M4 17l5-5 4 4 3-3 4 4',
+  router: 'M4 14h16v5H4zM7 16.5h.01M11 16.5h.01M8 14V9M16 14V9M5 6a5 5 0 0 1 6 0M13 6a5 5 0 0 1 6 0',
 };
 
 export function icon(name: keyof typeof P | string, size = 16): SVGElement {
@@ -53,3 +65,7 @@ export function icon(name: keyof typeof P | string, size = 16): SVGElement {
   svg.append(path);
   return svg;
 }
+
+/** Names the icon picker offers (built-in glyphs; users can also import an image). */
+export const PICKER_ICONS = ['server', 'terminal', 'script', 'note', 'folder', 'key', 'lock', 'bolt', 'star', 'globe', 'database', 'cloud', 'cpu', 'box', 'shield', 'router', 'activity', 'home', 'settings', 'link'];
+export const hasIcon = (name: string): boolean => name in P;

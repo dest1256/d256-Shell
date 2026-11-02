@@ -2,6 +2,24 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.1.0 — 2026-11-02
+One window for everything command-line: SSH sessions, local shells, scripts and notes, in eight languages.
+
+**Added**
+- **Languages:** English, Русский, Español, Deutsch, Français, Português (Brasil), 简体中文, 日本語. The default follows the system language; choose another in Settings → Language (applied at once). Messages from the program core are translated too. Catalogs are checked by `scripts/check-i18n.mjs` (every text in every language, same placeholders).
+- **Terminals:** the left column has a new section. Local shells are found on the computer and open in tabs next to the SSH sessions: Windows PowerShell, PowerShell 7, Command Prompt, WSL distributions, Git Bash (Windows), bash/zsh/fish and the others from `/etc/shells` (Linux). Your own profiles (program, arguments, start folder) are added in the section. One shell can open at start (Settings → Open at start).
+- **Scripts:** `.bat`, `.cmd`, `.ps1` and `.sh` files. Two ways to add one: write it in the built-in editor (saved as a file in `data/scripts`) or drop/choose a file: then only a **link** is stored and the file is never copied or modified by the list. A link whose file was moved is shown grey with “file not found”, and can be pointed to the new place or removed. “Run” opens a terminal tab with the right shell in the script's folder (nothing runs without a click). Encodings, BOM and line endings are kept as they are.
+- **Notes:** any number of notes with any titles, saved automatically in the encrypted vault (`vault.bin`), together with the passwords.
+- **Icons:** every session, shell, script and note can have its own icon (a built-in glyph or your own png/svg/jpg/webp/ico/gif image, copied into `data/icons`).
+- **Tabs on the left:** Settings → Tabs → Left (vertical) moves the tab strip into the left column.
+
+**Changed**
+- The left column is now a section switcher (Sessions, Terminals, Scripts, Notes) and the home tab shows the cards of the chosen section.
+- After the active tab is closed, the side panel is shown again.
+
+**Compatibility**
+- Notes are stored in `vault.bin`. Version 1.1.0 opens vaults from older versions, but older versions ignore the notes and would drop them the next time they save the vault. After starting to use notes, use 1.1.0 or newer everywhere the same `data` folder is used.
+
 ## 1.0.2 — 2026-10-31
 The project is now released under the MIT license, and the whole program and repository are in English.
 

@@ -7,6 +7,9 @@ noise='^ *Compiling\|^ *Checking\|^ *Downloaded\|^ *Downloading'
 echo "== lint"
 bash scripts/clippy.sh | tail -3 ; [ "${PIPESTATUS[0]}" = 0 ] || rc=1
 
+echo "== i18n catalogs"
+node scripts/check-i18n.mjs | tail -3 ; [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+
 echo "== unit tests"
 cargo test --locked -p d256shell-core --lib 2>&1 | grep -E "^test result|FAILED|panicked" ; [ "${PIPESTATUS[0]}" = 0 ] || rc=1
 

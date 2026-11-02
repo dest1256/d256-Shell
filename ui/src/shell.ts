@@ -2,7 +2,10 @@
 import { EditorPane, pickEncoding } from './editor';
 import { prepareClone } from './clone';
 import { PaneSet } from './panes';
-import { api, ApiError, Connected, inTauri, ServerView } from './api';
+import { api, ApiError, Connected, inTauri, ScriptItem, ServerView, ShellProfile } from './api';
+import { iconFor, iconKey, pickIcon } from './iconkit';
+import { NotePane, ScriptPane } from './localedit';
+import { createNotes, createScripts, createTerminals, Section } from './sections';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { connectFlow } from './connect';
 import { changeMasterDialog, serverForm, settingsDialog } from './dialogs';
@@ -15,6 +18,7 @@ import { icon } from './icons';
 import { TerminalView } from './terminal';
 import { Titlebar } from './titlebar';
 import { pref } from './util';
+import { t, locale } from './i18n';
 
 declare const __APP_VERSION__: string;
 
@@ -31,6 +35,7 @@ interface Tab {
   id: string;
   title: string;
   icon: string;
+  iconKey?: string;
   view: HTMLElement;
   closable: boolean;
   /** Backend sessions owned by this tab (more than one after an SFTP reconnect); all closed with the tab. */
@@ -40,6 +45,8 @@ interface Tab {
   dispose?: () => void;
   /** Unsaved editor changes inside the tab. */
   dirty?: () => boolean;
+  /** A local shell, script or note (no remote session: closing needs no connection warning). */
+  local?: boolean;
   /** Open a live copy of the terminal (same server, new shell, previous output shown above). */
   duplicate?: () => void | Promise<void>;
 }
@@ -58,30 +65,33 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   let servers: ServerView[] = [];
   let selected: string | null = null;
   const tabs: Tab[] = [];
+  type SectionName = 'sessions' | 'terminals' | 'scripts' | 'notes';
+  let section: SectionName = 'sessions';
   let activeId = 'home';
   let counter = 0;
 
   const list = h('ul', { class: 'servers', 'data-testid': 'server-list', role: 'listbox' });
-  const search = h('input', { type: 'search', placeholder: 'Search sessions', 'data-testid': 'search', 'aria-label': 'Search sessions' }) as HTMLInputElement;
-  const quick = h('input', { type: 'text', placeholder: 'user@host:port: quick connect', 'data-testid': 'quick', 'aria-label': 'Quick connect', spellcheck: 'false' }) as HTMLInputElement;
+  const search = h('input', { type: 'search', placeholder: t('Search sessions'), 'data-testid': 'search', 'aria-label': t('Search sessions') }) as HTMLInputElement;
+  const quick = h('input', { type: 'text', placeholder: t('user@host:port: quick connect'), 'data-testid': 'quick', 'aria-label': t('Quick connect'), spellcheck: 'false' }) as HTMLInputElement;
   const home = h('div', { class: 'home', 'data-testid': 'home' });
   const work = h('main', { class: 'work' }, home);
   const statusCount = h('span', { 'data-testid': 'status-count' });
   const statusSessions = h('span', { 'data-testid': 'status-sessions' });
 
   // ---------- tabs ----------
-  const homeTab: Tab = { id: 'home', title: 'Home', icon: 'home', view: home, closable: false };
+  const homeTab: Tab = { id: 'home', title: t('Home'), icon: 'home', view: home, closable: false };
   tabs.push(homeTab);
 
   function renderTabs(): void {
     for (const t of tabs) t.view.style.display = t.id === activeId ? '' : 'none';
     titlebar.setTabs(
-      tabs.map((t) => ({ id: t.id, title: t.title, icon: t.icon, closable: t.closable, state: t.state })),
+      tabs.map((t) => ({ id: t.id, title: t.title, icon: t.icon, iconKey: t.iconKey, closable: t.closable, state: t.state })),
       activeId,
       { onSelect: activate, onAdd: () => void add(), onClose: (id) => void closeTab(id), onRename: (id) => void renameTab(id) },
     );
+    renderOpenTabs();
     const n = tabs.filter((t) => t.state === 'ok').length;
-    statusSessions.textContent = n ? `Connected: ${n}` : '';
+    statusSessions.textContent = n ? t('Connected: {0}', n) : '';
   }
   let onActivate: (id: string) => void = () => undefined;
   function activate(id: string): void {
@@ -95,25 +105,181 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     activate(tabs[(i + delta + tabs.length) % tabs.length].id);
   }
   async function renameTab(id: string): Promise<void> {
-    const t = tabs.find((x) => x.id === id);
-    if (!t) return;
-    const name = await promptDialog('Rename tab', 'Name', t.title, 'OK');
+    const tab = tabs.find((x) => x.id === id);
+    if (!tab) return;
+    const name = await promptDialog(t('Rename tab'), t('Name'), tab.title, 'OK');
     if (name?.trim()) {
-      t.title = name.trim();
+      tab.title = name.trim();
       renderTabs();
     }
   }
   async function closeTab(id: string): Promise<void> {
-    const t = tabs.find((x) => x.id === id);
-    if (!t || !t.closable) return;
-    const unsaved = t.dirty?.() ? ' There are UNSAVED changes in open files, they will be lost.' : '';
-    if ((t.state !== 'off' || unsaved) && !(await confirmDialog('Close the session?', `Connection to “${t.title}” will be closed and the programs running in it will be interrupted.${unsaved}`, 'Close', true))) return;
-    t.dispose?.();
-    for (const s of t.sessions ?? []) void api.disconnect(s).catch(() => undefined);
-    t.view.remove();
-    tabs.splice(tabs.indexOf(t), 1);
-    if (activeId === id) activeId = 'home';
-    renderTabs();
+    const tab = tabs.find((x) => x.id === id);
+    if (!tab || !tab.closable) return;
+    const unsaved = tab.dirty?.() ? ' ' + t('There are UNSAVED changes in open files, they will be lost.') : '';
+    if (((tab.state !== 'off' && !tab.local) || unsaved) && !(await confirmDialog(tab.local ? t('Close the tab?') : t('Close the session?'), t('Connection to “{0}” will be closed and the programs running in it will be interrupted.{1}', tab.title, unsaved), t('Close'), true))) return;
+    tab.dispose?.();
+    for (const s of tab.sessions ?? []) void api.disconnect(s).catch(() => undefined);
+    tab.view.remove();
+    tabs.splice(tabs.indexOf(tab), 1);
+    if (activeId === id) activate('home');
+    else renderTabs();
+  }
+
+  // ---------- local tabs: shells, scripts, notes ----------
+  let localCounter = 0;
+  const dropTab = (tb: Tab) => {
+    tb.dispose?.();
+    tb.view.remove();
+    tabs.splice(tabs.indexOf(tb), 1);
+    if (activeId === tb.id) activate('home');
+    else renderTabs();
+  };
+  const sectionCtx = {
+    openTerminal: (p: ShellProfile) => openTerminal(p),
+    openScript: (it: ScriptItem) => void openScriptTab(it),
+    runScript: (it: ScriptItem) => openRunTab(it),
+    openNote: (id?: string) => void openNoteTab(id),
+    closeTabs: (prefix: string) => {
+      for (const tb of [...tabs]) if (tb.id.startsWith(prefix)) dropTab(tb);
+    },
+    refreshHome: () => renderHome(),
+  };
+  const sections: Record<'terminals' | 'scripts' | 'notes', Section> = {
+    terminals: createTerminals(sectionCtx),
+    scripts: createScripts(sectionCtx),
+    notes: createNotes(sectionCtx),
+  };
+
+  function addLocalTab(tab: Tab): void {
+    tab.local = true;
+    work.append(tab.view);
+    tabs.push(tab);
+    activate(tab.id);
+  }
+
+  function localTerminal(title: string, key: string | undefined, local: { profile?: string; script?: string }, testid: string): void {
+    const id = `local${++localCounter}`;
+    const tab: Tab = { id, title, icon: 'terminal', iconKey: key, closable: true, state: 'busy', view: h('div', { class: 'session', 'data-testid': testid }) };
+    const term = new TerminalView('', undefined, {
+      onClose: () => void closeTab(id),
+      onState: (st) => {
+        if (tab.state === st) return;
+        tab.state = st;
+        renderTabs();
+      },
+    }, { testid: 'local-terminal', local });
+    tab.view.append(h('div', { class: 'term-col' }, term.el));
+    tab.onShow = () => term.show();
+    tab.dispose = () => term.dispose();
+    addLocalTab(tab);
+    requestAnimationFrame(() => void term.start());
+  }
+  function openTerminal(p: ShellProfile): void {
+    localTerminal(p.name, iconKey('profile', p.id), { profile: p.id }, 'local-tab');
+  }
+  function openRunTab(it: ScriptItem): void {
+    localTerminal(it.name, iconKey('script', it.id), { script: it.id }, 'run-tab');
+  }
+
+  async function openScriptTab(it: ScriptItem): Promise<void> {
+    const id = 'script:' + it.id;
+    if (tabs.some((x) => x.id === id)) return activate(id);
+    const tab: Tab = { id, title: it.name, icon: 'script', iconKey: iconKey('script', it.id), closable: true, view: h('div', { class: 'session editor-tab', 'data-testid': 'script-tab' }) };
+    const pane = new ScriptPane(
+      it,
+      {
+        onDirty: (d) => {
+          tab.title = d ? it.name + ' ●' : it.name;
+          renderTabs();
+        },
+        onClose: () => void closeTab(id),
+      },
+      () => openRunTab(it),
+    );
+    try {
+      await pane.load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
+      return;
+    }
+    tab.view.append(pane.el);
+    tab.dirty = () => pane.dirty;
+    tab.onShow = () => pane.focus();
+    addLocalTab(tab);
+    pane.focus();
+  }
+
+  async function openNoteTab(noteId?: string): Promise<void> {
+    if (noteId && tabs.some((x) => x.id === 'note:' + noteId)) return activate('note:' + noteId);
+    let tabId = noteId ? 'note:' + noteId : `note:new${++localCounter}`;
+    const tab: Tab = { id: tabId, title: t('Untitled'), icon: 'note', iconKey: noteId ? iconKey('note', noteId) : undefined, closable: true, view: h('div', { class: 'session editor-tab', 'data-testid': 'note-tab' }) };
+    const pane = new NotePane(
+      noteId,
+      {
+        onDirty: () => undefined,
+        onClose: () => void closeTab(tabId),
+        onTitle: (title, nid) => {
+          tab.title = title;
+          if (tab.id !== 'note:' + nid) {
+            tabId = 'note:' + nid;
+            tab.id = tabId;
+            tab.iconKey = iconKey('note', nid);
+            activeId = tabId;
+          }
+          renderTabs();
+          void sections.notes.refresh().then(() => section === 'notes' && renderHome());
+        },
+      },
+      async () => {
+        if (!pane.id) return void dropTab(tab);
+        if (!(await confirmDialog(t('Delete note?'), t('“{0}” will be deleted from the vault.', tab.title), t('Delete'), true))) return;
+        await api.noteDelete(pane.id);
+        dropTab(tab);
+        await sections.notes.refresh();
+        renderHome();
+      },
+    );
+    try {
+      await pane.load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
+      return;
+    }
+    if (noteId) tab.title = (await api.noteGet(noteId)).title;
+    tab.view.append(pane.el);
+    tab.dispose = () => {
+      void pane.flush().finally(() => pane.dispose());
+    };
+    tab.onShow = () => pane.focus();
+    addLocalTab(tab);
+    pane.focus();
+  }
+
+  // ---------- tabs on the left (Settings: Tabs) ----------
+  function applyTabsPosition(): void {
+    const left = getSettings().tabs_position === 'left';
+    titlebar.setVertical(left);
+    sidebar.classList.toggle('with-tabs', left);
+    renderOpenTabs();
+    if (left && sidebar.classList.contains('hidden')) toggleSidebar();
+  }
+  function renderOpenTabs(): void {
+    clear(openTabsEl);
+    if (getSettings().tabs_position !== 'left') return;
+    openTabsEl.append(h('div', { class: 'side-head' }, h('span', {}, t('Open tabs'))));
+    for (const tb of tabs) {
+      openTabsEl.append(
+        h(
+          'div',
+          { class: 'vtab' + (tb.id === activeId ? ' active' : ''), role: 'tab', tabindex: '0', title: tb.title, 'data-testid': `vtab-${tb.id}`, onclick: () => activate(tb.id), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && activate(tb.id) },
+          tb.state ? h('span', { class: `dot ${tb.state}` }) : null,
+          tb.iconKey ? iconFor(tb.iconKey, tb.icon, 14) : icon(tb.icon, 14),
+          h('span', { class: 'grow vtab-title' }, tb.title),
+          tb.closable ? h('button', { class: 'icon-btn', title: t('Close tab'), 'aria-label': t('Close tab'), 'data-testid': `vtab-close-${tb.id}`, onclick: (e) => (e.stopPropagation(), void closeTab(tb.id)) }, icon('close', 12)) : null,
+        ),
+      );
+    }
   }
 
   // ---------- connecting ----------
@@ -124,7 +290,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       onNewFile: (path) => void openFile(path, true),
       onReconnect: () => reconnect(),
     });
-    const tab: Tab = { id, title: info.name, icon: 'terminal', closable: true, sessions: [info.session_id], state: 'busy', view: h('div', { class: 'session', 'data-testid': 'session' }) };
+    const tab: Tab = { id, title: info.name, icon: 'terminal', iconKey: s.serverId ? iconKey('server', s.serverId) : undefined, closable: true, sessions: [info.session_id], state: 'busy', view: h('div', { class: 'session', 'data-testid': 'session' }) };
     const terminal = new TerminalView(info.session_id, s.serverId, {
       onClose: () => void closeTab(id),
       onState: (st) => {
@@ -136,7 +302,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     const panes = new PaneSet();
     // mini task manager under the terminal (numbers, small graphs); a click opens the detailed pane
     const mon = new MonitorSource(() => tab.sessions![tab.sessions!.length - 1], () => activeId === id);
-    const bar = new MonitorBar(mon, () => openMonitor(), info.sftp_error ? 'Monitoring is unavailable: the server has no SFTP' : undefined);
+    const bar = new MonitorBar(mon, () => openMonitor(), info.sftp_error ? t('Monitoring is unavailable: the server has no SFTP') : undefined);
     bar.setVisible(getSettings().monitor_enabled);
     const offSettings = onSettings((st) => bar.setVisible(st.monitor_enabled));
     const sessionNow = () => tab.sessions![tab.sessions!.length - 1];
@@ -166,12 +332,12 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
         plan = await prepareClone(src);
       } catch (e) {
         // never fail silently: open the copy without commands and say why
-        toast(`Copy without commands: ${e instanceof Error ? e.message : String(e)}`);
+        toast(t('Copy without commands: {0}', e instanceof Error ? e.message : String(e)));
         plan = { prefill: src.snapshot(), startup: [], env: src.envCommands };
       }
       if (!plan) return;
-      const hhmm = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-      const note = `\r\n\x1b[2m──── copy of the terminal from ${hhmm}: below is a new shell on the same server ────\x1b[0m\r\n`;
+      const hhmm = new Date().toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+      const note = `\r\n\x1b[2m──── ${t('copy of the terminal from {0}: below is a new shell on the same server', hhmm)} ────\x1b[0m\r\n`;
       const pid = `dup:${++copies}`;
       const copy: TerminalView = new TerminalView(
         sessionNow(),
@@ -182,7 +348,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       copy.el.addEventListener('focusin', () => (source = copy));
       side.add({
         id: pid,
-        title: `Copy ${hhmm}`,
+        title: t('Copy {0}', hhmm),
         view: h('div', { class: 'session-term' }, copy.el),
         closable: true,
         onShow: () => {
@@ -193,7 +359,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
           if (source === copy) source = terminal;
           copy.dispose();
         },
-        beforeClose: () => confirmDialog('Close the terminal copy?', 'The connection of this copy will be closed and the programs running in it will be interrupted.', 'Close', true),
+        beforeClose: () => confirmDialog(t('Close the terminal copy?'), t('The connection of this copy will be closed and the programs running in it will be interrupted.'), t('Close'), true),
       });
       setSide(true);
       requestAnimationFrame(() => void copy.start());
@@ -216,7 +382,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       split.addEventListener('pointermove', move);
       split.addEventListener('pointerup', up);
     });
-    panes.add({ id: 'term', title: 'Terminal', view: h('div', { class: 'session-term', 'data-testid': 'session-term' }, h('div', { class: 'term-col' }, terminal.el, bar.el)), closable: false, onShow: () => terminal.show() });
+    panes.add({ id: 'term', title: t('Terminal'), view: h('div', { class: 'session-term', 'data-testid': 'session-term' }, h('div', { class: 'term-col' }, terminal.el, bar.el)), closable: false, onShow: () => terminal.show() });
     // right column: copies of the terminal (hidden until the first copy), with a draggable divider
     const sideCol = h('div', { class: 'side-col', 'data-testid': 'side-col' }, side.el);
     const sideSplit = h('div', { class: 'splitter', role: 'separator', 'aria-orientation': 'vertical', 'data-testid': 'side-splitter' });
@@ -260,7 +426,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     function openMonitor(): void {
       if (panes.has('monitor')) return panes.activate('monitor');
       const detail = new MonitorDetail(mon);
-      panes.add({ id: 'monitor', title: 'Monitor', view: detail.el, closable: true, onShow: () => mon.start(), dispose: () => detail.dispose() });
+      panes.add({ id: 'monitor', title: t('Monitor'), view: detail.el, closable: true, onShow: () => mon.start(), dispose: () => detail.dispose() });
     }
 
     // ---- built-in editor: one pane per open file next to the terminal
@@ -295,9 +461,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
         const e = failure;
         ed.dispose();
         if (e instanceof ApiError && (e.code === 'binary' || e.code === 'too_large')) {
-          if (await confirmDialog('The file cannot be opened in the editor', `${e.message}
-
-Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downloadPaths([path]);
+          if (await confirmDialog(t('The file cannot be opened in the editor'), t('{0}\n\nDownload “{1}”?', e.message, path.split('/').pop()), t('Download…'))) await explorer.downloadPaths([path]);
         } else toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
         return;
       }
@@ -309,7 +473,7 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
         closable: true,
         onShow: () => ed.focus(),
         dispose: () => ed.dispose(),
-        beforeClose: async () => !ed.dirty || (await confirmDialog('Close without saving?', `“${path}” has unsaved changes. They will be lost.`, 'Close', true)),
+        beforeClose: async () => !ed.dirty || (await confirmDialog(t('Close without saving?'), t('“{0}” has unsaved changes. They will be lost.', path), t('Close'), true)),
       });
       ed.focus();
     }
@@ -333,7 +497,7 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
 
   async function connectQuick(): Promise<void> {
     const q = parseQuick(quick.value);
-    if (!q) return void toast('Enter the address as user@host or user@host:port.');
+    if (!q) return void toast(t('Enter the address as user@host or user@host:port.'));
     const opts: ConnectOpts = { label: `${q.username}@${q.host}`, host: q.host, port: q.port, username: q.username };
     const info = await connectFlow(opts);
     if (info) {
@@ -349,7 +513,7 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
     if (selected && !servers.some((s) => s.id === selected)) selected = null;
     renderList();
     renderHome();
-    statusCount.textContent = `Sessions: ${servers.length}`;
+    statusCount.textContent = t('Sessions: {0}', servers.length);
   };
   const add = async () => (await serverForm()) && (await reload());
   const edit = async (s: ServerView) => (await serverForm(s)) && (await reload());
@@ -358,12 +522,12 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
     await reload();
   };
   const del = async (s: ServerView) => {
-    if (!(await confirmDialog('Delete server?', `“${s.name}” and the saved password will be deleted.`, 'Delete', true))) return;
+    if (!(await confirmDialog(t('Delete server?'), t('“{0}” and the saved password will be deleted.', s.name), t('Delete'), true))) return;
     await api.deleteServer(s.id);
     await reload();
   };
   const lock = async (silent = false) => {
-    if (!silent && tabs.some((t) => t.sessions?.length) && !(await confirmDialog('Lock the vault?', 'The open sessions will be closed and the programs running in them will be interrupted.', 'Lock', true))) return;
+    if (!silent && tabs.some((t) => t.sessions?.length) && !(await confirmDialog(t('Lock the vault?'), t('The open sessions will be closed and the programs running in them will be interrupted.'), t('Lock'), true))) return;
     for (const t of tabs) {
       t.dispose?.();
       for (const s of t.sessions ?? []) void api.disconnect(s).catch(() => undefined);
@@ -380,7 +544,7 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
     const q = search.value.trim().toLowerCase();
     const shown = servers.filter((s) => !q || s.name.toLowerCase().includes(q) || s.host.toLowerCase().includes(q));
     if (!shown.length) {
-      list.append(h('li', { class: 'empty' }, servers.length ? 'Nothing found.' : 'No sessions yet. Click Session on the toolbar.'));
+      list.append(h('li', { class: 'empty' }, servers.length ? t('Nothing found.') : t('No sessions yet. Click Session on the toolbar.')));
       return;
     }
     for (const s of shown) {
@@ -405,15 +569,16 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
               if (k === 'Delete') void del(s);
             },
           },
-          h('span', { class: 'srv-ico' }, icon('terminal', 16)),
-          h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, s.name), h('div', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " · key" : ""}`)),
+          h('span', { class: 'srv-ico' }, iconFor(iconKey('server', s.id), 'terminal', 16)),
+          h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, s.name), h('div', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " " + t("· key") : ""}`)),
           h(
             'div',
             { class: 'srv-actions' },
-            iconBtn('plug', 'Connect (Enter)', 'connect', () => void connectServer(s)),
-            iconBtn('edit', 'Edit (F2)', 'edit', () => void edit(s)),
-            iconBtn('copy', 'Duplicate', 'dup', () => void dup(s)),
-            iconBtn('trash', 'Delete (Del)', 'delete', () => void del(s)),
+            iconBtn('plug', t('Connect (Enter)'), 'connect', () => void connectServer(s)),
+            iconBtn('edit', t('Edit (F2)'), 'edit', () => void edit(s)),
+            iconBtn('copy', t('Duplicate'), 'dup', () => void dup(s)),
+            iconBtn('image', t('Change icon…'), 'server-icon', () => void pickIcon(iconKey('server', s.id), 'terminal').then((c) => c && (renderList(), renderHome()))),
+            iconBtn('trash', t('Delete (Del)'), 'delete', () => void del(s)),
           ),
         ),
       );
@@ -422,18 +587,22 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
 
   function renderHome(): void {
     clear(home);
+    if (section !== 'sessions') {
+      home.append(sections[section].home());
+      return;
+    }
     home.append(
       h(
         'div',
         { class: 'home-head' },
-        h('h1', {}, 'Welcome to d256 Shell'),
-        h('p', {}, 'Portable SSH client: terminal, file explorer and editor in one window.'),
-        h('div', { class: 'row' }, h('button', { class: 'primary', 'data-testid': 'home-add', onclick: () => void add() }, icon('plus', 14), 'New session')),
+        h('h1', {}, t('Welcome to d256 Shell')),
+        h('p', {}, t('Portable SSH client: terminal, file explorer and editor in one window.')),
+        h('div', { class: 'row' }, h('button', { class: 'primary', 'data-testid': 'home-add', onclick: () => void add() }, icon('plus', 14), t('New session'))),
       ),
-      h('h2', { class: 'section' }, 'Sessions'),
+      h('h2', { class: 'section' }, t('Sessions')),
     );
     if (!servers.length) {
-      home.append(h('div', { class: 'home-empty' }, 'Your servers will appear here. Add the first one: its password will be kept in the encrypted vault.'));
+      home.append(h('div', { class: 'home-empty' }, t('Your servers will appear here. Add the first one: its password will be kept in the encrypted vault.')));
       return;
     }
     const grid = h('div', { class: 'cards' });
@@ -442,8 +611,8 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
         h(
           'button',
           { class: 'card-srv', 'data-testid': 'home-card', ondblclick: () => void connectServer(s), onclick: () => ((selected = s.id), renderList()) },
-          h('span', { class: 'srv-ico big' }, icon('terminal', 20)),
-          h('span', { class: 'grow left' }, h('strong', {}, s.name), h('span', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " · key" : ""}`)),
+          h('span', { class: 'srv-ico big' }, iconFor(iconKey('server', s.id), 'terminal', 20)),
+          h('span', { class: 'grow left' }, h('strong', {}, s.name), h('span', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " " + t("· key") : ""}`)),
         ),
       );
     }
@@ -458,9 +627,9 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
     h('button', { class: 'tool', 'data-testid': testid, onclick: fn }, icon(name, 20), h('span', {}, label));
   /** Copy of the active terminal: a new live shell that starts with the original screen and scrollback. */
   const dupActive = () => {
-    const t = tabs.find((x) => x.id === activeId);
-    if (t?.duplicate) t.duplicate();
-    else toast('Open an SSH tab: its terminal is duplicated.');
+    const tab = tabs.find((x) => x.id === activeId);
+    if (tab?.duplicate) tab.duplicate();
+    else toast(t('Open an SSH tab: its terminal is duplicated.'));
   };
   const toggleSidebar = () => {
     const hidden = sidebar.classList.toggle('hidden');
@@ -470,33 +639,54 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
   const toolbar = h(
     'div',
     { class: 'toolbar', role: 'toolbar' },
-    tbtn('plus', 'Session', 'add', () => void add()),
-    tbtn('plug', 'Connect', 'toolbar-connect', () => {
+    tbtn('plus', t('Session'), 'add', () => void add()),
+    tbtn('plug', t('Connect'), 'toolbar-connect', () => {
       const s = servers.find((x) => x.id === selected);
       if (s) void connectServer(s);
-      else toast('Select a session in the list on the left.');
+      else toast(t('Select a session in the list on the left.'));
     }),
-    tbtn('sidebar', 'Panel', 'toggle-sidebar', toggleSidebar),
-    tbtn('copy', 'Duplicate', 'duplicate-term', () => dupActive()),
+    tbtn('sidebar', t('Panel'), 'toggle-sidebar', toggleSidebar),
+    tbtn('copy', t('Duplicate'), 'duplicate-term', () => dupActive()),
     h('div', { class: 'tool-sep' }),
-    tbtn('key', 'Master password', 'change-master', () => void changeMasterDialog()),
-    tbtn('settings', 'Settings', 'settings', () => void settingsDialog()),
+    tbtn('key', t('Master password'), 'change-master', () => void changeMasterDialog()),
+    tbtn('settings', t('Settings'), 'settings', () => void settingsDialog()),
     h('div', { class: 'grow' }),
-    tbtn('lock', 'Lock', 'lock', () => void lock()),
+    tbtn('lock', t('Lock'), 'lock', () => void lock()),
   );
 
   // ---------- left rail + sidebar + splitter ----------
-  const rail = h(
-    'nav',
-    { class: 'rail', 'aria-label': 'Sections' },
-    h('button', { class: 'rail-btn active', title: 'Sessions', 'data-testid': 'rail-sessions' }, icon('server', 20)),
-  );
-  sidebar.append(
-    h('div', { class: 'side-head' }, h('span', {}, 'Sessions')),
+  const railBtns = new Map<SectionName, HTMLElement>();
+  const rail = h('nav', { class: 'rail', 'aria-label': t('Sections') });
+  const railBtn = (name: SectionName, title: string, glyph: string) => {
+    const b = h('button', { class: 'rail-btn', title, 'aria-label': title, 'data-testid': `rail-${name}`, onclick: () => showSection(name) }, icon(glyph, 20));
+    railBtns.set(name, b);
+    rail.append(b);
+  };
+  railBtn('sessions', t('Sessions'), 'server');
+  railBtn('terminals', t('Terminals'), 'terminal');
+  railBtn('scripts', t('Scripts'), 'script');
+  railBtn('notes', t('Notes'), 'note');
+  const sessionsSide = h(
+    'div',
+    { class: 'side-section', 'data-testid': 'section-sessions' },
+    h('div', { class: 'side-head' }, h('span', {}, t('Sessions'))),
     h('div', { class: 'search' }, icon('plug', 14), quick),
     h('div', { class: 'search' }, icon('search', 14), search),
     list,
   );
+  const sideBody = h('div', { class: 'side-body' });
+  const openTabsEl = h('div', { class: 'open-tabs', 'data-testid': 'open-tabs' });
+  sidebar.append(sideBody, openTabsEl);
+  function showSection(name: SectionName): void {
+    section = name;
+    for (const [n, b] of railBtns) b.classList.toggle('active', n === name);
+    clear(sideBody);
+    sideBody.append(name === 'sessions' ? sessionsSide : sections[name].side);
+    if (name !== 'sessions') void sections[name].refresh().then(renderHome);
+    if (activeId !== 'home') activate('home');
+    else renderHome();
+    if (sidebar.classList.contains('hidden') && activeId === 'home') toggleSidebar();
+  }
   const saved = Number(pref.get('sidebar-width'));
   sidebar.style.width = `${saved >= MIN_SIDEBAR && saved <= MAX_SIDEBAR ? saved : 280}px`;
 
@@ -527,16 +717,16 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
     sidebar.classList.toggle('hidden', hidden);
     splitter.classList.toggle('hidden', hidden);
   };
-  onActivate = (id) => setSidebar(id === 'home' ? pref.get('sidebar-hidden') === '1' : true);
+  onActivate = (id) => setSidebar(getSettings().tabs_position === 'left' ? false : id === 'home' ? pref.get('sidebar-hidden') === '1' : true);
   // ---------- status bar ----------
   const status = h(
     'footer',
     { class: 'statusbar' },
-    h('span', { class: 'st' }, icon('unlock', 12), 'Vault unlocked'),
+    h('span', { class: 'st' }, icon('unlock', 12), t('Vault unlocked')),
     statusCount,
     statusSessions,
     h('div', { class: 'grow' }),
-    h('span', {}, `d256 Shell ${__APP_VERSION__}`),
+    h('span', {}, t('d256 Shell {0}', __APP_VERSION__)),
   );
 
   screen.append(toolbar, h('div', { class: 'body' }, rail, sidebar, splitter, work), status);
@@ -594,9 +784,22 @@ Download “${path.split('/').pop()}”?`, 'Download…')) await explorer.downlo
     void getCurrentWindow().onCloseRequested(async (ev) => {
       if (!anyDirty()) return;
       ev.preventDefault();
-      if (await confirmDialog('Close d256 Shell?', 'There are unsaved changes in open files. They will be lost.', 'Close', true)) await getCurrentWindow().destroy();
+      if (await confirmDialog(t('Close d256 Shell?'), t('There are unsaved changes in open files. They will be lost.'), t('Close'), true)) await getCurrentWindow().destroy();
     });
   }
 
+  showSection('sessions');
   await reload();
+  // vertical tabs (Settings) and the profile that opens at start
+  applyTabsPosition();
+  onSettings(() => applyTabsPosition());
+  const startup = getSettings().startup_profile;
+  if (startup && startup !== 'home') {
+    try {
+      const p = (await api.shellProfiles()).profiles.find((x) => x.id === startup);
+      if (p) openTerminal(p);
+    } catch {
+      /* the profile is gone: stay on the home tab */
+    }
+  }
 }

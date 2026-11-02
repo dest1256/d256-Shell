@@ -6,6 +6,7 @@ import { getSettings, updateSettings } from './settings';
 import { aboutDialog } from './about';
 import { native } from './native';
 import { pwField, errText } from './util';
+import { applyLanguage, LANGUAGES, t, tm } from './i18n';
 
 export async function serverForm(existing?: ServerView): Promise<boolean> {
   const f = (id: string, label: string, value = '', type = 'text') =>
@@ -20,7 +21,7 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
       type: 'password',
       'data-testid': 'f-password',
       autocomplete: 'new-password',
-      placeholder: existing?.has_password ? '•••••••• (do not change)' : '',
+      placeholder: existing?.has_password ? t('•••••••• (do not change)') : '',
     }) as HTMLInputElement;
     const eye = h(
       'button',
@@ -34,16 +35,16 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
             pwInput.value = (await api.getPassword(existing.id).catch(() => null)) ?? '';
           }
           pwInput.type = pwShown ? 'text' : 'password';
-          eye.textContent = pwShown ? 'Hide' : 'Show';
+          eye.textContent = pwShown ? t('Hide') : t('Show');
         },
       },
-      'Show',
+      t('Show'),
     );
     // private key login (like "Use private key" in MobaXterm): a checkbox, the key file and, if wanted, its passphrase
     const useKey = h('input', { type: 'checkbox', 'data-testid': 'f-usekey' }) as HTMLInputElement;
     useKey.checked = !!existing?.key_path;
-    const keyPath = h('input', { id: 'f-keypath', type: 'text', 'data-testid': 'f-keypath', value: existing?.key_path ?? '', spellcheck: 'false', placeholder: 'Private key file (id_ed25519, id_rsa, *.pem)', autocomplete: 'off' }) as HTMLInputElement;
-    const keyPass = h('input', { id: 'f-keypass', type: 'password', 'data-testid': 'f-keypass', autocomplete: 'new-password', placeholder: existing?.has_key_passphrase ? '•••••••• (do not change)' : 'Key passphrase (optional)' }) as HTMLInputElement;
+    const keyPath = h('input', { id: 'f-keypath', type: 'text', 'data-testid': 'f-keypath', value: existing?.key_path ?? '', spellcheck: 'false', placeholder: t('Private key file (id_ed25519, id_rsa, *.pem)'), autocomplete: 'off' }) as HTMLInputElement;
+    const keyPass = h('input', { id: 'f-keypass', type: 'password', 'data-testid': 'f-keypass', autocomplete: 'new-password', placeholder: existing?.has_key_passphrase ? t('•••••••• (do not change)') : t('Key passphrase (optional)') }) as HTMLInputElement;
     const browse = h('button', { type: 'button', class: 'btn', 'data-testid': 'f-keybrowse', onclick: async () => {
       const [p] = await native.pick('files');
       if (p) {
@@ -51,8 +52,8 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
         useKey.checked = true;
         syncKey();
       }
-    } }, 'Browse…');
-    const keyBox = h('div', { class: 'col key-box', 'data-testid': 'key-box' }, h('div', { class: 'row' }, keyPath, browse), keyPass, h('p', { class: 'muted small' }, 'PuTTY files (.ppk) are not supported: export the key to OpenSSH format. The password, if given, is used only if the server rejects the key.'));
+    } }, t('Browse…'));
+    const keyBox = h('div', { class: 'col key-box', 'data-testid': 'key-box' }, h('div', { class: 'row' }, keyPath, browse), keyPass, h('p', { class: 'muted small' }, t('PuTTY files (.ppk) are not supported: export the key to OpenSSH format. The password, if given, is used only if the server rejects the key.')));
     const syncKey = () => (keyBox.style.display = useKey.checked ? '' : 'none');
     useKey.addEventListener('change', syncKey);
     syncKey();
@@ -82,15 +83,15 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
     return h(
       'form',
       { 'data-testid': 'server-form', onsubmit: (e) => (e.preventDefault(), void save()) },
-      h('h3', {}, existing ? 'Edit server' : 'New server'),
-      f('f-name', 'Name', existing?.name),
-      h('div', { class: 'row' }, f('f-host', 'Address', existing?.host), f('f-port', 'Port', String(existing?.port ?? 22), 'number')),
-      f('f-user', 'User', existing?.username),
-      h('label', {}, 'Password', h('div', { class: 'row' }, pwInput, eye)),
-      h('label', { class: 'check' }, useKey, ' Use a private key'),
+      h('h3', {}, existing ? t('Edit server') : t('New server')),
+      f('f-name', t('Name'), existing?.name),
+      h('div', { class: 'row' }, f('f-host', t('Address'), existing?.host), f('f-port', t('Port'), String(existing?.port ?? 22), 'number')),
+      f('f-user', t('User'), existing?.username),
+      h('label', {}, t('Password'), h('div', { class: 'row' }, pwInput, eye)),
+      h('label', { class: 'check' }, useKey, ' ' + t('Use a private key')),
       keyBox,
-      f('f-dir', 'Start folder (optional)', existing?.initial_dir ?? ''),
-      f('f-args', 'Extra ssh arguments (optional)', existing?.ssh_extra_args ?? ''),
+      f('f-dir', t('Start folder (optional)'), existing?.initial_dir ?? ''),
+      f('f-args', t('Extra ssh arguments (optional)'), existing?.ssh_extra_args ?? ''),
       err,
       h(
         'div',
@@ -101,22 +102,22 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
             type: 'button',
             class: 'btn left-auto',
             'data-testid': 'form-test',
-            title: 'Check the SFTP login without opening a terminal',
+            title: t('Check the SFTP login without opening a terminal'),
             onclick: async () => {
               err.textContent = '';
               const host = val('f-host').trim();
               const username = val('f-user').trim();
               const port = Number(val('f-port'));
-              if (!host || !username || !port) return void (err.textContent = 'Fill in the address, port and user.');
+              if (!host || !username || !port) return void (err.textContent = t('Fill in the address, port and user.'));
               const password = pwInput.value || (existing ? ((await api.getPassword(existing.id).catch(() => null)) ?? '') : '');
               const r = await connectFlow({ label: `${username}@${host}`, host, port, username, password: password || undefined, testOnly: true, keyPath: useKey.checked ? keyPath.value.trim() : undefined, keyPassphrase: useKey.checked && keyPass.value ? keyPass.value : undefined });
-              if (r) toast(`Connection successful: ${username}@${host}`);
+              if (r) toast(t('Connection successful: {0}@{1}', username, host));
             },
           },
-          'Test connection',
+          t('Test connection'),
         ),
-        h('button', { type: 'button', class: 'btn', onclick: () => close(false), 'data-testid': 'form-cancel' }, 'Cancel'),
-        h('button', { type: 'submit', class: 'btn primary', 'data-testid': 'form-save' }, 'Save'),
+        h('button', { type: 'button', class: 'btn', onclick: () => close(false), 'data-testid': 'form-cancel' }, t('Cancel')),
+        h('button', { type: 'submit', class: 'btn primary', 'data-testid': 'form-save' }, t('Save')),
       ),
     );
   });
@@ -126,25 +127,25 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
 export async function changeMasterDialog(): Promise<void> {
   const err = h('div', { class: 'error', 'data-testid': 'cm-error' });
   await modal<boolean>((close) => {
-    const o = pwField('cm-old', 'Current master password');
-    const n1 = pwField('cm-new1', 'New master password', 'new-password');
-    const n2 = pwField('cm-new2', 'Repeat the new password', 'new-password');
+    const o = pwField('cm-old', t('Current master password'));
+    const n1 = pwField('cm-new1', t('New master password'), 'new-password');
+    const n2 = pwField('cm-new2', t('Repeat the new password'), 'new-password');
     return h(
       'form',
       {
         onsubmit: async (e) => {
           e.preventDefault();
-          if (n1.value !== n2.value) return void (err.textContent = 'The passwords do not match.');
+          if (n1.value !== n2.value) return void (err.textContent = t('The passwords do not match.'));
           try {
             await api.changeMaster(o.value, n1.value);
-            toast('Master password changed.');
+            toast(t('Master password changed.'));
             close(true);
           } catch (x) {
             err.textContent = errText(x);
           }
         },
       },
-      h('h3', {}, 'Change master password'),
+      h('h3', {}, t('Change master password')),
       o,
       n1,
       n2,
@@ -152,18 +153,18 @@ export async function changeMasterDialog(): Promise<void> {
       h(
         'div',
         { class: 'row end' },
-        h('button', { type: 'button', class: 'btn', onclick: () => close(false) }, 'Cancel'),
-        h('button', { type: 'submit', class: 'btn primary', 'data-testid': 'cm-ok' }, 'Edit'),
+        h('button', { type: 'button', class: 'btn', onclick: () => close(false) }, t('Cancel')),
+        h('button', { type: 'submit', class: 'btn primary', 'data-testid': 'cm-ok' }, t('Edit')),
       ),
     );
   });
 }
 
 const AUTO_MODES: Array<[string, string]> = [
-  ['auto', 'Automatic (askpass for ssh 8.4+, otherwise careful typing into the terminal)'],
-  ['askpass', 'Only askpass (SSH_ASKPASS)'],
-  ['expect', 'Only careful typing into the terminal (for old ssh)'],
-  ['off', 'Do not fill in the password automatically'],
+  ['auto', t('Automatic (askpass for ssh 8.4+, otherwise careful typing into the terminal)')],
+  ['askpass', t('Only askpass (SSH_ASKPASS)')],
+  ['expect', t('Only careful typing into the terminal (for old ssh)')],
+  ['off', t('Do not fill in the password automatically')],
 ];
 
 /** Settings: ssh location and password mode, terminal appearance and behaviour. */
@@ -178,14 +179,18 @@ export async function settingsDialog(): Promise<void> {
   const num = (id: string, v: number) => h('input', { id, type: 'number', value: String(v), 'data-testid': id }) as HTMLInputElement;
   const text = (id: string, v: string) => h('input', { id, type: 'text', value: v, 'data-testid': id, spellcheck: 'false' }) as HTMLInputElement;
 
+  const lang = sel('set-lang', [['auto', t('System default')], ...LANGUAGES.map((l) => [l.code, l.name] as [string, string])], cur.language);
+  const profs = await api.shellProfiles().then((r) => r.profiles).catch(() => []);
+  const tabsPos = sel('set-tabs', [['top', t('Top')], ['left', t('Left (vertical)')]], cur.tabs_position);
+  const startup = sel('set-startup', [['home', t('Home')], ...profs.map((p) => [p.id, p.name] as [string, string])], cur.startup_profile);
   const sshPath = text('set-ssh-path', cur.ssh_path);
-  sshPath.placeholder = 'empty: detect automatically';
+  sshPath.placeholder = t('empty: detect automatically');
   const mode = sel('set-auto', AUTO_MODES, cur.auto_password);
   const scheme = sel('set-scheme', SCHEMES.map((s) => [s.id, s.name] as [string, string]), cur.scheme);
-  const cursor = sel('set-cursor', [['bar', 'Bar'], ['block', 'Block'], ['underline', 'Underline']], cur.cursor_style);
-  const rclick = sel('set-rclick', [['copy-paste', 'Copy the selection / paste'], ['menu', 'Browser context menu']], cur.right_click);
-  const wheel = sel('set-wheel', [['arrows', 'Up/down arrows (btop, htop, mc)'], ['mouse', 'Mouse events (tmux, vim with mouse)']], cur.wheel_mode);
-  const cloneMode = sel('set-clone', [['ask', 'Show the commands and ask'], ['auto', 'Repeat the folder, environment and program at once'], ['view', 'Output only, no commands']], cur.clone_mode);
+  const cursor = sel('set-cursor', [['bar', t('Bar')], ['block', t('Block')], ['underline', t('Underline')]], cur.cursor_style);
+  const rclick = sel('set-rclick', [['copy-paste', t('Copy the selection / paste')], ['menu', t('Browser context menu')]], cur.right_click);
+  const wheel = sel('set-wheel', [['arrows', t('Up/down arrows (btop, htop, mc)')], ['mouse', t('Mouse events (tmux, vim with mouse)')]], cur.wheel_mode);
+  const cloneMode = sel('set-clone', [['ask', t('Show the commands and ask')], ['auto', t('Repeat the folder, environment and program at once')], ['view', t('Output only, no commands')]], cur.clone_mode);
   const size = num('set-font-size', cur.font_size);
   const scroll = num('set-scrollback', cur.scrollback);
   const family = text('set-font', cur.font_family);
@@ -201,8 +206,8 @@ export async function settingsDialog(): Promise<void> {
   const err = h('div', { class: 'error', 'data-testid': 'settings-error' });
 
   const sshLine = info.found
-    ? `Found: ${info.path}\n${info.version}\nAuto password: ${info.mode === 'askpass' ? 'askpass (SSH_ASKPASS)' : info.mode === 'expect' ? 'careful typing into the terminal' : 'off'}`
-    : `ssh not found: ${info.error ?? ''}`;
+    ? t('Found: {0}\n{1}\nAuto password: {2}', info.path, info.version, info.mode === 'askpass' ? 'askpass (SSH_ASKPASS)' : info.mode === 'expect' ? t('careful typing into the terminal') : 'off')
+    : t('ssh not found: {0}', tm(info.error ?? ''));
 
   await modal<boolean>((close) =>
     h(
@@ -230,34 +235,41 @@ export async function settingsDialog(): Promise<void> {
               keep_mtime: keepMtime.checked,
               monitor_enabled: monOn.checked,
               monitor_interval_ms: Number(monInterval.value),
+              language: lang.value,
+              tabs_position: tabsPos.value,
+              startup_profile: startup.value,
             });
             close(true);
+            if (applyLanguage(lang.value)) location.reload();
           } catch (x) {
             err.textContent = String(x instanceof Error ? x.message : x);
           }
         },
       },
-      h('h3', {}, 'Settings'),
-      h('h4', {}, 'System ssh'),
+      h('h3', {}, t('Settings')),
+      field(t('Language'), lang),
+      h('h4', {}, t('Tabs and start')),
+      h('div', { class: 'row' }, field(t('Tabs'), tabsPos), field(t('Open at start'), startup)),
+      h('h4', {}, t('System ssh')),
       h('pre', { class: 'detail', style: 'display:block', 'data-testid': 'ssh-info' }, sshLine),
-      field('Path to ssh (ssh.exe on Windows)', sshPath),
-      field('Fill in the password automatically', mode),
-      h('h4', {}, 'Terminal'),
-      h('div', { class: 'row' }, field('Colour scheme', scheme), field('Cursor', cursor)),
-      h('div', { class: 'row' }, field('Font size', size), field('Scrollback lines', scroll)),
-      field('Font', family),
-      field('Right mouse button', rclick),
-      field('Wheel in full-screen programs', wheel),
-      field('Duplicate terminal (Ctrl+Shift+D)', cloneMode),
-      h('h4', {}, 'Transfers and editor'),
-      h('div', { class: 'row' }, field('Parallel transfers', parallel), field('Drag-out limit, MB', dragLimit)),
-      h('div', { class: 'row' }, field('File size limit in the editor, MB', editLimit), field('Auto-lock, minutes (0 = off)', autoLock)),
-      h('label', { class: 'check' }, keepMtime, ' Keep the modification time of files on transfer'),
-      h('h4', {}, 'Server monitor'),
-      h('label', { class: 'check' }, monOn, ' Show server load under the terminal (reads /proc over SFTP, no commands are run)'),
-      field('Refresh interval, ms (from 100)', monInterval),
+      field(t('Path to ssh (ssh.exe on Windows)'), sshPath),
+      field(t('Fill in the password automatically'), mode),
+      h('h4', {}, t('Terminal')),
+      h('div', { class: 'row' }, field(t('Colour scheme'), scheme), field(t('Cursor'), cursor)),
+      h('div', { class: 'row' }, field(t('Font size'), size), field(t('Scrollback lines'), scroll)),
+      field(t('Font'), family),
+      field(t('Right mouse button'), rclick),
+      field(t('Wheel in full-screen programs'), wheel),
+      field(t('Duplicate terminal (Ctrl+Shift+D)'), cloneMode),
+      h('h4', {}, t('Transfers and editor')),
+      h('div', { class: 'row' }, field(t('Parallel transfers'), parallel), field(t('Drag-out limit, MB'), dragLimit)),
+      h('div', { class: 'row' }, field(t('File size limit in the editor, MB'), editLimit), field(t('Auto-lock, minutes (0 = off)'), autoLock)),
+      h('label', { class: 'check' }, keepMtime, ' ' + t('Keep the modification time of files on transfer')),
+      h('h4', {}, t('Server monitor')),
+      h('label', { class: 'check' }, monOn, ' ' + t('Show server load under the terminal (reads /proc over SFTP, no commands are run)')),
+      field(t('Refresh interval, ms (from 100)'), monInterval),
       err,
-      h('div', { class: 'row end' }, h('button', { type: 'button', class: 'left-auto', onclick: () => void aboutDialog(), 'data-testid': 'open-about' }, 'About'), h('button', { type: 'button', onclick: () => close(false), 'data-testid': 'settings-cancel' }, 'Cancel'), h('button', { type: 'submit', class: 'primary', 'data-testid': 'settings-save' }, 'Save')),
+      h('div', { class: 'row end' }, h('button', { type: 'button', class: 'left-auto', onclick: () => void aboutDialog(), 'data-testid': 'open-about' }, t('About')), h('button', { type: 'button', onclick: () => close(false), 'data-testid': 'settings-cancel' }, t('Cancel')), h('button', { type: 'submit', class: 'primary', 'data-testid': 'settings-save' }, t('Save'))),
     ),
   );
 }

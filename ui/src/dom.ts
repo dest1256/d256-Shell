@@ -1,3 +1,4 @@
+import { t } from './i18n';
 // Tiny DOM helpers (no framework).
 type Attrs = Record<string, string | boolean | ((e: Event) => void) | undefined>;
 
@@ -46,7 +47,7 @@ export function confirmDialog(title: string, text: string, okLabel = 'OK', dange
       h(
         'div',
         { class: 'row end' },
-        h('button', { onclick: () => close(false), 'data-testid': 'confirm-cancel' }, 'Cancel'),
+        h('button', { onclick: () => close(false), 'data-testid': 'confirm-cancel' }, t('Cancel')),
         h('button', { class: danger ? 'danger' : 'primary', onclick: () => close(true), 'data-testid': 'confirm-ok' }, okLabel),
       ),
     ),
@@ -54,17 +55,17 @@ export function confirmDialog(title: string, text: string, okLabel = 'OK', dange
 }
 
 export function toast(msg: string, detail?: string): void {
-  const t = h('div', { class: 'toast', role: 'alert' }, msg);
+  const el = h('div', { class: 'toast', role: 'alert' }, msg);
   if (detail) {
     const d = h('pre', { class: 'detail' }, detail);
     d.style.display = 'none';
-    t.append(
-      h('button', { class: 'link', onclick: () => (d.style.display = d.style.display === 'none' ? 'block' : 'none') }, 'Details'),
+    el.append(
+      h('button', { class: 'link', onclick: () => (d.style.display = d.style.display === 'none' ? 'block' : 'none') }, t('Details')),
       d,
     );
   }
-  document.body.append(t);
-  setTimeout(() => t.remove(), 8000);
+  document.body.append(el);
+  setTimeout(() => el.remove(), 8000);
 }
 
 /** Single-line text prompt; resolves with the entered text or null on cancel. */
@@ -84,7 +85,7 @@ export function promptDialog(title: string, label: string, value = '', okLabel =
       h(
         'div',
         { class: 'row end' },
-        h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'prompt-cancel' }, 'Cancel'),
+        h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'prompt-cancel' }, t('Cancel')),
         h('button', { type: 'submit', class: 'primary', 'data-testid': 'prompt-ok' }, okLabel),
       ),
     );

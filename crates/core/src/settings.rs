@@ -1,5 +1,6 @@
 //! Unencrypted user settings (`settings.json`). Unknown/missing fields fall back to defaults, so older
 //! and newer files both load.
+use crate::localshell::CustomProfile;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Write;
@@ -15,6 +16,9 @@ pub enum AutoPasswordMode {
     /// Never type or supply the password automatically.
     Off,
 }
+
+/// Interface languages the UI has catalogs for.
+pub const LANGUAGES: [&str; 8] = ["en", "ru", "es", "de", "fr", "pt-BR", "zh-CN", "ja"];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
@@ -49,6 +53,18 @@ pub struct Settings {
     pub monitor_enabled: bool,
     /// Milliseconds between load samples (100..60000).
     pub monitor_interval_ms: u32,
+    /// Interface language: "auto" (follow the system) or a code from `LANGUAGES`.
+    pub language: String,
+    /// Profiles of local shells defined by the user.
+    pub shell_profiles: Vec<CustomProfile>,
+    /// Tab opened at start: "home" or a shell profile id.
+    pub startup_profile: String,
+    /// Script files added by link (the files stay where they are).
+    pub script_links: Vec<String>,
+    /// Icons: "<kind>:<id>" -> built-in icon name or the file name of an imported icon.
+    pub icons: std::collections::BTreeMap<String, String>,
+    /// Where the tabs are shown: "top" or "left".
+    pub tabs_position: String,
 }
 
 impl Default for Settings {
@@ -73,6 +89,12 @@ impl Default for Settings {
             clone_mode: "ask".into(),
             monitor_enabled: true,
             monitor_interval_ms: 2000,
+            language: "auto".into(),
+            shell_profiles: Vec::new(),
+            startup_profile: "home".into(),
+            script_links: Vec::new(),
+            icons: Default::default(),
+            tabs_position: "top".into(),
         }
     }
 }
@@ -88,6 +110,17 @@ impl Settings {
         self.monitor_interval_ms = self.monitor_interval_ms.clamp(100, 60_000);
         if !["ask", "auto", "view"].contains(&self.clone_mode.as_str()) {
             self.clone_mode = "ask".into();
+        }
+        if !["top", "left"].contains(&self.tabs_position.as_str()) {
+            self.tabs_position = "top".into();
+        }
+        self.shell_profiles
+            .retain(|p| !p.id.is_empty() && !p.program.trim().is_empty());
+        self.shell_profiles.truncate(100);
+        self.script_links.retain(|p| !p.trim().is_empty());
+        self.script_links.dedup();
+        if self.language != "auto" && !LANGUAGES.contains(&self.language.as_str()) {
+            self.language = "auto".into();
         }
         self.scrollback = self.scrollback.clamp(100, 1_000_000);
         if !["bar", "block", "underline"].contains(&self.cursor_style.as_str()) {
@@ -222,5 +255,29 @@ mod interval_tests {
         std::fs::write(&p, b"{}").unwrap();
         assert_eq!(Settings::load(&p).monitor_interval_ms, 2000);
         std::fs::remove_dir_all(dir).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod language_tests {
+    use super::*;
+
+    #[test]
+    fn language_is_auto_by_default_and_unknown_codes_fall_back_to_auto() {
+        assert_eq!(Settings::default().language, "auto");
+        for code in LANGUAGES {
+            let s = Settings {
+                language: code.to_string(),
+                ..Settings::default()
+            }
+            .sanitized();
+            assert_eq!(s.language, code);
+        }
+        let s = Settings {
+            language: "klingon".into(),
+            ..Settings::default()
+        }
+        .sanitized();
+        assert_eq!(s.language, "auto");
     }
 }

@@ -1,7 +1,8 @@
-// Panes inside one SSH tab: "Terminal" plus one pane per open file, with a small strip on top
+// Panes inside one SSH tab: t("Terminal") plus one pane per open file, with a small strip on top
 // (shown only while there is more than one pane). Unsaved files are marked with a dot.
 import { clear, h } from './dom';
 import { icon } from './icons';
+import { t } from './i18n';
 
 interface Pane {
   id: string;
@@ -99,9 +100,9 @@ export class PaneSet {
         { class: 'pane-tab' + (p.id === this.activeId ? ' active' : ''), role: 'tab', 'data-testid': `pane-${p.id}`, 'data-dirty': p.dirty ? '1' : '0', onclick: () => this.activate(p.id) },
         p.id === 'term' || p.id.startsWith('dup:') ? icon('terminal', 13) : p.id === 'monitor' ? icon('activity', 13) : icon('file', 13),
         h('span', { class: 'pane-title' }, p.title),
-        p.dirty ? h('span', { class: 'dirty-dot', title: 'There are unsaved changes', 'data-testid': 'dirty-dot' }, '●') : null,
+        p.dirty ? h('span', { class: 'dirty-dot', title: t('There are unsaved changes'), 'data-testid': 'dirty-dot' }, '●') : null,
         p.closable
-          ? h('button', { class: 'pane-x', title: 'Close', 'data-testid': `pane-close-${p.id}`, onclick: (e) => (e.stopPropagation(), void this.close(p.id)) }, icon('close', 11))
+          ? h('button', { class: 'pane-x', title: t('Close'), 'data-testid': `pane-close-${p.id}`, onclick: (e) => (e.stopPropagation(), void this.close(p.id)) }, icon('close', 11))
           : null,
       );
       this.strip.append(b);
