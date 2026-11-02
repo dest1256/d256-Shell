@@ -446,6 +446,8 @@ impl Service {
             "set_settings" => self.set_settings(&params),
             "ssh_info" => Ok(self.ssh_info()),
             "shell_profiles" => Ok(self.shell_profiles()),
+            "lfs_list" => self.lfs_list(&params),
+            "lfs" => self.lfs(&params),
             "local_term_open" => self.local_term_open(&params),
             "scripts_list" => self.scripts_list(),
             "script_read" => self.script_read(&need("id")?),

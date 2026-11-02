@@ -1,6 +1,7 @@
 //! Local features of the service: shell profiles, scripts (own files and links), notes (in the vault), icons.
 //! Nothing here touches a server.
 use super::{new_id, now, ApiError, Service};
+use crate::localfs;
 use crate::localshell::{self, ShellProfile};
 use crate::sftp::codec;
 use crate::vault::Note;
@@ -117,6 +118,10 @@ impl Service {
 
     /// Resolve "own:<name>" / "link:<path>" to a file path (own scripts never leave the scripts folder).
     fn script_path(&self, id: &str) -> Result<PathBuf, ApiError> {
+        // any file chosen in the local explorer (read and write only; it is not a script of the list)
+        if let Some(p) = id.strip_prefix("file:") {
+            return localfs::real_path(p, cfg!(windows)).map_err(|m| ApiError::new("invalid", m));
+        }
         if let Some(name) = id.strip_prefix("own:") {
             let n = valid_script_name(name)?;
             return Ok(self.dirs.scripts().join(n));
@@ -245,6 +250,9 @@ impl Service {
     }
 
     pub(super) fn script_delete(&self, id: &str) -> Result<Value, ApiError> {
+        if id.starts_with("file:") {
+            return Err(ApiError::new("invalid", "Unknown script."));
+        }
         if let Some(path) = id.strip_prefix("link:") {
             // a link: only the entry goes, never the file
             let mut s = self.settings_snapshot();
@@ -310,6 +318,9 @@ impl Service {
             .get("id")
             .and_then(Value::as_str)
             .ok_or_else(|| ApiError::new("invalid", "Missing parameter id"))?;
+        if id.starts_with("file:") {
+            return Err(ApiError::new("invalid", "Unknown script."));
+        }
         let path = self.script_path(id)?;
         if !path.is_file() {
             return Err(ApiError::new("not_found", "The script file was not found."));
@@ -327,6 +338,79 @@ impl Service {
             .map(|p| p.to_string_lossy().into_owned())
             .unwrap_or_default();
         self.open_local(&program, args, &cwd, params)
+    }
+
+    // ------------------------------------------------------------ local explorer
+
+    pub(super) fn lfs_list(&self, params: &Value) -> Result<Value, ApiError> {
+        let path = params.get("path").and_then(Value::as_str);
+        localfs::list(path)
+            .map(|(p, entries)| json!({ "path": p, "entries": entries }))
+            .map_err(|m| ApiError::new("io", m))
+    }
+
+    pub(super) fn lfs(&self, params: &Value) -> Result<Value, ApiError> {
+        let s = |k: &str| params.get(k).and_then(Value::as_str).map(str::to_owned);
+        let need = |k: &str| {
+            s(k).ok_or_else(|| ApiError::new("invalid", format!("Missing parameter {k}")))
+        };
+        let fail = |m: String| ApiError::new("io", m);
+        let paths: Vec<String> = params
+            .get("paths")
+            .and_then(Value::as_array)
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(str::to_owned))
+                    .collect()
+            })
+            .unwrap_or_default();
+        let op = need("op")?;
+        match op.as_str() {
+            "mkdir" => localfs::mkdir(&need("parent")?, &need("name")?)
+                .map(|p| json!({ "path": p }))
+                .map_err(fail),
+            "touch" => localfs::create_file(&need("parent")?, &need("name")?)
+                .map(|p| json!({ "path": p }))
+                .map_err(fail),
+            "rename" => localfs::rename(&need("path")?, &need("name")?)
+                .map(|p| json!({ "path": p }))
+                .map_err(fail),
+            "count" => {
+                let (mut files, mut dirs) = (0, 0);
+                for p in &paths {
+                    let (f, d) = localfs::count_tree(p).map_err(fail)?;
+                    files += f;
+                    dirs += d;
+                }
+                Ok(json!({ "files": files, "dirs": dirs }))
+            }
+            "move" | "copy" | "delete" => {
+                let dest = if op == "delete" {
+                    String::new()
+                } else {
+                    need("dest")?
+                };
+                let (mut done, mut errors) = (Vec::new(), Vec::new());
+                for p in &paths {
+                    let r = match op.as_str() {
+                        "move" => localfs::move_entry(p, &dest),
+                        "copy" => localfs::copy_entry(p, &dest),
+                        _ => localfs::delete_entry(p).map(|_| p.clone()),
+                    };
+                    match r {
+                        Ok(n) => done.push(n),
+                        Err(m) => {
+                            errors.push(json!({ "path": p, "message": m }));
+                            if op == "delete" {
+                                break; // stop at the first error, as the SFTP explorer does
+                            }
+                        }
+                    }
+                }
+                Ok(json!({ "done": done, "errors": errors }))
+            }
+            _ => Err(ApiError::new("invalid", format!("Unknown operation: {op}"))),
+        }
     }
 
     // ------------------------------------------------------------ notes

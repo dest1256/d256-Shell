@@ -191,3 +191,9 @@ Author: dest1256.
 - **Icons:** `settings.icons` (`"server:<id>"`, `"profile:<id>"`, `"script:<id>"`, `"note:<id>"` → built-in glyph name or an imported file in `data/icons`; only plain file names written by `icon_import`, ≤ 1 MB, png/svg/jpg/webp/ico/gif). Vertical tabs: `settings.tabs_position = "left"` renders the open tabs in the side panel and hides the title-bar strip.
 - Behavior change: after the active tab is closed the home tab is activated properly, so the side panel is shown again.
 - Tests: 6 new integration tests (`local_features.rs`), 5 unit tests (`localshell.rs`) + 1 (settings), 8 new e2e tests (`language.spec.ts`, `local.spec.ts`).
+
+## 1.1.1: local explorer
+
+- `crates/core/src/localfs.rs` is the SFTP explorer's twin for this computer (`lfs_list`, `lfs` with mkdir/touch/rename/count/move/copy/delete); the UI's `Explorer` has a `local` flag and routes `listDir`/`fs` through `lfsList`/`lfs`. Paths cross the API as `/`-separated on every platform; on Windows they start with the drive (`/C:/Users/me`) and `/` lists the drives (conversion functions are unit-tested on Linux with Windows-style strings; the Windows file system code itself is **not verified** on a real Windows). Rules as remote: no overwriting, “(copy)” names, never into itself, links not followed, drive root/home/system folders refused.
+- A text file opens in `ScriptPane` with id `file:<path>`: `script_read`/`script_write` accept it (same codec), but `script_delete`/`script_run` refuse it (a test guards this).
+- Not in the first version: the terminal does not follow the explorer's folder (and vice versa), no chmod/transfers/drag-out, no drag-in from the file manager.

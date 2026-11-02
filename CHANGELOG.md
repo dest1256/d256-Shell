@@ -2,6 +2,14 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.1.1 — 2026-11-02
+A file explorer for local terminals.
+
+**Added**
+- **Local explorer:** a local terminal tab now has the file explorer of **this computer** on its left, just like an SSH tab has the SFTP explorer: list with hidden files, breadcrumbs and the “..” row, create, rename, copy, cut, paste, delete, properties, drag and drop inside the panel. On Windows the root shows the drives. A text file opens in the built-in editor (encoding, BOM and line endings are kept) and is saved with Ctrl+S.
+- Nothing is ever overwritten: a name clash is an error, a copy gets a new “name (copy)” name. The drive root, the home folder and the system folders cannot be deleted from the panel; a link is removed itself, never its target.
+- Not offered in the local explorer (they make no sense on one computer): upload, download and permissions.
+
 ## 1.1.0 — 2026-11-02
 One window for everything command-line: SSH sessions, local shells, scripts and notes, in eight languages.
 

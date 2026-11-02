@@ -431,3 +431,107 @@ fn icons_are_copied_into_data_and_served_as_data_urls() {
         .call("icon_import", json!({"path": big.to_string_lossy()}))
         .is_err());
 }
+
+#[cfg(unix)]
+#[test]
+fn local_explorer_lists_changes_and_edits_files_through_the_service() {
+    let (svc, _root) = service("lfs");
+    let base = tmp("lfs-area");
+    let b = base.to_string_lossy().into_owned();
+    std::fs::write(base.join("note.txt"), "hello\n").unwrap();
+    std::fs::write(base.join(".dot"), "").unwrap();
+
+    let l = call(&svc, "lfs_list", json!({"path": b}));
+    let names: Vec<&str> = l["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["name"].as_str().unwrap())
+        .collect();
+    assert!(
+        names.contains(&"note.txt") && names.contains(&".dot"),
+        "hidden files are listed: {names:?}"
+    );
+    // no path = the home folder
+    assert!(call(&svc, "lfs_list", json!({}))["path"]
+        .as_str()
+        .unwrap()
+        .starts_with('/'));
+    assert!(svc
+        .call("lfs_list", json!({"path": "/definitely/not/here"}))
+        .is_err());
+
+    let made = call(
+        &svc,
+        "lfs",
+        json!({"op": "mkdir", "parent": b, "name": "sub"}),
+    );
+    let sub = made["path"].as_str().unwrap().to_string();
+    assert!(svc
+        .call("lfs", json!({"op": "mkdir", "parent": b, "name": "sub"}))
+        .is_err());
+    call(
+        &svc,
+        "lfs",
+        json!({"op": "touch", "parent": sub, "name": "new.txt"}),
+    );
+    let r = call(
+        &svc,
+        "lfs",
+        json!({"op": "copy", "paths": [format!("{b}/note.txt")], "dest": sub}),
+    );
+    assert_eq!(r["errors"].as_array().unwrap().len(), 0);
+    let r = call(
+        &svc,
+        "lfs",
+        json!({"op": "copy", "paths": [format!("{b}/note.txt")], "dest": sub}),
+    );
+    assert!(r["done"][0].as_str().unwrap().ends_with("note (copy).txt"));
+    let c = call(&svc, "lfs", json!({"op": "count", "paths": [sub]}));
+    assert_eq!(
+        (c["files"].as_u64(), c["dirs"].as_u64()),
+        (Some(3), Some(1))
+    );
+    let r = call(
+        &svc,
+        "lfs",
+        json!({"op": "move", "paths": [format!("{b}/note.txt"), "/definitely/not/here"], "dest": sub}),
+    );
+    assert_eq!(
+        (
+            r["done"].as_array().unwrap().len(),
+            r["errors"].as_array().unwrap().len()
+        ),
+        (0, 2),
+        "note.txt already exists there"
+    );
+
+    // a text file is edited with the same codec as scripts (exact bytes)
+    let id = format!("file:{b}/note.txt");
+    let t = call(&svc, "script_read", json!({"id": id}));
+    assert_eq!(t["text"], "hello\n");
+    call(
+        &svc,
+        "script_write",
+        json!({"id": id, "text": "changed\n", "eol": t["eol"], "bom": t["bom"], "encoding": t["encoding"]}),
+    );
+    assert_eq!(
+        std::fs::read_to_string(base.join("note.txt")).unwrap(),
+        "changed\n"
+    );
+    assert!(
+        svc.call("script_delete", json!({"id": id})).is_err(),
+        "the explorer's files cannot be deleted through the script list"
+    );
+    assert!(base.join("note.txt").exists());
+
+    let r = call(&svc, "lfs", json!({"op": "delete", "paths": [sub]}));
+    assert_eq!(r["errors"].as_array().unwrap().len(), 0);
+    assert!(!base.join("sub").exists());
+    let r = call(&svc, "lfs", json!({"op": "delete", "paths": ["/etc"]}));
+    assert_eq!(
+        r["errors"].as_array().unwrap().len(),
+        1,
+        "system folders are refused"
+    );
+}

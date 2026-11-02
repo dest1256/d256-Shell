@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Bridge, startBridge } from '../fixtures';
-import { addServer, createVault, PASS } from '../helpers';
+import { addServer, createVault, PASS, row } from '../helpers';
 
 let bridge: Bridge;
 test.afterEach(async () => bridge?.stop());
@@ -198,4 +198,73 @@ test('tabs on the left and the shell that opens at start', async ({ page }) => {
   await page.screenshot({ path: 'screenshots/76-left-tabs.png' });
   await page.getByTestId('vtab-close-local1').click();
   await expect(page.getByTestId('vtab-local1')).toHaveCount(0);
+});
+
+test('local explorer: folders of this computer on the left of a local terminal, like the SFTP one', async ({ page }) => {
+  await start(page);
+  const dir = join(tmpdir(), `d256shell-e2e-lfs-${Date.now()}`);
+  mkdirSync(join(dir, 'sub'), { recursive: true });
+  writeFileSync(join(dir, 'a.txt'), 'first\n');
+  writeFileSync(join(dir, '.hidden'), 'h');
+
+  await page.getByTestId('rail-terminals').click();
+  await page.getByTestId('profile-item').first().click();
+  const ex = page.getByTestId('local-ex');
+  await expect(ex).toBeVisible();
+  // explorer on the left, terminal on the right
+  const exBox = (await ex.boundingBox())!;
+  const termBox = (await page.getByTestId('local-terminal').boundingBox())!;
+  expect(exBox.x + exBox.width).toBeLessThanOrEqual(termBox.x + 1);
+  // the SFTP-only actions are not offered
+  await expect(ex.getByTestId('upload')).toHaveCount(0);
+  await expect(ex.getByTestId('download')).toHaveCount(0);
+
+  await ex.getByTestId('path-input').fill(dir);
+  await ex.getByTestId('path-input').press('Enter');
+  await expect(ex.getByTestId('path-input')).toHaveValue(dir);
+  await expect(row(page, 'a.txt')).toBeVisible();
+  await expect(row(page, 'sub')).toBeVisible();
+  await expect(row(page, '.hidden')).toBeVisible(); // hidden files are shown (the toggle is on by default)
+
+  // create, rename, copy, paste
+  await ex.getByTestId('new-folder').click();
+  await page.getByTestId('prompt-input').fill('made');
+  await page.getByTestId('prompt-ok').click();
+  await expect(row(page, 'made')).toBeVisible();
+  expect(existsSync(join(dir, 'made'))).toBe(true);
+  await row(page, 'a.txt').click();
+  await page.keyboard.press('F2');
+  await page.getByTestId('prompt-input').fill('b.txt');
+  await page.getByTestId('prompt-ok').click();
+  await expect(row(page, 'b.txt')).toBeVisible();
+  expect(existsSync(join(dir, 'a.txt'))).toBe(false);
+  await page.keyboard.press('Control+c');
+  await page.keyboard.press('Control+v');
+  await expect(row(page, 'b (copy).txt')).toBeVisible();
+  expect(readFileSync(join(dir, 'b (copy).txt'), 'utf8')).toBe('first\n');
+
+  // open a text file in the built-in editor, change it, save
+  await row(page, 'b.txt').dblclick();
+  await expect(page.getByTestId('file-tab')).toBeVisible();
+  await page.locator('[data-testid="script-editor"] .cm-content').click();
+  await page.keyboard.press('Control+End');
+  await page.keyboard.type('second');
+  await page.keyboard.press('Control+s');
+  await expect(page.getByTestId('sc-status')).toHaveText('Saved');
+  expect(readFileSync(join(dir, 'b.txt'), 'utf8')).toBe('first\nsecond');
+  await expect(page.getByTestId('sc-run')).toHaveCount(0);
+  await page.screenshot({ path: 'screenshots/77-local-explorer-editor.png' });
+
+  // back to the terminal tab: delete with confirmation, the folder goes up with ".."
+  await page.getByTestId('tab-local1').click();
+  await row(page, 'made').click();
+  await page.keyboard.press('Delete');
+  await page.getByTestId('confirm-ok').click();
+  await expect(row(page, 'made')).toHaveCount(0);
+  expect(existsSync(join(dir, 'made'))).toBe(false);
+  await row(page, 'sub').dblclick();
+  await expect(ex.getByTestId('path-input')).toHaveValue(join(dir, 'sub'));
+  await ex.getByTestId('up').click();
+  await expect(ex.getByTestId('path-input')).toHaveValue(dir);
+  await page.screenshot({ path: 'screenshots/78-local-explorer.png' });
 });

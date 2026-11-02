@@ -169,11 +169,75 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
         renderTabs();
       },
     }, { testid: 'local-terminal', local });
-    tab.view.append(h('div', { class: 'term-col' }, term.el));
+    // the explorer of THIS computer on the left, like the SFTP explorer of an SSH tab
+    const explorer = new Explorer('local', {
+      onOpenFile: (path) => void openLocalFile(path),
+      onNewFile: (path) => void createLocalFile(path),
+    }, true);
+    const exWrap = h('div', { class: 'session-ex', 'data-testid': 'local-ex' }, explorer.el);
+    const savedW = Number(pref.get('explorer-width'));
+    exWrap.style.width = `${savedW >= 240 && savedW <= 900 ? savedW : 360}px`;
+    const split = h('div', { class: 'splitter', role: 'separator', 'aria-orientation': 'vertical', 'data-testid': 'local-ex-splitter' });
+    split.addEventListener('pointerdown', (e) => {
+      const x0 = e.clientX;
+      const w0 = exWrap.getBoundingClientRect().width;
+      split.setPointerCapture(e.pointerId);
+      const move = (ev: PointerEvent) => (exWrap.style.width = `${Math.min(900, Math.max(240, w0 + ev.clientX - x0))}px`);
+      const up = () => {
+        split.removeEventListener('pointermove', move);
+        split.removeEventListener('pointerup', up);
+        pref.set('explorer-width', String(Math.round(exWrap.getBoundingClientRect().width)));
+      };
+      split.addEventListener('pointermove', move);
+      split.addEventListener('pointerup', up);
+    });
+    tab.view.append(exWrap, split, h('div', { class: 'session-term' }, h('div', { class: 'term-col' }, term.el)));
     tab.onShow = () => term.show();
     tab.dispose = () => term.dispose();
     addLocalTab(tab);
     requestAnimationFrame(() => void term.start());
+    void explorer.load();
+  }
+
+  /** A file chosen in the local explorer opens in the built-in editor (same codec as the remote editor). */
+  async function openLocalFile(path: string): Promise<void> {
+    const id = 'localfile:' + path;
+    if (tabs.some((x) => x.id === id)) return activate(id);
+    const name = path.slice(path.lastIndexOf('/') + 1);
+    const item: ScriptItem = { id: 'file:' + path, name, ext: name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '', kind: 'file', path, exists: true };
+    const tab: Tab = { id, title: name, icon: 'file', closable: true, view: h('div', { class: 'session editor-tab', 'data-testid': 'file-tab' }) };
+    const pane = new ScriptPane(
+      item,
+      {
+        onDirty: (d) => {
+          tab.title = d ? name + ' ●' : name;
+          renderTabs();
+        },
+        onClose: () => void closeTab(id),
+      },
+      () => undefined,
+    );
+    try {
+      await pane.load();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
+      return;
+    }
+    tab.view.append(pane.el);
+    tab.dirty = () => pane.dirty;
+    tab.onShow = () => pane.focus();
+    addLocalTab(tab);
+    pane.focus();
+  }
+
+  async function createLocalFile(path: string): Promise<void> {
+    const i = path.lastIndexOf('/');
+    try {
+      await api.lfs('touch', { parent: path.slice(0, i) || '/', name: path.slice(i + 1) });
+    } catch (e) {
+      return void toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
+    }
+    await openLocalFile(path);
   }
   function openTerminal(p: ShellProfile): void {
     localTerminal(p.name, iconKey('profile', p.id), { profile: p.id }, 'local-tab');

@@ -119,6 +119,8 @@ export class Explorer {
   constructor(
     private sessionId: string,
     private hooks: ExplorerHooks = {},
+    /** The folders of THIS computer instead of a server (no transfers, no permissions). */
+    private local = false,
   ) {
     const btn = (name: string, title: string, testid: string, fn: () => void) =>
       h('button', { class: 'icon-btn', title, 'aria-label': title, 'data-testid': testid, onclick: fn }, icon(name, 15));
@@ -170,8 +172,8 @@ export class Explorer {
         { class: 'ex-bar ex-actions' },
         btn('folder-plus', t('New folder (Ctrl+Shift+N)'), 'new-folder', () => void this.newFolder()),
         btn('file-plus', t('New file (Ctrl+N)'), 'new-file', () => void this.newFile()),
-        btn('upload', t('Upload files to the server…'), 'upload', () => void this.uploadHere('files')),
-        btn('download', t('Download selected…'), 'download', () => void this.downloadSelected()),
+        this.local ? null : btn('upload', t('Upload files to the server…'), 'upload', () => void this.uploadHere('files')),
+        this.local ? null : btn('download', t('Download selected…'), 'download', () => void this.downloadSelected()),
       ),
       this.crumbs,
       this.banner,
@@ -211,7 +213,7 @@ export class Explorer {
     const my = ++this.seq;
     this.el.classList.add('loading');
     try {
-      const l = await this.retrying(() => api.listDir(this.sessionId, path));
+      const l = await this.retrying(() => (this.local ? api.lfsList(path) : api.listDir(this.sessionId, path)));
       if (my !== this.seq) return;
       this.path = l.path;
       this.entries = l.entries;
@@ -467,6 +469,11 @@ export class Explorer {
     }
   }
 
+  /** A file operation on the server (SFTP) or, in a local explorer, on this computer. */
+  private fsx<T>(op: string, params: Record<string, unknown> = {}): Promise<T> {
+    return this.local ? api.lfs<T>(op, params) : api.fs<T>(this.sessionId, op, params);
+  }
+
   private async run<T>(fn: () => Promise<T>): Promise<T | null> {
     try {
       return await this.retrying(fn);
@@ -488,7 +495,7 @@ export class Explorer {
   async newFolder(): Promise<void> {
     const name = await promptDialog(t('New folder'), t('Folder name'), t('New folder'));
     if (!name) return;
-    const r = await this.run(() => api.fs<{ path: string }>(this.sessionId, 'mkdir', { parent: this.path, name: name.trim() }));
+    const r = await this.run(() => this.fsx<{ path: string }>('mkdir', { parent: this.path, name: name.trim() }));
     if (r) await this.reloadSelect(r.path);
   }
 
@@ -507,7 +514,7 @@ export class Explorer {
     const dot = e.kind === 'file' ? e.name.lastIndexOf('.') : -1;
     const name = await promptDialog(t('Rename'), t('New name'), e.name, t('Rename'), [0, dot > 0 ? dot : e.name.length]);
     if (!name || name === e.name) return;
-    const r = await this.run(() => api.fs<{ path: string }>(this.sessionId, 'rename', { path: this.join(e.name), name: name.trim() }));
+    const r = await this.run(() => this.fsx<{ path: string }>('rename', { path: this.join(e.name), name: name.trim() }));
     if (r) await this.reloadSelect(r.path);
   }
 
@@ -516,13 +523,13 @@ export class Explorer {
     if (!list.length) return;
     const paths = list.map((e) => this.join(e.name));
     // count first: what exactly is about to disappear
-    const c = await this.run(() => api.fs<{ files: number; dirs: number }>(this.sessionId, 'count', { paths }));
+    const c = await this.run(() => this.fsx<{ files: number; dirs: number }>('count', { paths }));
     if (!c) return;
     const examples = list.slice(0, 5).map((e) => paths[list.indexOf(e)]).join('\n') + (list.length > 5 ? t('\n… plus {0}', list.length - 5) : '');
     const stat = `${c.files} ${c.files === 1 ? 'file' : 'files'}${c.dirs ? `, ${c.dirs} ${c.dirs === 1 ? 'folder' : 'folders'}` : ''}`;
     const text = t('Permanently deleted on the server: {0}.\n\n{1}', stat, examples);
     if (!(await confirmDialog(t('Delete?'), text, t('Delete'), true))) return;
-    const r = await this.run(() => api.fs<BatchResult>(this.sessionId, 'delete', { paths }));
+    const r = await this.run(() => this.fsx<BatchResult>('delete', { paths }));
     if (r) {
       this.report(t('Deleting'), r);
       await this.load(this.path);
@@ -544,7 +551,7 @@ export class Explorer {
       return;
     }
     const paths = c.names.map((n) => (c.dir === '/' ? `/${n}` : `${c.dir}/${n}`));
-    const r = await this.run(() => api.fs<BatchResult>(this.sessionId, c.cut ? 'move' : 'copy', { paths, dest }));
+    const r = await this.run(() => this.fsx<BatchResult>(c.cut ? 'move' : 'copy', { paths, dest }));
     if (!r) return;
     this.report(c.cut ? t('Moving') : t('Copying'), r);
     if (c.cut && !r.errors.length) Explorer.clipboard = null;
@@ -558,7 +565,7 @@ export class Explorer {
     if (!e) return;
     const r0 = await chmodDialog(e.name, isDirLike(e), e.mode);
     if (!r0) return;
-    const r = await this.run(() => api.fs<{ changed: number }>(this.sessionId, 'chmod', { path: this.join(e.name), mode: r0.mode, recursive: r0.recursive, files: r0.files, dirs: r0.dirs }));
+    const r = await this.run(() => this.fsx<{ changed: number }>('chmod', { path: this.join(e.name), mode: r0.mode, recursive: r0.recursive, files: r0.files, dirs: r0.dirs }));
     if (r) {
       if (r0.recursive) toast(t('Permissions changed: {0}.', r.changed));
       await this.reloadSelect(this.join(e.name));
@@ -616,15 +623,15 @@ export class Explorer {
       const dirOne = one && isDirLike(sel[0]);
       if (dirOne) items.push([t('Open'), 'Enter', 'folder', true, () => this.open(sel[0])]);
       if (isFile) items.push([t('Edit'), 'Enter', 'edit', true, () => this.open(sel[0])]);
-      items.push([t('Download…'), '', 'download', true, () => void this.downloadSelected()]);
-      if (dirOne) items.push([t('Upload here…'), '', 'upload', true, () => void this.uploadHere('files', this.join(sel[0].name))]);
+      if (!this.local) items.push([t('Download…'), '', 'download', true, () => void this.downloadSelected()]);
+      if (dirOne && !this.local) items.push([t('Upload here…'), '', 'upload', true, () => void this.uploadHere('files', this.join(sel[0].name))]);
       items.push(null);
       items.push([t('Copy'), 'Ctrl+C', 'copy', true, () => this.copySelected(false)]);
       items.push([t('Cut'), 'Ctrl+X', 'cut', true, () => this.copySelected(true)]);
       if (dirOne) items.push([t('Paste into folder'), '', 'paste', hasClip, () => void this.paste(this.join(sel[0].name))]);
       items.push(null);
       items.push([t('Rename'), 'F2', 'rename', one, () => void this.renameSelected()]);
-      items.push([t('Permissions…'), '', 'key', one, () => void this.chmodSelected()]);
+      if (!this.local) items.push([t('Permissions…'), '', 'key', one, () => void this.chmodSelected()]);
       items.push([t('Copy path'), '', 'link', one, () => void this.copyPath()]);
       items.push([t('Properties'), '', 'info', one, () => void propertiesDialog(this.join(sel[0].name), sel[0])]);
       items.push(null);
@@ -632,8 +639,8 @@ export class Explorer {
     } else {
       items.push([t('New folder'), 'Ctrl+Shift+N', 'folder-plus', true, () => void this.newFolder()]);
       items.push([t('New file'), 'Ctrl+N', 'file-plus', true, () => void this.newFile()]);
-      items.push([t('Upload files…'), '', 'upload', true, () => void this.uploadHere('files')]);
-      items.push([t('Upload folder…'), '', 'upload', true, () => void this.uploadHere('folder')]);
+      if (!this.local) items.push([t('Upload files…'), '', 'upload', true, () => void this.uploadHere('files')]);
+      if (!this.local) items.push([t('Upload folder…'), '', 'upload', true, () => void this.uploadHere('folder')]);
       items.push([t('Paste'), 'Ctrl+V', 'paste', hasClip, () => void this.paste()]);
       items.push(null);
       items.push([t('Copy path'), '', 'link', true, () => void this.copyPath()]);
@@ -730,7 +737,7 @@ export class Explorer {
       drop: (paths, x, y) => {
         clearMarks();
         const { inst, mark } = target(x, y);
-        if (!inst) return;
+        if (!inst || inst.local) return;
         void inst.upload(paths, mark ? inst.destOf(mark) : inst.path);
       },
     });
@@ -789,7 +796,7 @@ export class Explorer {
             target = el;
             el.classList.add('drop-target');
           }
-        } else if (!outside && native.isTauri) {
+        } else if (!outside && native.isTauri && !this.local) {
           outside = true;
           cleanup();
           void this.beginDragOut(names);
@@ -843,7 +850,7 @@ export class Explorer {
       if (r.remember) Explorer.noAskMove.add(this.sessionId);
     }
     const paths = names.map((n) => this.join(n));
-    const res = await this.run(() => api.fs<BatchResult>(this.sessionId, 'move', { paths, dest }));
+    const res = await this.run(() => this.fsx<BatchResult>('move', { paths, dest }));
     if (res) {
       this.report(t('Moving'), res);
       await this.load(this.path);
