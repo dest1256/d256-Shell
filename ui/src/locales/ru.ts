@@ -623,5 +623,8 @@ const catalog: Record<string, string> = {
   "Notes are encrypted in the vault together with your passwords. Name them as you like.": "Заметки шифруются в хранилище вместе с вашими паролями. Называйте их как хотите.",
   "Close the tab?": "Закрыть вкладку?",
   "Open tabs": "Открытые вкладки",
+  "Edit the script": "Изменить скрипт",
+  "Run a copy in a new tab": "Запустить копию в новой вкладке",
+  "The programs running in “{0}” will be interrupted.{1}": "Программы, запущенные в «{0}», будут прерваны.{1}",
 };
 export default catalog;

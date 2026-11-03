@@ -122,6 +122,7 @@ export interface Settings {
   shell_profiles: CustomProfile[];
   startup_profile: string;
   script_links: string[];
+  script_names: Record<string, string>;
   icons: Record<string, string>;
   tabs_position: string;
   paste_warn_lines: number;

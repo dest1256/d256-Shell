@@ -47,6 +47,8 @@ interface Tab {
   dirty?: () => boolean;
   /** A local shell, script or note (no remote session: closing needs no connection warning). */
   local?: boolean;
+  /** Script id of a run tab (a click on the script switches to it while it runs). */
+  runKey?: string;
   /** Open a live copy of the terminal (same server, new shell, previous output shown above). */
   duplicate?: () => void | Promise<void>;
 }
@@ -117,7 +119,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     const tab = tabs.find((x) => x.id === id);
     if (!tab || !tab.closable) return;
     const unsaved = tab.dirty?.() ? ' ' + t('There are UNSAVED changes in open files, they will be lost.') : '';
-    if (((tab.state !== 'off' && !tab.local) || unsaved) && !(await confirmDialog(tab.local ? t('Close the tab?') : t('Close the session?'), t('Connection to “{0}” will be closed and the programs running in it will be interrupted.{1}', tab.title, unsaved), t('Close'), true))) return;
+    if (((tab.state ?? 'off') !== 'off' || unsaved) && !(await confirmDialog(tab.local ? t('Close the tab?') : t('Close the session?'), tab.local ? t('The programs running in “{0}” will be interrupted.{1}', tab.title, unsaved) : t('Connection to “{0}” will be closed and the programs running in it will be interrupted.{1}', tab.title, unsaved), t('Close'), true))) return;
     tab.dispose?.();
     for (const s of tab.sessions ?? []) void api.disconnect(s).catch(() => undefined);
     tab.view.remove();
@@ -138,7 +140,8 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   const sectionCtx = {
     openTerminal: (p: ShellProfile) => openTerminal(p),
     openScript: (it: ScriptItem) => void openScriptTab(it),
-    runScript: (it: ScriptItem) => openRunTab(it),
+    runScript: (it: ScriptItem, copy = false) => openRunTab(it, copy),
+    retitle: (sid: string) => retitleScript(sid),
     openNote: (id?: string) => void openNoteTab(id),
     closeTabs: (prefix: string) => {
       for (const tb of [...tabs]) if (tb.id.startsWith(prefix)) dropTab(tb);
@@ -158,9 +161,9 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     activate(tab.id);
   }
 
-  function localTerminal(title: string, key: string | undefined, local: { profile?: string; script?: string }, testid: string): void {
+  function localTerminal(title: string, key: string | undefined, local: { profile?: string; script?: string }, testid: string, runKey?: string): void {
     const id = `local${++localCounter}`;
-    const tab: Tab = { id, title, icon: 'terminal', iconKey: key, closable: true, state: 'busy', view: h('div', { class: 'session', 'data-testid': testid }) };
+    const tab: Tab = { id, title, icon: 'terminal', iconKey: key, closable: true, state: 'busy', runKey, view: h('div', { class: 'session', 'data-testid': testid }) };
     const term = new TerminalView('', undefined, {
       onClose: () => void closeTab(id),
       onState: (st) => {
@@ -170,6 +173,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       },
     }, { testid: 'local-terminal', local });
     // the explorer of THIS computer on the left, like the SFTP explorer of an SSH tab
+    const panes = new PaneSet();
     const explorer = new Explorer('local', {
       onOpenFile: (path) => void openLocalFile(path),
       onNewFile: (path) => void createLocalFile(path),
@@ -191,70 +195,88 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       split.addEventListener('pointermove', move);
       split.addEventListener('pointerup', up);
     });
-    tab.view.append(exWrap, split, h('div', { class: 'session-term' }, h('div', { class: 'term-col' }, term.el)));
-    tab.onShow = () => term.show();
-    tab.dispose = () => term.dispose();
+    panes.add({ id: 'term', title: t('Terminal'), view: h('div', { class: 'session-term' }, h('div', { class: 'term-col' }, term.el)), closable: false, onShow: () => term.show() });
+    tab.view.append(exWrap, split, panes.el);
+    tab.onShow = () => panes.activate(panes.active || 'term');
+    tab.dispose = () => {
+      term.dispose();
+      panes.disposeAll();
+    };
+    tab.dirty = () => panes.anyDirty();
     addLocalTab(tab);
     requestAnimationFrame(() => void term.start());
     void explorer.load();
+
+    /** A file chosen in the local explorer opens in the built-in editor (same codec as the remote editor). */
+    async function openLocalFile(path: string): Promise<void> {
+      const pid = 'f:' + path;
+      if (panes.has(pid)) return panes.activate(pid);
+      const name = path.slice(path.lastIndexOf('/') + 1);
+      const item: ScriptItem = { id: 'file:' + path, name, ext: name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '', kind: 'file', path, exists: true };
+      const ed = new ScriptPane(item, { onDirty: (d) => panes.setDirty(pid, d), onClose: () => void panes.close(pid) }, () => undefined);
+      try {
+        await ed.load();
+      } catch (e) {
+        toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
+        return;
+      }
+      panes.add({
+        id: pid,
+        title: name,
+        view: ed.el,
+        closable: true,
+        onShow: () => ed.focus(),
+        beforeClose: async () => !ed.dirty || (await confirmDialog(t('Close without saving?'), t('“{0}” has unsaved changes. They will be lost.', path), t('Close'), true)),
+      });
+      ed.focus();
+    }
+
+    async function createLocalFile(path: string): Promise<void> {
+      const i = path.lastIndexOf('/');
+      try {
+        await api.lfs('touch', { parent: path.slice(0, i) || '/', name: path.slice(i + 1) });
+      } catch (e) {
+        return void toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
+      }
+      await openLocalFile(path);
+    }
   }
 
-  /** A file chosen in the local explorer opens in the built-in editor (same codec as the remote editor). */
-  async function openLocalFile(path: string): Promise<void> {
-    const id = 'localfile:' + path;
-    if (tabs.some((x) => x.id === id)) return activate(id);
-    const name = path.slice(path.lastIndexOf('/') + 1);
-    const item: ScriptItem = { id: 'file:' + path, name, ext: name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '', kind: 'file', path, exists: true };
-    const tab: Tab = { id, title: name, icon: 'file', closable: true, view: h('div', { class: 'session editor-tab', 'data-testid': 'file-tab' }) };
-    const pane = new ScriptPane(
-      item,
-      {
-        onDirty: (d) => {
-          tab.title = d ? name + ' ●' : name;
-          renderTabs();
-        },
-        onClose: () => void closeTab(id),
-      },
-      () => undefined,
-    );
-    try {
-      await pane.load();
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
-      return;
-    }
-    tab.view.append(pane.el);
-    tab.dirty = () => pane.dirty;
-    tab.onShow = () => pane.focus();
-    addLocalTab(tab);
-    pane.focus();
-  }
-
-  async function createLocalFile(path: string): Promise<void> {
-    const i = path.lastIndexOf('/');
-    try {
-      await api.lfs('touch', { parent: path.slice(0, i) || '/', name: path.slice(i + 1) });
-    } catch (e) {
-      return void toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
-    }
-    await openLocalFile(path);
-  }
   function openTerminal(p: ShellProfile): void {
     localTerminal(p.name, iconKey('profile', p.id), { profile: p.id }, 'local-tab');
   }
-  function openRunTab(it: ScriptItem): void {
-    localTerminal(it.name, iconKey('script', it.id), { script: it.id }, 'run-tab');
+  const scriptTitle = (it: ScriptItem) => getSettings().script_names[it.id] || it.name;
+  function openRunTab(it: ScriptItem, copy = false): void {
+    scriptCache.set(it.id, it);
+    if (!copy) {
+      const live = tabs.find((x) => x.runKey === it.id && x.state !== 'off');
+      if (live) return activate(live.id); // running: show it
+      const ended = tabs.find((x) => x.runKey === it.id);
+      if (ended) dropTab(ended); // finished: the new run replaces it
+    }
+    localTerminal(scriptTitle(it), iconKey('script', it.id), { script: it.id }, 'run-tab', it.id);
   }
+  function retitleScript(sid: string): void {
+    for (const tb of tabs) {
+      if (tb.runKey === sid || tb.id === 'script:' + sid) {
+        const sc = scriptCache.get(sid);
+        if (sc) tb.title = tb.dirty?.() ? scriptTitle(sc) + ' ●' : scriptTitle(sc);
+      }
+    }
+    renderTabs();
+  }
+  const scriptCache = new Map<string, ScriptItem>();
 
   async function openScriptTab(it: ScriptItem): Promise<void> {
     const id = 'script:' + it.id;
+    scriptCache.set(it.id, it);
     if (tabs.some((x) => x.id === id)) return activate(id);
-    const tab: Tab = { id, title: it.name, icon: 'script', iconKey: iconKey('script', it.id), closable: true, view: h('div', { class: 'session editor-tab', 'data-testid': 'script-tab' }) };
+    const tab: Tab = { id, title: scriptTitle(it), icon: 'script', iconKey: iconKey('script', it.id), closable: true, view: h('div', { class: 'session editor-tab', 'data-testid': 'script-tab' }) };
     const pane = new ScriptPane(
       it,
       {
         onDirty: (d) => {
-          tab.title = d ? it.name + ' ●' : it.name;
+          tab.title = d ? scriptTitle(it) + ' ●' : scriptTitle(it);
           renderTabs();
         },
         onClose: () => void closeTab(id),
@@ -722,7 +744,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   const railBtns = new Map<SectionName, HTMLElement>();
   const rail = h('nav', { class: 'rail', 'aria-label': t('Sections') });
   const railBtn = (name: SectionName, title: string, glyph: string) => {
-    const b = h('button', { class: 'rail-btn', title, 'aria-label': title, 'data-testid': `rail-${name}`, onclick: () => showSection(name) }, icon(glyph, 20));
+    const b = h('button', { class: 'rail-btn', title, 'aria-label': title, 'data-testid': `rail-${name}`, onclick: () => (name === section ? toggleSidebar() : showSection(name)) }, icon(glyph, 20));
     railBtns.set(name, b);
     rail.append(b);
   };

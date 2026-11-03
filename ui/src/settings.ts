@@ -23,6 +23,7 @@ const DEFAULTS: Settings = {
   shell_profiles: [],
   startup_profile: 'home',
   script_links: [],
+  script_names: {},
   icons: {},
   tabs_position: 'top',
   paste_warn_lines: 2,

@@ -35,17 +35,21 @@ test('terminals: local shells are listed and open in a tab next to the SSH sessi
   // the home page now shows the shells too, and only shells
   await expect(page.getByTestId('home-terminals')).toBeVisible();
   await expect(page.getByTestId('server-item')).toHaveCount(0);
-  await items.first().click();
+  await items.first().dblclick(); // a double click opens
   await expect(page.getByTestId('tab-local1')).toBeVisible();
   await page.getByTestId('local-terminal').click();
   await page.keyboard.type('echo local-$((20+22))');
   await page.keyboard.press('Enter');
   await waitFor(page, 'local-42');
   await page.screenshot({ path: 'screenshots/71-local-terminal.png' });
-  // closing a local shell needs no "connection will be closed" question
+  // a single click only selects; closing a running shell asks, like an SSH tab
   await page.getByTestId('tab-close-local1').click();
+  await expect(page.getByTestId('confirm')).toBeVisible();
+  await page.getByTestId('confirm-cancel').click();
+  await expect(page.getByTestId('tab-local1')).toBeVisible();
+  await page.getByTestId('tab-close-local1').click();
+  await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('tab-local1')).toHaveCount(0);
-  await expect(page.getByTestId('confirm')).toHaveCount(0);
 
   // an own profile from Settings-like dialog
   await page.getByTestId('profiles-edit').click();
@@ -54,7 +58,7 @@ test('terminals: local shells are listed and open in a tab next to the SSH sessi
   await page.getByTestId('prof-prog-0').fill('/bin/sh');
   await page.getByTestId('prof-save').click();
   await expect(items.filter({ hasText: 'My sh' })).toBeVisible();
-  await items.filter({ hasText: 'My sh' }).click();
+  await items.filter({ hasText: 'My sh' }).dblclick();
   await page.getByTestId('local-terminal').click();
   await page.keyboard.type('echo mine-$((1+1))');
   await page.keyboard.press('Enter');
@@ -197,6 +201,7 @@ test('tabs on the left and the shell that opens at start', async ({ page }) => {
   await expect(page.getByTestId('home')).toBeVisible();
   await page.screenshot({ path: 'screenshots/76-left-tabs.png' });
   await page.getByTestId('vtab-close-local1').click();
+  await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('vtab-local1')).toHaveCount(0);
 });
 
@@ -208,7 +213,7 @@ test('local explorer: folders of this computer on the left of a local terminal, 
   writeFileSync(join(dir, '.hidden'), 'h');
 
   await page.getByTestId('rail-terminals').click();
-  await page.getByTestId('profile-item').first().click();
+  await page.getByTestId('profile-item').first().dblclick();
   const ex = page.getByTestId('local-ex');
   await expect(ex).toBeVisible();
   // explorer on the left, terminal on the right
@@ -245,7 +250,9 @@ test('local explorer: folders of this computer on the left of a local terminal, 
 
   // open a text file in the built-in editor, change it, save
   await row(page, 'b.txt').dblclick();
-  await expect(page.getByTestId('file-tab')).toBeVisible();
+  // the file opens as a pane of the same tab (Terminal | b.txt), like in an SSH tab
+  await expect(page.locator('[data-testid^="pane-f:"]')).toBeVisible();
+  await expect(page.locator('[data-testid^="tab-localfile"]')).toHaveCount(0);
   await page.locator('[data-testid="script-editor"] .cm-content').click();
   await page.keyboard.press('Control+End');
   await page.keyboard.type('second');
@@ -256,7 +263,7 @@ test('local explorer: folders of this computer on the left of a local terminal, 
   await page.screenshot({ path: 'screenshots/77-local-explorer-editor.png' });
 
   // back to the terminal tab: delete with confirmation, the folder goes up with ".."
-  await page.getByTestId('tab-local1').click();
+  await page.getByTestId('pane-term').click();
   await row(page, 'made').click();
   await page.keyboard.press('Delete');
   await page.getByTestId('confirm-ok').click();
@@ -267,4 +274,64 @@ test('local explorer: folders of this computer on the left of a local terminal, 
   await ex.getByTestId('up').click();
   await expect(ex.getByTestId('path-input')).toHaveValue(dir);
   await page.screenshot({ path: 'screenshots/78-local-explorer.png' });
+});
+
+test('scripts: a click runs the script or switches to its running tab; edit, run a copy, rename', async ({ page }) => {
+  await start(page);
+  await rpc(page, 'script_create', { name: 'svc.sh', text: 'echo running-here; sleep 60\n' });
+  await page.getByTestId('rail-scripts').click();
+  const item = page.getByTestId('script-item').filter({ hasText: 'svc.sh' });
+
+  // rename: any name; the file name stays visible underneath
+  await item.hover();
+  await item.getByTestId('script-rename').click();
+  await page.getByTestId('prompt-input').fill('My service');
+  await page.getByTestId('prompt-ok').click();
+  const named = page.getByTestId('script-item').filter({ hasText: 'My service' });
+  await expect(named).toBeVisible();
+  await expect(named).toContainText('svc.sh');
+  await expect.poll(async () => ((await rpc(page, 'get_settings')) as { script_names: Record<string, string> }).script_names['own:svc.sh']).toBe('My service');
+
+  // a click starts it
+  await named.locator('.srv-name').click();
+  await expect(page.getByTestId('tab-local1')).toContainText('My service');
+  await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('[data-testid="local-terminal"]')].map((e) => { const t = (e as unknown as { __term: XTerm }).__term.buffer.active; let s = ''; for (let i = 0; i < t.length; i++) s += t.getLine(i)?.translateToString(true) + '\n'; return s; }).join('|')), { timeout: 20_000 }).toContain('running-here');
+
+  // a second click does NOT start another one: it switches to the running tab
+  await page.getByTestId('tab-home').click();
+  await page.getByTestId('script-item').filter({ hasText: 'My service' }).locator('.srv-name').click();
+  await expect(page.getByTestId('tab-local1')).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-testid^="tab-local"]')).toHaveCount(1);
+
+  // "run a copy" starts a second one
+  await page.getByTestId('rail-scripts').click();
+  const row2 = page.getByTestId('script-item').filter({ hasText: 'My service' });
+  await row2.hover();
+  await row2.getByTestId('script-run-copy').click();
+  await expect(page.getByTestId('tab-local2')).toContainText('My service');
+
+  // edit opens the editor and does not run anything
+  await page.getByTestId('rail-scripts').click();
+  await row2.hover();
+  await row2.getByTestId('script-edit').click();
+  await expect(page.getByTestId('script-editor')).toBeVisible();
+  await expect(page.locator('[data-testid^="tab-local"]')).toHaveCount(2);
+  await page.screenshot({ path: 'screenshots/79-script-run-edit.png' });
+});
+
+test('panel: a click on the active rail icon folds and unfolds the panel, another icon switches', async ({ page }) => {
+  await start(page);
+  const side = page.getByTestId('sidebar');
+  await expect(side).toBeVisible();
+  await page.getByTestId('rail-scripts').click(); // inactive: switches and shows
+  await expect(page.getByTestId('section-scripts')).toBeVisible();
+  await page.getByTestId('rail-scripts').click(); // active: folds
+  await expect(side).toBeHidden();
+  await page.getByTestId('rail-scripts').click(); // active again: unfolds
+  await expect(side).toBeVisible();
+  await page.getByTestId('rail-scripts').click();
+  await expect(side).toBeHidden();
+  await page.getByTestId('rail-notes').click(); // another icon: switches AND unfolds
+  await expect(side).toBeVisible();
+  await expect(page.getByTestId('section-notes')).toBeVisible();
 });

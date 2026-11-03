@@ -61,6 +61,8 @@ pub struct Settings {
     pub startup_profile: String,
     /// Script files added by link (the files stay where they are).
     pub script_links: Vec<String>,
+    /// Names the user gave to scripts (script id -> shown name); the file keeps its own name.
+    pub script_names: std::collections::BTreeMap<String, String>,
     /// Icons: "<kind>:<id>" -> built-in icon name or the file name of an imported icon.
     pub icons: std::collections::BTreeMap<String, String>,
     /// Where the tabs are shown: "top" or "left".
@@ -93,6 +95,7 @@ impl Default for Settings {
             shell_profiles: Vec::new(),
             startup_profile: "home".into(),
             script_links: Vec::new(),
+            script_names: Default::default(),
             icons: Default::default(),
             tabs_position: "top".into(),
         }
@@ -117,6 +120,11 @@ impl Settings {
         self.shell_profiles
             .retain(|p| !p.id.is_empty() && !p.program.trim().is_empty());
         self.shell_profiles.truncate(100);
+        self.script_names = std::mem::take(&mut self.script_names)
+            .into_iter()
+            .map(|(k, v)| (k, v.trim().chars().take(100).collect::<String>()))
+            .filter(|(_, v)| !v.is_empty())
+            .collect();
         self.script_links.retain(|p| !p.trim().is_empty());
         self.script_links.dedup();
         if self.language != "auto" && !LANGUAGES.contains(&self.language.as_str()) {

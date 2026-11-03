@@ -2,6 +2,19 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.1.2 — 2026-11-03
+Scripts behave like launchers, the side panel folds with one click, scripts can be renamed.
+
+**Changed**
+- **Scripts:** a click on a script now **runs** it, or, if it is already running, switches to its tab (a finished run is replaced by a new one). The row buttons are: Edit, Run a copy in a new tab, Rename, Change icon, Delete / Remove (Locate the file… for a missing link).
+- **Terminals:** a shell in the list opens with a **double click** (like a session), a single click only selects it.
+- **Local explorer:** a file opens as a pane of the same tab (“Terminal | file”), exactly like in an SSH tab, instead of a separate top tab.
+- **Closing a local terminal** that is still running asks for confirmation, as for an SSH session (a finished one closes at once).
+- **Side panel:** a click on the **active** icon of the left column folds or unfolds the panel; a click on another icon switches to that section and unfolds the panel.
+
+**Added**
+- **Rename scripts:** give a script any name (the file keeps its own name, shown underneath). The name is used in the lists, cards and tab titles. An empty name or the file name restores the default. Names are kept in `settings.json` (`script_names`), the script files are not touched.
+
 ## 1.1.1 — 2026-11-02
 A file explorer for local terminals.
 

@@ -1,7 +1,7 @@
 // Left-column sections next to "Sessions": Terminals (local shells), Scripts (own files and links), Notes (encrypted in the vault).
 // Each section gives a sidebar list and a page of cards for the home tab; shell.ts decides what is shown.
 import { api, ApiError, CustomProfile, NoteItem, ScriptItem, ShellProfile } from './api';
-import { clear, confirmDialog, h, modal, toast } from './dom';
+import { clear, confirmDialog, h, modal, promptDialog, toast } from './dom';
 import { t } from './i18n';
 import { iconFor, iconKey, pickIcon } from './iconkit';
 import { icon } from './icons';
@@ -12,7 +12,10 @@ import { errText } from './util';
 export interface SectionCtx {
   openTerminal: (p: ShellProfile) => void;
   openScript: (s: ScriptItem) => void;
-  runScript: (s: ScriptItem) => void;
+  /** Run the script, or switch to its tab when it is already running; `copy` always starts a new run. */
+  runScript: (s: ScriptItem, copy?: boolean) => void;
+  /** The name shown for a script was changed: update open tabs. */
+  retitle: (scriptId: string) => void;
   openNote: (id?: string) => void;
   /** Close tabs showing a deleted item (ids start with this prefix). */
   closeTabs: (prefix: string) => void;
@@ -65,7 +68,7 @@ export function createTerminals(ctx: SectionCtx): Section {
       list.append(
         h(
           'li',
-          { class: 'srv', role: 'option', tabindex: '0', 'data-testid': 'profile-item', 'data-id': p.id, onclick: () => ctx.openTerminal(p), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && ctx.openTerminal(p) },
+          { class: 'srv', role: 'option', tabindex: '0', 'data-testid': 'profile-item', 'data-id': p.id, ondblclick: () => ctx.openTerminal(p), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && ctx.openTerminal(p) },
           h('span', { class: 'srv-ico' }, iconFor(key, p.custom ? 'box' : 'terminal')),
           h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, p.name), h('div', { class: 'sub' }, (star ? '★ ' + t('opens at start') + ' · ' : '') + p.program)),
           h(
@@ -79,7 +82,7 @@ export function createTerminals(ctx: SectionCtx): Section {
       grid.append(
         h(
           'button',
-          { class: 'card-srv', 'data-testid': 'profile-card', onclick: () => ctx.openTerminal(p) },
+          { class: 'card-srv', 'data-testid': 'profile-card', ondblclick: () => ctx.openTerminal(p) },
           h('span', { class: 'srv-ico big' }, iconFor(key, p.custom ? 'box' : 'terminal', 20)),
           h('span', { class: 'grow left' }, h('strong', {}, p.name), h('span', { class: 'sub' }, p.program)),
         ),
@@ -230,7 +233,9 @@ export function createScripts(ctx: SectionCtx): Section {
       ctx.closeTabs('script:' + s.id);
       const icons = { ...getSettings().icons };
       delete icons[iconKey('script', s.id)];
-      await updateSettings({ icons });
+      const names = { ...getSettings().script_names };
+      delete names[s.id];
+      await updateSettings({ icons, script_names: names });
       await refresh();
       ctx.refreshHome();
     } catch (e) {
@@ -238,8 +243,25 @@ export function createScripts(ctx: SectionCtx): Section {
     }
   }
 
-  const label = (s: ScriptItem) => (s.kind === 'link' ? s.name + ' 🔗' : s.name);
-  const sub = (s: ScriptItem) => (!s.exists ? '⚠ ' + t('file not found') : s.kind === 'link' ? s.path : t('my script'));
+  const shown = (s: ScriptItem) => getSettings().script_names[s.id] || s.name;
+  const label = (s: ScriptItem) => (s.kind === 'link' ? shown(s) + ' 🔗' : shown(s));
+  const sub = (s: ScriptItem) => {
+    if (!s.exists) return '⚠ ' + t('file not found');
+    const own = s.kind === 'link' ? s.path : t('my script');
+    return shown(s) !== s.name ? s.name + ' · ' + own : own;
+  };
+
+  async function rename(s: ScriptItem): Promise<void> {
+    const v = await promptDialog(t('Rename'), t('Name'), shown(s), 'OK');
+    if (v === null) return;
+    const names = { ...getSettings().script_names };
+    if (v.trim() && v.trim() !== s.name) names[s.id] = v.trim();
+    else delete names[s.id]; // empty or the file name: back to the file name
+    await updateSettings({ script_names: names });
+    ctx.retitle(s.id);
+    render();
+    ctx.refreshHome();
+  }
 
   function render(): void {
     clear(list);
@@ -250,7 +272,7 @@ export function createScripts(ctx: SectionCtx): Section {
     if (own.length) list.append(group(t('Mine')));
     const item = (s: ScriptItem) => {
       const key = iconKey('script', s.id);
-      const open = () => (s.exists ? ctx.openScript(s) : toast(t('The file was not found: {0}', s.path)));
+      const open = () => (s.exists ? ctx.runScript(s) : toast(t('The file was not found: {0}', s.path)));
       return h(
         'li',
         { class: 'srv' + (s.exists ? '' : ' missing'), role: 'option', tabindex: '0', 'data-testid': 'script-item', 'data-id': s.id, 'data-missing': s.exists ? '0' : '1', onclick: open, onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && open() },
@@ -259,7 +281,9 @@ export function createScripts(ctx: SectionCtx): Section {
         h(
           'div',
           { class: 'srv-actions' },
-          s.exists ? iconBtn('terminal', t('Run in a new terminal tab'), 'script-run', () => ctx.runScript(s)) : iconBtn('search', t('Locate the file…'), 'script-locate', () => void locate(s)),
+          s.exists ? iconBtn('edit', t('Edit the script'), 'script-edit', () => ctx.openScript(s)) : iconBtn('search', t('Locate the file…'), 'script-locate', () => void locate(s)),
+          s.exists ? iconBtn('copy', t('Run a copy in a new tab'), 'script-run-copy', () => ctx.runScript(s, true)) : null,
+          iconBtn('rename', t('Rename'), 'script-rename', () => void rename(s)),
           iconBtn('image', t('Change icon…'), 'script-icon', () => void pickIcon(key, 'script').then((c) => c && (render(), ctx.refreshHome()))),
           iconBtn('trash', s.kind === 'link' ? t('Remove from the list') : t('Delete'), 'script-delete', () => void remove(s)),
         ),
@@ -274,7 +298,7 @@ export function createScripts(ctx: SectionCtx): Section {
       grid.append(
         h(
           'button',
-          { class: 'card-srv' + (s.exists ? '' : ' missing'), 'data-testid': 'script-card', onclick: () => (s.exists ? ctx.openScript(s) : toast(t('The file was not found: {0}', s.path))) },
+          { class: 'card-srv' + (s.exists ? '' : ' missing'), 'data-testid': 'script-card', onclick: () => (s.exists ? ctx.runScript(s) : toast(t('The file was not found: {0}', s.path))) },
           h('span', { class: 'srv-ico big' }, iconFor(key, 'script', 20)),
           h('span', { class: 'grow left' }, h('strong', {}, label(s)), h('span', { class: 'sub' }, sub(s))),
         ),

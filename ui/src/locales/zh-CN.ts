@@ -623,5 +623,8 @@ const catalog: Record<string, string> = {
   "Notes are encrypted in the vault together with your passwords. Name them as you like.": "笔记会与您的密码一起加密保存在保险库中。想怎么命名都可以。",
   "Close the tab?": "关闭标签页？",
   "Open tabs": "打开的标签页",
+  "Edit the script": "编辑脚本",
+  "Run a copy in a new tab": "在新标签页中运行副本",
+  "The programs running in “{0}” will be interrupted.{1}": "“{0}”中运行的程序将被中断。{1}",
 };
 export default catalog;
