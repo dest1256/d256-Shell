@@ -22,11 +22,18 @@ jobs:
         with:
           node-version: 22
       - name: Build
-        shell: pwsh
+        shell: bash # stops at the first failing command
         run: |
-          cd ui; npm ci; npm run build; cd ..
+          cd ui
+          npm ci
+          npm run build
+          test -f dist/index.html
+          cd ..
           cargo install --locked tauri-cli --version "^2"
           cargo tauri build --no-bundle -- --locked
+      - name: Package
+        shell: pwsh
+        run: |
           New-Item -ItemType Directory -Force dist/d256Shell/data | Out-Null
           Copy-Item target/release/d256shell.exe dist/d256Shell/d256Shell.exe
           Compress-Archive -Path dist/d256Shell -DestinationPath dist/d256Shell.zip

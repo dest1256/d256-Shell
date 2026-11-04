@@ -2,6 +2,13 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.1.3 — 2026-11-04
+A fix for the GitHub Actions build; the program itself is unchanged.
+
+**Fixed**
+- The Windows lint job failed on a test helper that is used only on Linux ("function tmp is never used"); it is now compiled only where it is used.
+- The workflow steps of the Windows jobs now run in bash, which stops at the first failing command. PowerShell only checks the last command of a step, so a failing frontend build used to be hidden and showed up later as "frontendDist ../ui/dist does not exist". The build now also checks that ui/dist/index.html exists.
+
 ## 1.1.2 — 2026-11-03
 Scripts behave like launchers, the side panel folds with one click, scripts can be renamed.
 

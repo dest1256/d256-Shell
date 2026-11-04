@@ -470,6 +470,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     fn tmp(name: &str) -> PathBuf {
         let d = std::env::temp_dir().join(format!("d256shell-lfs-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&d);

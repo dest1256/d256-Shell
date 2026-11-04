@@ -23,13 +23,16 @@ jobs:
           node-version: 22
 
       - name: Frontend
+        shell: bash # bash stops at the first failing command (PowerShell would only check the last one)
         working-directory: ui
         run: |
           npm ci
           npm run build
           npm audit --omit=dev --audit-level=moderate
+          test -f dist/index.html
 
       - name: Lint
+        shell: bash # bash stops at the first failing command (PowerShell would only check the last one)
         run: |
           cargo fmt --all --check
           cargo clippy --locked --workspace --all-targets -- -D warnings
@@ -41,12 +44,14 @@ jobs:
       # (scripts/check-all.sh). Windows-specific checks of the built exe: dist/win-tests/run-win-tests.ps1.
 
       - name: Supply chain
+        shell: bash # bash stops at the first failing command (PowerShell would only check the last one)
         run: |
           cargo install --locked cargo-deny cargo-audit
           cargo deny check
           cargo audit
 
       - name: Build exe
+        shell: bash # bash stops at the first failing command (PowerShell would only check the last one)
         run: |
           cargo install --locked tauri-cli --version "^2"
           cargo tauri build --no-bundle -- --locked

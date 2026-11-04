@@ -1,12 +1,14 @@
 //! Local features through `Service::call` (the API the UI uses): notes in the vault, scripts (own files and links),
 //! local shells, icons. No SSH server is needed.
 mod common;
+#[cfg(unix)]
 use base64ct::{Base64, Encoding};
 use common::tmp;
 use d256shell_core::paths;
 use d256shell_core::service::Service;
 use d256shell_core::vault::KdfParams;
 use serde_json::{json, Value};
+#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 const KDF: KdfParams = KdfParams {
@@ -28,6 +30,7 @@ fn call(svc: &Service, m: &str, p: Value) -> Value {
         .unwrap_or_else(|e| panic!("{m}: {}", e.message))
 }
 
+#[cfg(unix)]
 fn read_until(svc: &Service, term: &str, needle: &str) -> String {
     let t = Instant::now();
     let mut all = String::new();
