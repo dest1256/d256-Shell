@@ -14,6 +14,7 @@ import { Explorer } from './explorer';
 import { MonitorBar, MonitorSource } from './monitor';
 import { MonitorDetail } from './taskmgr';
 import { getSettings, onSettings } from './settings';
+import { autoCheck, dismissUpdate, openRelease } from './updates';
 import { icon } from './icons';
 import { TerminalView } from './terminal';
 import { Titlebar } from './titlebar';
@@ -79,6 +80,8 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   const work = h('main', { class: 'work' }, home);
   const statusCount = h('span', { 'data-testid': 'status-count' });
   const statusSessions = h('span', { 'data-testid': 'status-sessions' });
+  const statusUpdate = h('span', { class: 'st-update', 'data-testid': 'update-banner' });
+  statusUpdate.style.display = 'none';
 
   // ---------- tabs ----------
   const homeTab: Tab = { id: 'home', title: t('Home'), icon: 'home', view: home, closable: false };
@@ -214,12 +217,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       const name = path.slice(path.lastIndexOf('/') + 1);
       const item: ScriptItem = { id: 'file:' + path, name, ext: name.includes('.') ? name.slice(name.lastIndexOf('.') + 1).toLowerCase() : '', kind: 'file', path, exists: true };
       const ed = new ScriptPane(item, { onDirty: (d) => panes.setDirty(pid, d), onClose: () => void panes.close(pid) }, () => undefined);
-      try {
-        await ed.load();
-      } catch (e) {
-        toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
-        return;
-      }
+      if (!(await ed.open())) return;
       panes.add({
         id: pid,
         title: name,
@@ -283,12 +281,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       },
       () => openRunTab(it),
     );
-    try {
-      await pane.load();
-    } catch (e) {
-      toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? e.code : undefined);
-      return;
-    }
+    if (!(await pane.open())) return;
     tab.view.append(pane.el);
     tab.dirty = () => pane.dirty;
     tab.onShow = () => pane.focus();
@@ -811,6 +804,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     h('span', { class: 'st' }, icon('unlock', 12), t('Vault unlocked')),
     statusCount,
     statusSessions,
+    statusUpdate,
     h('div', { class: 'grow' }),
     h('span', {}, t('d256 Shell {0}', __APP_VERSION__)),
   );
@@ -876,6 +870,18 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
 
   showSection('sessions');
   await reload();
+  if (getSettings().check_updates) {
+    void autoCheck().then((r) => {
+      if (!r) return;
+      statusUpdate.style.display = '';
+      statusUpdate.append(
+        icon('download', 12),
+        ' ' + t('Update {0} is available', r.latest) + ' ',
+        h('button', { class: 'link', 'data-testid': 'update-release', onclick: () => void openRelease(r.url) }, t('Release page')),
+        h('button', { class: 'icon-btn', title: t('Hide'), 'aria-label': t('Hide'), 'data-testid': 'update-hide', onclick: () => (dismissUpdate(r.latest), (statusUpdate.style.display = 'none')) }, icon('close', 10)),
+      );
+    });
+  }
   // vertical tabs (Settings) and the profile that opens at start
   applyTabsPosition();
   onSettings(() => applyTabsPosition());

@@ -162,6 +162,8 @@ struct TermEntry {
     session: Arc<TermSession>,
     ssh_session: String,
     _askpass: Option<AskpassServer>,
+    /// A folder with a decrypted copy of a script: removed when the terminal closes.
+    cleanup: Option<PathBuf>,
 }
 
 pub struct Hub {
@@ -775,6 +777,7 @@ impl Hub {
                 session,
                 ssh_session: session_id.to_string(),
                 _askpass: server,
+                cleanup: None,
             }),
         );
         Ok(term_id)
@@ -788,6 +791,7 @@ impl Hub {
         cwd: Option<PathBuf>,
         cols: u16,
         rows: u16,
+        cleanup: Option<PathBuf>,
     ) -> Result<String, ApiError> {
         let session = TermSession::spawn(TermOptions {
             program,
@@ -806,6 +810,7 @@ impl Hub {
                 session,
                 ssh_session: String::new(),
                 _askpass: None,
+                cleanup,
             }),
         );
         Ok(term_id)
@@ -898,6 +903,10 @@ impl Hub {
         self.prompts.cancel_attempt(id);
         if let Some(t) = t {
             t.session.close();
+            if let Some(dir) = &t.cleanup {
+                // the decrypted copy of a script goes away with its terminal
+                let _ = std::fs::remove_dir_all(dir);
+            }
         }
     }
 }

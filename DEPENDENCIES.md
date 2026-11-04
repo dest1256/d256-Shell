@@ -76,5 +76,5 @@ Run by `scripts/check-all.sh`:
 
 ## Network
 
-The application makes no network requests except SSH to the user's servers: no updates, telemetry or crash reports.
+The application makes no network requests except SSH to the user's servers and one optional update check: the UI (not the core) asks `https://api.github.com/repos/dest1256/d256-Shell/releases/latest` at start, at most once a day (Settings → Updates switches it off). Nothing about the user is sent, nothing is downloaded or installed; a newer version is only announced with a link to its release page. There is no telemetry and no crash reporting. The CSP allows `connect-src` to `api.github.com` for this reason.
 The frontend is fully embedded (no CDNs or remote fonts), CSP `default-src 'self'`.

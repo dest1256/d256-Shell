@@ -450,7 +450,7 @@ impl Service {
             "lfs" => self.lfs(&params),
             "local_term_open" => self.local_term_open(&params),
             "scripts_list" => self.scripts_list(),
-            "script_read" => self.script_read(&need("id")?),
+            "script_read" => self.script_read(&params),
             "script_write" => self.script_write(&params),
             "script_create" => self.script_create(&params),
             "script_delete" => self.script_delete(&need("id")?),

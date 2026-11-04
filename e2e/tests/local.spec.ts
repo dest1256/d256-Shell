@@ -78,7 +78,10 @@ test('scripts: write one in the editor and run it; link a file (never copied), g
   await page.keyboard.type('echo from-script-$((1+2))');
   await page.keyboard.press('Control+s');
   await expect(page.getByTestId('sc-status')).toHaveText('Saved');
-  expect(readFileSync(join(bridge.dataDir, 'scripts', 'hello.sh'), 'utf8')).toBe('echo from-script-$((1+2))');
+  // an own script is stored encrypted in the vault: no plain file, no plain text in vault.bin
+  expect(existsSync(join(bridge.dataDir, 'scripts', 'hello.sh'))).toBe(false);
+  expect(readFileSync(join(bridge.dataDir, 'vault.bin')).toString('latin1')).not.toContain('from-script');
+  expect(((await rpc(page, 'script_read', { id: 'own:hello.sh' })) as { text: string }).text).toBe('echo from-script-$((1+2))');
   await page.getByTestId('sc-run').click();
   await waitFor(page, 'from-script-3');
   await page.screenshot({ path: 'screenshots/72-script-run.png' });
@@ -334,4 +337,40 @@ test('panel: a click on the active rail icon folds and unfolds the panel, anothe
   await page.getByTestId('rail-notes').click(); // another icon: switches AND unfolds
   await expect(side).toBeVisible();
   await expect(page.getByTestId('section-notes')).toBeVisible();
+});
+
+test('scripts: choose the encoding when editing (reread, save as another one, BOM)', async ({ page }) => {
+  await start(page);
+  await rpc(page, 'script_create', { name: 'enc.bat', text: '' });
+  await rpc(page, 'script_write', { id: 'own:enc.bat', text: '@echo Привет\n', eol: 'crlf', bom: false, encoding: 'windows-1251' });
+  await page.getByTestId('rail-scripts').click();
+  const item = page.getByTestId('script-item').filter({ hasText: 'enc.bat' });
+  await item.hover();
+  await item.getByTestId('script-edit').click();
+  // detected automatically; the text is right; the encoding is shown on the button
+  await expect(page.getByTestId('sc-enc')).toHaveText('windows-1251');
+  await expect(page.getByTestId('sc-status')).toContainText('detected automatically');
+  await expect(page.locator('[data-testid="script-editor"] .cm-content')).toContainText('Привет');
+  // reread in a wrong encoding shows other letters, reread in the right one brings them back
+  await page.getByTestId('sc-enc').click();
+  await page.getByTestId('enc-select').selectOption('KOI8-R');
+  await page.getByTestId('enc-reread').click();
+  await expect(page.getByTestId('sc-enc')).toHaveText('KOI8-R');
+  await expect(page.locator('[data-testid="script-editor"] .cm-content')).not.toContainText('Привет');
+  await page.getByTestId('sc-enc').click();
+  await page.getByTestId('enc-select').selectOption('windows-1251');
+  await page.getByTestId('enc-reread').click();
+  await expect(page.locator('[data-testid="script-editor"] .cm-content')).toContainText('Привет');
+  // save as UTF-8 with a BOM: the stored bytes change, the text does not
+  await page.getByTestId('sc-enc').click();
+  await page.getByTestId('enc-select').selectOption('UTF-8');
+  await page.getByTestId('enc-bom').check();
+  await page.getByTestId('enc-save-as').click();
+  await expect(page.getByTestId('sc-enc')).toHaveText('UTF-8');
+  await page.locator('[data-testid="script-editor"] .cm-content').click();
+  await page.keyboard.press('Control+s');
+  await expect(page.getByTestId('sc-status')).toHaveText('Saved');
+  const r = (await rpc(page, 'script_read', { id: 'own:enc.bat' })) as { encoding: string; bom: boolean; eol: string; text: string };
+  expect(r).toMatchObject({ encoding: 'UTF-8', bom: true, eol: 'crlf', text: '@echo Привет\n' });
+  await page.screenshot({ path: 'screenshots/80-script-encoding.png' });
 });

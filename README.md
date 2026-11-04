@@ -53,7 +53,7 @@ d256 Shell puts everything you need to work with servers into a single window st
 One window for everything command-line. The left column switches between **Sessions** (SSH), **Terminals**, **Scripts** and **Notes**.
 
 - **Terminals:** local shells open in tabs next to the SSH sessions. Windows PowerShell, PowerShell 7, Command Prompt, WSL distributions and Git Bash are found automatically on Windows; bash, zsh, fish and the others from `/etc/shells` on Linux. Add your own profiles (program, arguments, start folder); one shell can open at start. A local tab also shows the file explorer of this computer on its left (create, rename, copy, delete, open a text file in the built-in editor).
-- **Scripts:** `.bat`, `.cmd`, `.ps1` and `.sh` files, edited in the built-in editor. Write a script there (it is saved as a file in `data/scripts`) or drop a file onto the section: then only a **link** is stored and the file is never copied or changed by the list. A moved file is shown grey (“file not found”) and can be re-linked. **Run** opens a terminal tab with the right shell; nothing runs without a click.
+- **Scripts:** `.bat`, `.cmd`, `.ps1` and `.sh` files, edited in the built-in editor. Write a script there (it is stored encrypted in the vault, and you can choose the encoding, like for any text file) or drop a file onto the section: then only a **link** is stored and the file is never copied or changed by the list. A moved file is shown grey (“file not found”) and can be re-linked. **Run** opens a terminal tab with the right shell; nothing runs without a click.
 - **Notes:** any number of notes with any titles, saved automatically in the encrypted vault together with the passwords.
 - **Icons:** every session, shell, script and note can have its own icon (a built-in glyph or your own image). Tabs can also be shown on the left (Settings → Tabs).
 
@@ -78,7 +78,7 @@ A status bar under the terminal (CPU, RAM, swap, load average, network, uptime a
 | **Host keys** | Always verified. A changed key means refusal; replacing it requires an explicit double confirmation. |
 | **Passwords** | Never written to logs, `ssh` arguments or environment variables (only a one-time askpass token is passed). |
 | **Server** | The program runs no service commands and no `sudo`. Everything goes through SFTP or the interactive shell you opened. |
-| **Network** | No requests other than SSH to your servers: no telemetry, no auto-updates. |
+| **Network** | SSH to your servers, plus one optional HTTPS request to `api.github.com` at start to see whether a newer release exists (Settings → Updates; nothing about you is sent, nothing is downloaded or installed by itself). No telemetry. |
 | **Dependencies** | crates.io and npm only, pinned versions; `cargo audit`, `cargo deny` and `npm audit` report no issues. |
 | **UI** | Fully bundled into the program — no CDNs or remote fonts, strict CSP. |
 
@@ -95,12 +95,12 @@ Prebuilt packages are available on the [Releases](../../releases) page.
 ### Ubuntu / Debian
 
 ```bash
-sudo apt install ./d256shell_1.1.4_amd64.deb
+sudo apt install ./d256shell_1.2.0_amd64.deb
 ```
 
 ### Arch Linux
 
-Put `PKGBUILD`, `d256shell-1.1.4-linux-x86_64.tar.gz`, `d256shell.desktop` and `LICENSE` in one folder, then run:
+Put `PKGBUILD`, `d256shell-1.2.0-linux-x86_64.tar.gz`, `d256shell.desktop` and `LICENSE` in one folder, then run:
 
 ```bash
 makepkg -si
@@ -109,7 +109,7 @@ makepkg -si
 ### Portable (any Linux)
 
 ```bash
-tar xzf d256shell-1.1.4-linux-x86_64.tar.gz && ./d256shell/d256shell
+tar xzf d256shell-1.2.0-linux-x86_64.tar.gz && ./d256shell/d256shell
 ```
 
 Requires WebKitGTK 4.1, GTK 3 and OpenSSH. The binary is built on Ubuntu 22.04 (glibc ≥ 2.34) and tested by installing on clean Ubuntu 22.04, 24.04 and Arch.

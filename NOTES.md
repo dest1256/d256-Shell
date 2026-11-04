@@ -111,7 +111,7 @@ Author: dest1256.
 - `scripts/run-win-tests.ps1` (run by the user): metadata, manifest, Defender (`MpCmdRun`), starting from a folder with spaces and Cyrillic, startup time, memory, traces outside the folder, askpass mode, `ssh.exe` login through SSH_ASKPASS to a local test server.
 - **Deviation:** separate test exes with a real ConPTY (`cargo xwin test --no-run`) are not built — the terminal tests use a unix PTY and run in the container; Windows behavior (ConPTY, askpass from a GUI exe, 8.3 paths, closing ssh.exe) is checked with the manual checklist from the README.
 - The Defender and VirusTotal results are entered in this file by the user after running `run-win-tests.ps1` (we do not upload files to third-party services).
-- Known limitations: copying between different servers is unavailable; no digital signature (the `signtool` slot in CI is off); no auto-updates and no telemetry, per the spec.
+- Known limitations: copying between different servers is unavailable; no digital signature (the `signtool` slot in CI is off); no auto-installing updates and no telemetry (an optional check for a newer release exists since 1.2.0, see below).
 
 ## Server monitor (after stage 9)
 
@@ -202,3 +202,11 @@ Author: dest1256.
 
 - Script click = run: `openRunTab` looks for a tab with the same `runKey` whose state is not `off` and activates it, otherwise drops an ended one and starts a new run; "Run a copy" always starts a new tab. `settings.script_names` maps a script id to the shown name (trimmed, <= 100 chars, empty entries dropped); `retitle` updates open tabs. The left rail: a click on the active section calls `toggleSidebar`, on another one `showSection`.
 - Local terminal tabs own a `PaneSet` (terminal pane + one pane per file opened from the local explorer, `f:<path>`), the same structure as an SSH tab; their `dirty()` and `dispose()` go through it. `closeTab` asks whenever `tab.state` is not `off` (a running SSH session or local shell) or something is unsaved. Terminals section: `ondblclick` opens.
+
+## 1.2.0: scripts in the vault, encodings
+
+- `VaultData.scripts` (`VaultScript { name, data (base64 of the exact bytes), created, updated }`, `#[serde(default)]`): own scripts (`own:<name>`, unique case-insensitively) live there; links and files from the local explorer still go to disk. `script_read` takes an optional forced `encoding` and returns `guessed`; decode failures use the codes `binary`, `encoding` (unknown name) and `bad_encoding` (the UI then opens the encoding picker). `script_write` converts with `codec::encode` (EOL, BOM, encoding from the UI).
+- Running an own script: `script_run` writes the bytes to `staging/run-<id>/<name>` (0700 on Unix), runs it with the home folder as cwd and gives `Hub::local_open` the folder as `cleanup`; `term_close` removes it. This plain copy exists only while the terminal is open (a crash leaves it until the next start, when `staging` is emptied).
+- Migration (`migrate_plain_scripts`): on `scripts_list`, plain files in `data/scripts` are added to the vault, the vault is saved, then the files are removed; collisions get ` (2)`… suffixes. Compatibility is the same as for notes (older versions drop the field on their next save).
+
+- **Update check (1.2.0):** `ui/src/updates.ts`. The only network access outside SSH, made by the UI with `fetch` (the core stays network-free): `GET https://api.github.com/repos/dest1256/d256-Shell/releases/latest` (the endpoint skips drafts and pre-releases), 8 s timeout, no credentials, at most once per 24 h (`localStorage` `update-checked`), a dismissed version is remembered (`update-skip`); setting `check_updates` (default on). The CSP `connect-src` lists `https://api.github.com`. Only a `https://github.com/dest1256/d256-Shell/` URL is ever opened. No download or installation: the user installs a new version by hand from the release. Tests mock GitHub with Playwright routes (`updates.spec.ts`).

@@ -197,7 +197,7 @@ export function createScripts(ctx: SectionCtx): Section {
         { role: 'dialog', 'data-testid': 'sc-new-dialog', onsubmit: (e) => (e.preventDefault(), go()) },
         h('h3', {}, t('New script')),
         h('label', {}, t('File name'), h('div', { class: 'row' }, name, ext)),
-        h('p', { class: 'muted' }, t('It is saved as a file in the data folder (data/scripts).')),
+        h('p', { class: 'muted' }, t('It is stored encrypted in the vault.')),
         h('div', { class: 'row end' }, h('button', { type: 'button', onclick: () => close(null) }, t('Cancel')), h('button', { type: 'submit', class: 'primary', 'data-testid': 'sc-new-ok' }, t('Create'))),
       );
     });
@@ -227,7 +227,7 @@ export function createScripts(ctx: SectionCtx): Section {
   }
 
   async function remove(s: ScriptItem): Promise<void> {
-    if (s.kind === 'own' && !(await confirmDialog(t('Delete script?'), t('“{0}” will be deleted from the data folder.', s.name), t('Delete'), true))) return;
+    if (s.kind === 'own' && !(await confirmDialog(t('Delete script?'), t('“{0}” will be deleted from the vault.', shown(s)), t('Delete'), true))) return;
     try {
       await api.scriptDelete(s.id);
       ctx.closeTabs('script:' + s.id);
@@ -247,7 +247,7 @@ export function createScripts(ctx: SectionCtx): Section {
   const label = (s: ScriptItem) => (s.kind === 'link' ? shown(s) + ' 🔗' : shown(s));
   const sub = (s: ScriptItem) => {
     if (!s.exists) return '⚠ ' + t('file not found');
-    const own = s.kind === 'link' ? s.path : t('my script');
+    const own = s.kind === 'link' ? s.path : t('my script') + ' · ' + t('encrypted');
     return shown(s) !== s.name ? s.name + ' · ' + own : own;
   };
 
@@ -308,7 +308,9 @@ export function createScripts(ctx: SectionCtx): Section {
 
   async function refresh(): Promise<void> {
     try {
-      scripts = (await api.scriptsList()).scripts;
+      const r = await api.scriptsList();
+      scripts = r.scripts;
+      if (r.migrated > 0) toast(t('Scripts moved into the encrypted vault: {0}', r.migrated));
     } catch (e) {
       fail(e);
     }

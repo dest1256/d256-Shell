@@ -2,6 +2,21 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.2.0 — 2026-11-04
+Scripts: a choice of the encoding and encrypted storage; a check for new releases on GitHub.
+
+**Added**
+- **Encoding of a script:** the script editor (and any local text file opened from the explorer) has the encoding button at the bottom right, like the editor of remote files: the encoding is detected automatically (and shown), “Reread in this encoding” decodes the file again, “Save as this” converts it to another encoding, with an optional BOM. A character the chosen encoding cannot hold is named and nothing is written; bytes that do not decode ask for an encoding.
+
+- **Update check:** at start the program asks GitHub (the public repository) whether a newer release exists and, if so, shows “Update X is available · Release page” in the status bar (it can be dismissed; a dismissed version is not announced again). Settings → Updates: switch the check off, or press “Check now”. It is **one HTTPS request** to `api.github.com` at most once a day, made by the UI; nothing about you is sent, nothing is downloaded or installed, only the release page of this repository can be opened. A missing network is silent at start.
+
+**Changed**
+- **Scripts written in the program are stored encrypted in the vault** (`vault.bin`, together with the passwords and notes) as exact file bytes, no longer as plain files in `data/scripts`. To run one, the program decrypts it into a private folder under `data/staging` for the time of the run; that copy is removed when the terminal tab is closed (and `staging` is emptied at every start and exit). Linked scripts (files that stay where they are) are unchanged.
+- **Migration:** scripts that 1.1.x kept as files in `data/scripts` move into the vault automatically the first time the Scripts section is opened (a toast tells how many); a file is deleted only after the vault was saved. A name that is already taken gets a suffix (`name (2).sh`).
+
+**Compatibility**
+- Like notes, scripts in `vault.bin` are ignored by versions before 1.2 and would be dropped when those save the vault. Use 1.2.0 or newer everywhere the same `data` folder is used.
+
 ## 1.1.4 — 2026-11-04
 Another fix for the GitHub Actions build; the program itself is unchanged.
 

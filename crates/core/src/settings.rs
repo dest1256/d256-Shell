@@ -67,6 +67,8 @@ pub struct Settings {
     pub icons: std::collections::BTreeMap<String, String>,
     /// Where the tabs are shown: "top" or "left".
     pub tabs_position: String,
+    /// Ask GitHub for a newer release at start (one HTTPS request made by the UI; never installs anything).
+    pub check_updates: bool,
 }
 
 impl Default for Settings {
@@ -98,6 +100,7 @@ impl Default for Settings {
             script_names: Default::default(),
             icons: Default::default(),
             tabs_position: "top".into(),
+            check_updates: true,
         }
     }
 }
@@ -273,6 +276,10 @@ mod language_tests {
     #[test]
     fn language_is_auto_by_default_and_unknown_codes_fall_back_to_auto() {
         assert_eq!(Settings::default().language, "auto");
+        assert!(
+            Settings::default().check_updates,
+            "the update check is on by default (one request a day)"
+        );
         for code in LANGUAGES {
             let s = Settings {
                 language: code.to_string(),

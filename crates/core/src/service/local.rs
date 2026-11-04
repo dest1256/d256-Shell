@@ -4,7 +4,7 @@ use super::{new_id, now, ApiError, Service};
 use crate::localfs;
 use crate::localshell::{self, ShellProfile};
 use crate::sftp::codec;
-use crate::vault::Note;
+use crate::vault::{Note, VaultScript};
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 
@@ -76,6 +76,7 @@ impl Service {
         args: Vec<String>,
         cwd: &str,
         params: &Value,
+        cleanup: Option<PathBuf>,
     ) -> Result<Value, ApiError> {
         let dir = if cwd.trim().is_empty() {
             None
@@ -95,6 +96,7 @@ impl Service {
             dir,
             Self::dim(params, "cols", 80),
             Self::dim(params, "rows", 24),
+            cleanup,
         )?;
         Ok(json!({ "term_id": id }))
     }
@@ -111,7 +113,13 @@ impl Service {
             .ok_or_else(|| {
                 ApiError::new("not_found", "The shell was not found on this computer.")
             })?;
-        self.open_local(&profile.program, profile.args.clone(), &profile.cwd, params)
+        self.open_local(
+            &profile.program,
+            profile.args.clone(),
+            &profile.cwd,
+            params,
+            None,
+        )
     }
 
     // ------------------------------------------------------------ scripts
@@ -122,10 +130,6 @@ impl Service {
         if let Some(p) = id.strip_prefix("file:") {
             return localfs::real_path(p, cfg!(windows)).map_err(|m| ApiError::new("invalid", m));
         }
-        if let Some(name) = id.strip_prefix("own:") {
-            let n = valid_script_name(name)?;
-            return Ok(self.dirs.scripts().join(n));
-        }
         if let Some(p) = id.strip_prefix("link:") {
             if !self.settings_snapshot().script_links.iter().any(|l| l == p) {
                 return Err(ApiError::new("not_found", "The script is not in the list."));
@@ -135,21 +139,79 @@ impl Service {
         Err(ApiError::new("invalid", "Unknown script."))
     }
 
-    pub(super) fn scripts_list(&self) -> Result<Value, ApiError> {
-        let mut out: Vec<Value> = Vec::new();
+    /// Name of an own script from its id ("own:<name>").
+    fn own_name(id: &str) -> Result<String, ApiError> {
+        match id.strip_prefix("own:") {
+            Some(n) => valid_script_name(n),
+            None => Err(ApiError::new("invalid", "Unknown script.")),
+        }
+    }
+
+    /// Scripts that 1.1.x kept as plain files in `data/scripts` move into the encrypted vault (once, when the vault is
+    /// open); a file is removed only after the vault was saved. Returns how many were moved.
+    fn migrate_plain_scripts(&self) -> usize {
         let dir = self.dirs.scripts();
-        let mut own: Vec<String> = std::fs::read_dir(&dir)
-            .map(|rd| {
-                rd.filter_map(|e| e.ok())
-                    .filter(|e| e.path().is_file())
-                    .filter_map(|e| e.file_name().into_string().ok())
-                    .filter(|n| is_script(n) && !n.starts_with('.'))
-                    .collect()
+        let Ok(rd) = std::fs::read_dir(&dir) else {
+            return 0;
+        };
+        let files: Vec<(String, PathBuf, Vec<u8>)> = rd
+            .filter_map(|e| e.ok())
+            .filter(|e| e.path().is_file())
+            .filter_map(|e| {
+                let name = e.file_name().into_string().ok()?;
+                if !is_script(&name) || name.starts_with('.') {
+                    return None;
+                }
+                let bytes = std::fs::read(e.path()).ok()?;
+                Some((name, e.path(), bytes))
             })
-            .unwrap_or_default();
+            .collect();
+        if files.is_empty() {
+            return 0;
+        }
+        let t = now();
+        let saved = self.with_vault(|v| {
+            for (name, _, bytes) in &files {
+                let mut unique = name.clone();
+                let mut n = 1;
+                while v
+                    .data
+                    .scripts
+                    .iter()
+                    .any(|x| x.name.eq_ignore_ascii_case(&unique))
+                {
+                    n += 1;
+                    unique = match name.rfind('.') {
+                        Some(i) => format!("{} ({n}){}", &name[..i], &name[i..]),
+                        None => format!("{name} ({n})"),
+                    };
+                }
+                v.data.scripts.push(VaultScript::new(unique, bytes, t));
+            }
+            v.save()
+        });
+        if saved.is_err() {
+            return 0;
+        }
+        let mut moved = 0;
+        for (_, path, _) in &files {
+            if std::fs::remove_file(path).is_ok() {
+                moved += 1;
+            }
+        }
+        let _ = std::fs::remove_dir(&dir); // only when empty
+        moved
+    }
+
+    pub(super) fn scripts_list(&self) -> Result<Value, ApiError> {
+        self.with_vault(|_| Ok(()))?; // a locked vault has no scripts to show
+        let migrated = self.migrate_plain_scripts();
+        let mut out: Vec<Value> = Vec::new();
+        let mut own: Vec<String> =
+            self.with_vault(|v| Ok(v.data.scripts.iter().map(|s| s.name.clone()).collect()))?;
         own.sort_by_key(|n| n.to_lowercase());
         for n in own {
-            out.push(json!({ "id": format!("own:{n}"), "name": n, "ext": ext_of(&n), "kind": "own", "path": dir.join(&n).to_string_lossy(), "exists": true }));
+            out.push(json!({ "id": format!("own:{n}"), "name": n, "ext": ext_of(&n), "kind": "own", "path": "", "exists": true }));
         }
         for l in self.settings_snapshot().script_links {
             let name = Path::new(&l)
@@ -158,12 +220,32 @@ impl Service {
                 .unwrap_or_else(|| l.clone());
             out.push(json!({ "id": format!("link:{l}"), "name": name, "ext": ext_of(&l), "kind": "link", "path": l, "exists": Path::new(&l).is_file() }));
         }
-        Ok(json!({ "scripts": out }))
+        Ok(json!({ "scripts": out, "migrated": migrated }))
     }
 
-    pub(super) fn script_read(&self, id: &str) -> Result<Value, ApiError> {
-        let path = self.script_path(id)?;
+    /// The raw bytes of a script (own: from the vault, otherwise from its file).
+    fn script_bytes(&self, id: &str) -> Result<(Vec<u8>, String), ApiError> {
         let limit = u64::from(self.settings_snapshot().editor_limit_mb) * 1024 * 1024;
+        if id.starts_with("own:") {
+            let name = Self::own_name(id)?;
+            let bytes = self
+                .with_vault(|v| {
+                    Ok(v.data
+                        .scripts
+                        .iter()
+                        .find(|s| s.name == name)
+                        .map(|s| s.bytes()))
+                })?
+                .ok_or_else(|| ApiError::new("not_found", "The script was not found."))?;
+            if bytes.len() as u64 > limit {
+                return Err(ApiError::new(
+                    "too_large",
+                    "The file is too large for the editor.",
+                ));
+            }
+            return Ok((bytes, String::new()));
+        }
+        let path = self.script_path(id)?;
         let meta = std::fs::metadata(&path).map_err(|e| io_err("Could not read the file", e))?;
         if meta.len() > limit {
             return Err(ApiError::new(
@@ -172,15 +254,31 @@ impl Service {
             ));
         }
         let bytes = std::fs::read(&path).map_err(|e| io_err("Could not read the file", e))?;
-        let d = codec::decode(&bytes, None)
-            .map_err(|f| ApiError::new("encoding", codec::fail_message(&f)))?;
+        Ok((bytes, path.to_string_lossy().into_owned()))
+    }
+
+    pub(super) fn script_read(&self, params: &Value) -> Result<Value, ApiError> {
+        let id = params
+            .get("id")
+            .and_then(Value::as_str)
+            .ok_or_else(|| ApiError::new("invalid", "Missing parameter id"))?;
+        let forced = params.get("encoding").and_then(Value::as_str);
+        let (bytes, path) = self.script_bytes(id)?;
+        let d = codec::decode(&bytes, forced).map_err(|f| {
+            let code = match f {
+                codec::DecodeFail::Binary => "binary",
+                codec::DecodeFail::Unknown(_) => "encoding",
+                _ => "bad_encoding",
+            };
+            ApiError::new(code, codec::fail_message(&f))
+        })?;
         let crlf = d.text.matches("\r\n").count();
         let lf = d.text.matches('\n').count() - crlf;
         let eol = if crlf > lf { "crlf" } else { "lf" };
         let text = d.text.replace("\r\n", "\n");
         Ok(json!({
-            "id": id, "path": path.to_string_lossy(), "text": text, "eol": eol,
-            "bom": d.bom, "encoding": d.encoding.name(),
+            "id": id, "path": path, "text": text, "eol": eol,
+            "bom": d.bom, "encoding": d.encoding.name(), "guessed": d.guessed,
         }))
     }
 
@@ -193,7 +291,6 @@ impl Service {
             .get("text")
             .and_then(Value::as_str)
             .ok_or_else(|| ApiError::new("invalid", "Missing parameter text"))?;
-        let path = self.script_path(id)?;
         let eol = params.get("eol").and_then(Value::as_str).unwrap_or("lf");
         let bom = params.get("bom").and_then(Value::as_bool).unwrap_or(false);
         let enc_name = params
@@ -210,6 +307,24 @@ impl Service {
         let bytes = codec::encode(&text, bom, enc).map_err(|c| {
             ApiError::new("encoding", format!("Character “{c}” (U+{:04X}) cannot be written in the encoding {enc_name}. Remove it or choose another encoding (for example, UTF-8).", c as u32))
         })?;
+        if id.starts_with("own:") {
+            // an own script is stored encrypted in the vault, as exact file bytes
+            let name = Self::own_name(id)?;
+            let t = now();
+            let found = self.with_vault(|v| {
+                let Some(s) = v.data.scripts.iter_mut().find(|s| s.name == name) else {
+                    return Ok(false);
+                };
+                s.set_bytes(&bytes, t);
+                v.save().map(|_| true)
+            })?;
+            return if found {
+                Ok(json!({ "ok": true }))
+            } else {
+                Err(ApiError::new("not_found", "The script was not found."))
+            };
+        }
+        let path = self.script_path(id)?;
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent).map_err(|e| io_err("Could not write the file", e))?;
         }
@@ -226,25 +341,22 @@ impl Service {
     pub(super) fn script_create(&self, params: &Value) -> Result<Value, ApiError> {
         let name = valid_script_name(params.get("name").and_then(Value::as_str).unwrap_or(""))?;
         let text = params.get("text").and_then(Value::as_str).unwrap_or("");
-        let dir = self.dirs.scripts();
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| io_err("Could not create the scripts folder", e))?;
-        let path = dir.join(&name);
-        {
-            use std::io::Write;
-            let mut f = std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&path)
-                .map_err(|e| {
-                    if e.kind() == std::io::ErrorKind::AlreadyExists {
-                        ApiError::new("exists", format!("“{name}” already exists."))
-                    } else {
-                        io_err("Could not create the file", e)
-                    }
-                })?;
-            f.write_all(text.as_bytes())
-                .map_err(|e| io_err("Could not write the file", e))?;
+        let t = now();
+        let created = self.with_vault(|v| {
+            if v.data
+                .scripts
+                .iter()
+                .any(|s| s.name.eq_ignore_ascii_case(&name))
+            {
+                return Ok(false);
+            }
+            v.data
+                .scripts
+                .push(VaultScript::new(name.clone(), text.as_bytes(), t));
+            v.save().map(|_| true)
+        })?;
+        if !created {
+            return Err(ApiError::new("exists", format!("“{name}” already exists.")));
         }
         Ok(json!({ "id": format!("own:{name}") }))
     }
@@ -260,9 +372,11 @@ impl Service {
             self.store_settings(s)?;
             return Ok(json!({ "ok": true }));
         }
-        let path = self.script_path(id)?;
-        std::fs::remove_file(&path).map_err(|e| io_err("Could not delete the file", e))?;
-        Ok(json!({ "ok": true }))
+        let name = Self::own_name(id)?;
+        self.with_vault(|v| {
+            v.data.scripts.retain(|s| s.name != name);
+            v.save().map(|_| json!({ "ok": true }))
+        })
     }
 
     pub(super) fn script_link_add(&self, params: &Value) -> Result<Value, ApiError> {
@@ -321,10 +435,35 @@ impl Service {
         if id.starts_with("file:") {
             return Err(ApiError::new("invalid", "Unknown script."));
         }
-        let path = self.script_path(id)?;
-        if !path.is_file() {
-            return Err(ApiError::new("not_found", "The script file was not found."));
-        }
+        let (path, cwd, cleanup) = if id.starts_with("own:") {
+            // an own script is decrypted into a private folder only for this run; it is removed when the terminal
+            // closes (and the staging folder is emptied at every start and exit)
+            let name = Self::own_name(id)?;
+            let (bytes, _) = self.script_bytes(id)?;
+            let dir = self.dirs.staging().join(format!("run-{}", new_id()?));
+            std::fs::create_dir_all(&dir).map_err(|e| io_err("Could not prepare the script", e))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+            }
+            let file = dir.join(&name);
+            std::fs::write(&file, bytes).map_err(|e| io_err("Could not prepare the script", e))?;
+            let home = localfs::real_path(&localfs::home(), cfg!(windows))
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            (file, home, Some(dir))
+        } else {
+            let path = self.script_path(id)?;
+            if !path.is_file() {
+                return Err(ApiError::new("not_found", "The script file was not found."));
+            }
+            let cwd = path
+                .parent()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            (path, cwd, None)
+        };
         let script = path.to_string_lossy().into_owned();
         let (program, args) = localshell::script_command(
             &ext_of(&script),
@@ -332,12 +471,21 @@ impl Service {
             &self.all_profiles(),
             &script,
         )
-        .map_err(|m| ApiError::new("unsupported", m))?;
-        let cwd = path
-            .parent()
-            .map(|p| p.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        self.open_local(&program, args, &cwd, params)
+        .map_err(|m| {
+            if let Some(d) = &cleanup {
+                let _ = std::fs::remove_dir_all(d);
+            }
+            ApiError::new("unsupported", m)
+        })?;
+        match self.open_local(&program, args, &cwd, params, cleanup.clone()) {
+            Ok(v) => Ok(v),
+            Err(e) => {
+                if let Some(d) = &cleanup {
+                    let _ = std::fs::remove_dir_all(d);
+                }
+                Err(e)
+            }
+        }
     }
 
     // ------------------------------------------------------------ local explorer

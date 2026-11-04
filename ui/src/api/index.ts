@@ -125,6 +125,7 @@ export interface Settings {
   script_names: Record<string, string>;
   icons: Record<string, string>;
   tabs_position: string;
+  check_updates: boolean;
   paste_warn_lines: number;
   paste_warn_bytes: number;
 }
@@ -200,8 +201,8 @@ export const api = {
   lfs: <T = Record<string, never>>(op: string, params: Record<string, unknown> = {}) => call<T>('lfs', { op, ...params }),
   shellProfiles: () => call<{ profiles: ShellProfile[]; startup: string }>('shell_profiles'),
   localOpen: (profile_id: string, cols: number, rows: number) => call<{ term_id: string }>('local_term_open', { profile_id, cols, rows }),
-  scriptsList: () => call<{ scripts: ScriptItem[] }>('scripts_list'),
-  scriptRead: (id: string) => call<ScriptText>('script_read', { id }),
+  scriptsList: () => call<{ scripts: ScriptItem[]; migrated: number }>('scripts_list'),
+  scriptRead: (id: string, encoding?: string) => call<ScriptText>('script_read', { id, encoding }),
   scriptWrite: (p: { id: string; text: string; eol: string; bom: boolean; encoding: string }) => call<object>('script_write', p),
   scriptCreate: (name: string, text: string) => call<{ id: string }>('script_create', { name, text }),
   scriptDelete: (id: string) => call<object>('script_delete', { id }),
@@ -397,6 +398,8 @@ export interface ScriptText {
   eol: 'lf' | 'crlf';
   bom: boolean;
   encoding: string;
+  /** The encoding was guessed (not announced by a BOM, not plain UTF-8). */
+  guessed: boolean;
 }
 export interface NoteItem {
   id: string;

@@ -126,6 +126,49 @@ pub struct VaultData {
     /// Free-form notes, encrypted with everything else. Programs older than 1.1 ignore this field.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub notes: Vec<Note>,
+    /// Scripts written in the built-in editor: the file bytes (base64), encrypted with everything else.
+    /// Programs older than 1.2 ignore this field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub scripts: Vec<VaultScript>,
+}
+
+/// A script of the user, kept as exact file bytes (encoding, BOM and line endings stay as they are).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct VaultScript {
+    pub name: String,
+    /// base64 of the file bytes
+    pub data: String,
+    pub created: u64,
+    pub updated: u64,
+}
+
+impl VaultScript {
+    pub fn new(name: String, bytes: &[u8], now: u64) -> Self {
+        use base64ct::{Base64, Encoding};
+        Self {
+            name,
+            data: Base64::encode_string(bytes),
+            created: now,
+            updated: now,
+        }
+    }
+
+    pub fn bytes(&self) -> Vec<u8> {
+        use base64ct::{Base64, Encoding};
+        Base64::decode_vec(&self.data).unwrap_or_default()
+    }
+
+    pub fn set_bytes(&mut self, bytes: &[u8], now: u64) {
+        use base64ct::{Base64, Encoding};
+        self.data = Base64::encode_string(bytes);
+        self.updated = now;
+    }
+}
+
+impl Drop for VaultScript {
+    fn drop(&mut self) {
+        self.data.zeroize();
+    }
 }
 
 /// A note the user keeps in the vault (any title, any text).

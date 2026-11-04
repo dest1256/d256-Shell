@@ -5,8 +5,9 @@ import { highlightSelectionMatches, openSearchPanel, search, searchKeymap } from
 import { EditorState, Extension } from '@codemirror/state';
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, keymap, lineNumbers } from '@codemirror/view';
 import { api, ApiError, ScriptItem } from './api';
-import { h, toast } from './dom';
-import { languageFor, themeExtensions } from './editor';
+import { h, modal, toast } from './dom';
+import { encodingTitle, ENCODINGS, supportsBom } from './encodings';
+import { languageFor, pickEncoding, themeExtensions } from './editor';
 import { t } from './i18n';
 import { icon } from './icons';
 import { errText } from './util';
@@ -47,6 +48,7 @@ export class ScriptPane {
   private encoding = 'UTF-8';
   private status = h('span', { 'data-testid': 'sc-status' }, '');
   private info = h('span', { class: 'ed-info', 'data-testid': 'sc-info' }, '');
+  private encButton = h('button', { class: 'tool-sm', 'data-testid': 'sc-enc', title: t('File encoding: reread, or save in another one'), onclick: () => void this.chooseEncoding() }, 'UTF-8');
 
   constructor(
     private item: ScriptItem,
@@ -60,24 +62,48 @@ export class ScriptPane {
         'div',
         { class: 'ed-bar' },
         h('span', { class: 'ed-path', title: item.path }, item.name),
-        h('span', { class: 'ed-dir muted' }, item.kind === 'file' ? item.path : item.kind === 'link' ? t('link') + ' · ' + item.path : t('my script')),
+        h('span', { class: 'ed-dir muted' }, item.kind === 'file' ? item.path : item.kind === 'link' ? t('link') + ' · ' + item.path : t('my script') + ' · ' + t('encrypted')),
         h('span', { class: 'ed-spacer' }),
         h('button', { class: 'tool-sm', 'data-testid': 'sc-find', title: t('Find and replace (Ctrl+F / Ctrl+H)'), onclick: () => openSearchPanel(this.view) }, icon('search', 13)),
         h('button', { class: 'tool-sm', 'data-testid': 'sc-save', title: t('Save (Ctrl+S)'), onclick: () => void this.save() }, t('Save')),
         item.kind === 'file' ? null : h('button', { class: 'tool-sm primary', 'data-testid': 'sc-run', title: t('Run in a new terminal tab'), onclick: () => void this.run() }, icon('terminal', 13), ' ' + t('Run')),
       ),
       h('div', { class: 'ed-host', 'data-testid': 'sc-host' }),
-      h('div', { class: 'ed-statusbar' }, this.status, h('span', { class: 'ed-spacer' }), this.info),
+      h('div', { class: 'ed-statusbar' }, this.status, h('span', { class: 'ed-spacer' }), this.info, this.encButton),
     );
   }
 
-  async load(): Promise<void> {
-    const r = await api.scriptRead(this.item.id);
+  /** Load the script; when its bytes do not decode, ask for an encoding. False: the user gave up or it failed. */
+  async open(): Promise<boolean> {
+    try {
+      await this.load();
+      return true;
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'bad_encoding') {
+        const enc = await pickEncoding(e.message);
+        if (!enc) return false;
+        try {
+          await this.load(enc);
+          return true;
+        } catch (e2) {
+          toast(errText(e2), e2 instanceof ApiError ? e2.code : undefined);
+          return false;
+        }
+      }
+      toast(errText(e), e instanceof ApiError ? e.code : undefined);
+      return false;
+    }
+  }
+
+  async load(encoding?: string): Promise<void> {
+    const r = await api.scriptRead(this.item.id, encoding);
     this.saved = r.text;
     this.eol = r.eol;
     this.bom = r.bom;
     this.encoding = r.encoding;
     const host = this.el.querySelector('.ed-host') as HTMLElement;
+    this.view?.destroy();
+    host.replaceChildren();
     this.view = makeView(
       host,
       r.text,
@@ -90,7 +116,69 @@ export class ScriptPane {
       ],
       () => this.setDirty(this.view.state.doc.toString() !== this.saved),
     );
-    this.info.textContent = `${this.encoding}${this.bom ? ' ' + t('BOM') : ''} · ${this.eol.toUpperCase()}`;
+    this.showInfo();
+    this.status.textContent = r.guessed ? t('The encoding was detected automatically: {0}. If the text is wrong, choose the encoding at the bottom right.', r.encoding) : '';
+    this.dirty = false;
+  }
+
+  private showInfo(): void {
+    this.info.textContent = `${this.bom ? t('BOM') + ' · ' : ''}${this.eol.toUpperCase()}`;
+    this.encButton.textContent = this.encoding;
+    this.encButton.title = encodingTitle(this.encoding);
+  }
+
+  /** Encoding menu: read the file again in another encoding, or just save it in another one (converting). */
+  private chooseEncoding(): Promise<void> {
+    return modal<void>((close) => {
+      const sel = h('select', { 'data-testid': 'enc-select' }) as HTMLSelectElement;
+      for (const [n, label] of ENCODINGS) sel.append(h('option', { value: n, selected: n === this.encoding }, label));
+      const bom = h('input', { type: 'checkbox', 'data-testid': 'enc-bom' }) as HTMLInputElement;
+      bom.checked = this.bom;
+      const bomRow = h('label', { class: 'check' }, bom, ' ' + t('Write a BOM (byte order mark)'));
+      const sync = () => (bomRow.style.display = supportsBom(sel.value) ? '' : 'none');
+      sel.addEventListener('change', sync);
+      sync();
+      return h(
+        'div',
+        { role: 'dialog', 'data-testid': 'enc-dialog' },
+        h('h3', {}, t('Encoding')),
+        h('p', {}, t('Now: {0}. “Reread” decodes the file again (if the text is shown as garbage). “Save as” writes the current text in the chosen encoding: this converts the file.', encodingTitle(this.encoding))),
+        sel,
+        bomRow,
+        h(
+          'div',
+          { class: 'row end wrap' },
+          h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'enc-cancel' }, t('Cancel')),
+          h('button', { type: 'button', 'data-testid': 'enc-reread', onclick: async () => {
+            if (this.dirty && !window.confirm(t('Unsaved changes will be lost. Reread the file?'))) return;
+            close(null);
+            await this.reread(sel.value);
+          } }, t('Reread in this encoding')),
+          h('button', { type: 'button', class: 'primary', 'data-testid': 'enc-save-as', onclick: () => {
+            this.encoding = sel.value;
+            this.bom = supportsBom(sel.value) ? bom.checked : false;
+            this.showInfo();
+            this.setDirty(true);
+            this.status.textContent = t('The file will be saved in the encoding {0}', this.encoding);
+            close(null);
+          } }, t('Save as this')),
+        ),
+      );
+    }).then(() => {
+      setTimeout(() => this.view?.focus(), 0);
+    });
+  }
+
+  /** Read the script again with a chosen encoding and replace the text. */
+  private async reread(encoding: string): Promise<void> {
+    const was = this.dirty;
+    try {
+      await this.load(encoding);
+      if (was) this.hooks.onDirty(false);
+      this.status.textContent = t('The file was reread in the encoding {0}', encoding);
+    } catch (e) {
+      toast(errText(e), e instanceof ApiError ? e.code : undefined);
+    }
   }
 
   focus(): void {

@@ -1,12 +1,13 @@
 import { api, ServerView, Settings, SshInfo } from './api';
 import { connectFlow } from './connect';
-import { h, modal, toast } from './dom';
+import { clear, h, modal, toast } from './dom';
 import { SCHEMES } from './schemes';
 import { getSettings, updateSettings } from './settings';
 import { aboutDialog } from './about';
 import { native } from './native';
 import { pwField, errText } from './util';
 import { applyLanguage, LANGUAGES, t, tm } from './i18n';
+import { fetchLatest, openRelease } from './updates';
 
 export async function serverForm(existing?: ServerView): Promise<boolean> {
   const f = (id: string, label: string, value = '', type = 'text') =>
@@ -201,6 +202,17 @@ export async function settingsDialog(): Promise<void> {
   const monInterval = num('set-mon-interval', cur.monitor_interval_ms);
   const monOn = h('input', { type: 'checkbox', id: 'set-mon', 'data-testid': 'set-mon' }) as HTMLInputElement;
   monOn.checked = cur.monitor_enabled;
+  const updOn = h('input', { type: 'checkbox', id: 'set-updates', 'data-testid': 'set-updates' }) as HTMLInputElement;
+  updOn.checked = cur.check_updates;
+  const updMsg = h('span', { class: 'muted', 'data-testid': 'update-result' }, '');
+  const updBtn = h('button', { type: 'button', 'data-testid': 'update-check', onclick: async () => {
+    updMsg.textContent = t('Checking…');
+    const r = await fetchLatest();
+    clear(updMsg);
+    if (r.state === 'current') updMsg.textContent = t('You have the latest version ({0}).', r.latest);
+    else if (r.state === 'error') updMsg.textContent = t('Could not check for updates: {0}', r.message);
+    else updMsg.append(t('Version {0} is available.', r.latest) + ' ', h('button', { type: 'button', class: 'link', 'data-testid': 'update-open', onclick: () => void openRelease(r.url) }, t('Release page')));
+  } }, t('Check now'));
   const keepMtime = h('input', { type: 'checkbox', id: 'set-mtime', 'data-testid': 'set-mtime' }) as HTMLInputElement;
   keepMtime.checked = cur.keep_mtime;
   const err = h('div', { class: 'error', 'data-testid': 'settings-error' });
@@ -237,6 +249,7 @@ export async function settingsDialog(): Promise<void> {
               monitor_interval_ms: Number(monInterval.value),
               language: lang.value,
               tabs_position: tabsPos.value,
+              check_updates: updOn.checked,
               startup_profile: startup.value,
             });
             close(true);
@@ -268,6 +281,10 @@ export async function settingsDialog(): Promise<void> {
       h('h4', {}, t('Server monitor')),
       h('label', { class: 'check' }, monOn, ' ' + t('Show server load under the terminal (reads /proc over SFTP, no commands are run)')),
       field(t('Refresh interval, ms (from 100)'), monInterval),
+      h('h4', {}, t('Updates')),
+      h('label', { class: 'check' }, updOn, ' ' + t('Check for updates at start')),
+      h('p', { class: 'muted small' }, t('One request to GitHub (api.github.com) when the program starts; nothing about you is sent. Updates are never installed by themselves.')),
+      h('div', { class: 'row' }, updBtn, updMsg),
       err,
       h('div', { class: 'row end' }, h('button', { type: 'button', class: 'left-auto', onclick: () => void aboutDialog(), 'data-testid': 'open-about' }, t('About')), h('button', { type: 'button', onclick: () => close(false), 'data-testid': 'settings-cancel' }, t('Cancel')), h('button', { type: 'submit', class: 'primary', 'data-testid': 'settings-save' }, t('Save'))),
     ),

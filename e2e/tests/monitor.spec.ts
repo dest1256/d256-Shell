@@ -64,7 +64,7 @@ test('monitor: numbers under the terminal, mini charts, detailed window, switchi
   await expect.poll(() => page.getByTestId('stat-cpu-uptime').textContent(), { timeout: 8000 }).not.toBe(frozen);
   await page.getByTestId('md-rate').selectOption('5000');
   await expect(page.getByTestId('md-rate')).toHaveValue('5000');
-  expect(JSON.parse(await page.evaluate(async () => JSON.stringify(await (await fetch('/rpc', { method: 'POST', body: JSON.stringify({ method: 'get_settings', params: {} }) })).json()))).result.monitor_interval_ms).toBe(5000);
+  await expect.poll(async () => JSON.parse(await page.evaluate(async () => JSON.stringify(await (await fetch('/rpc', { method: 'POST', body: JSON.stringify({ method: 'get_settings', params: {} }) })).json()))).result.monitor_interval_ms).toBe(5000); // saved a moment after the click
   await page.getByTestId('md-rate').selectOption('2000');
   // custom rate in milliseconds (minimum 100 ms): a valid value is applied, an invalid one is rejected
   await page.getByTestId('md-rate').selectOption('custom');

@@ -26,6 +26,7 @@ const DEFAULTS: Settings = {
   script_names: {},
   icons: {},
   tabs_position: 'top',
+  check_updates: true,
   paste_warn_lines: 2,
   paste_warn_bytes: 5 * 1024,
 };

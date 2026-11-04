@@ -115,7 +115,7 @@ fn notes_live_in_the_vault_and_survive_lock_and_unlock() {
 }
 
 #[test]
-fn own_scripts_are_files_in_data_scripts_with_exact_bytes() {
+fn own_scripts_live_encrypted_in_the_vault_with_exact_bytes_and_any_encoding() {
     let (svc, root) = service("scripts-own");
     for bad in [
         "../x.sh",
@@ -135,57 +135,112 @@ fn own_scripts_are_files_in_data_scripts_with_exact_bytes() {
     let id = call(
         &svc,
         "script_create",
-        json!({"name": "hello.sh", "text": "echo hi\n"}),
+        json!({"name": "hello.sh", "text": "echo SECRET-TOKEN-777\n"}),
     )["id"]
         .as_str()
         .unwrap()
         .to_string();
     assert_eq!(id, "own:hello.sh");
     assert!(
-        svc.call("script_create", json!({"name": "hello.sh", "text": "x"}))
+        svc.call("script_create", json!({"name": "HELLO.sh", "text": "x"}))
             .is_err(),
-        "never overwrites"
+        "never overwrites (case-insensitive)"
+    );
+    // nothing on disk in the clear: not as a file, not inside vault.bin
+    assert!(!root.join("scripts").join("hello.sh").exists());
+    assert!(
+        !String::from_utf8_lossy(&std::fs::read(root.join("vault.bin")).unwrap())
+            .contains("SECRET-TOKEN-777")
     );
     assert_eq!(
-        std::fs::read(root.join("scripts/hello.sh")).unwrap(),
-        b"echo hi\n"
+        call(&svc, "script_read", json!({"id": id}))["text"],
+        "echo SECRET-TOKEN-777\n"
     );
 
-    // CRLF + BOM are kept byte for byte through read -> write
-    std::fs::write(
-        root.join("scripts/win.ps1"),
-        b"\xEF\xBB\xBFWrite-Host 1\r\nWrite-Host 2\r\n",
-    )
-    .unwrap();
+    // UTF-8 with BOM + CRLF: kept byte for byte (written as the editor does: text with \n, eol, bom, encoding)
+    let ps = "Write-Host 1\nWrite-Host 2\n";
+    call(
+        &svc,
+        "script_create",
+        json!({"name": "win.ps1", "text": ""}),
+    );
+    call(
+        &svc,
+        "script_write",
+        json!({"id": "own:win.ps1", "text": ps, "eol": "crlf", "bom": true, "encoding": "UTF-8"}),
+    );
     let r = call(&svc, "script_read", json!({"id": "own:win.ps1"}));
     assert_eq!(
-        (r["eol"].as_str(), r["bom"].as_bool()),
-        (Some("crlf"), Some(true))
+        (
+            r["eol"].as_str(),
+            r["bom"].as_bool(),
+            r["encoding"].as_str()
+        ),
+        (Some("crlf"), Some(true), Some("UTF-8"))
     );
-    assert_eq!(r["text"], "Write-Host 1\nWrite-Host 2\n");
+    assert_eq!(r["text"], ps);
+
+    // a Windows-1251 batch file: auto-detected, rewritten in the same encoding; reread forced in another one
+    call(
+        &svc,
+        "script_create",
+        json!({"name": "old.bat", "text": ""}),
+    );
     call(
         &svc,
         "script_write",
-        json!({"id": "own:win.ps1", "text": r["text"], "eol": r["eol"], "bom": r["bom"], "encoding": r["encoding"]}),
+        json!({"id": "own:old.bat", "text": "@echo Привет, мир\n", "eol": "crlf", "bom": false, "encoding": "windows-1251"}),
+    );
+    let r = call(&svc, "script_read", json!({"id": "own:old.bat"}));
+    assert_eq!(
+        (r["encoding"].as_str(), r["guessed"].as_bool()),
+        (Some("windows-1251"), Some(true))
+    );
+    assert_eq!(r["text"], "@echo Привет, мир\n");
+    let koi = call(
+        &svc,
+        "script_read",
+        json!({"id": "own:old.bat", "encoding": "KOI8-R"}),
+    );
+    assert_ne!(
+        koi["text"], "@echo Привет, мир\n",
+        "another encoding shows other letters"
+    );
+    assert_eq!(koi["encoding"], "KOI8-R");
+    // saving in another encoding converts; a character the encoding cannot hold is named and nothing is written
+    call(
+        &svc,
+        "script_write",
+        json!({"id": "own:old.bat", "text": "@echo Привет, мир\n", "eol": "crlf", "bom": false, "encoding": "IBM866"}),
     );
     assert_eq!(
-        std::fs::read(root.join("scripts/win.ps1")).unwrap(),
-        b"\xEF\xBB\xBFWrite-Host 1\r\nWrite-Host 2\r\n"
+        call(
+            &svc,
+            "script_read",
+            json!({"id": "own:old.bat", "encoding": "IBM866"})
+        )["text"],
+        "@echo Привет, мир\n"
     );
-
-    // a Windows-1251 batch file is not damaged
-    let cp1251: Vec<u8> = vec![
-        b'@', b'e', b'c', b'h', b'o', b' ', 0xCF, 0xF0, 0xE8, 0xE2, 0xE5, 0xF2, b'\r', b'\n',
-    ];
-    std::fs::write(root.join("scripts/old.bat"), &cp1251).unwrap();
-    let r = call(&svc, "script_read", json!({"id": "own:old.bat"}));
-    assert_eq!(r["text"], "@echo Привет\n");
-    call(
-        &svc,
-        "script_write",
-        json!({"id": "own:old.bat", "text": r["text"], "eol": r["eol"], "bom": r["bom"], "encoding": r["encoding"]}),
+    let e = svc.call("script_write", json!({"id": "own:old.bat", "text": "ß 日本\n", "eol": "lf", "bom": false, "encoding": "windows-1251"})).unwrap_err();
+    assert_eq!(e.code, "encoding");
+    assert_eq!(
+        call(
+            &svc,
+            "script_read",
+            json!({"id": "own:old.bat", "encoding": "IBM866"})
+        )["text"],
+        "@echo Привет, мир\n",
+        "failed write changed nothing"
     );
-    assert_eq!(std::fs::read(root.join("scripts/old.bat")).unwrap(), cp1251);
+    // bytes that are invalid in the chosen encoding are refused with a code the UI turns into the picker
+    call(&svc, "script_create", json!({"name": "bin.sh", "text": ""}));
+    let e = svc
+        .call(
+            "script_read",
+            json!({"id": "own:bin.sh", "encoding": "nope"}),
+        )
+        .unwrap_err();
+    assert_eq!(e.code, "encoding");
 
     let list = call(&svc, "scripts_list", json!({}));
     let names: Vec<&str> = list["scripts"]
@@ -194,22 +249,71 @@ fn own_scripts_are_files_in_data_scripts_with_exact_bytes() {
         .iter()
         .map(|s| s["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["hello.sh", "old.bat", "win.ps1"]);
+    assert_eq!(names, ["bin.sh", "hello.sh", "old.bat", "win.ps1"]);
+    assert!(
+        list["scripts"][0]["path"] == "",
+        "no file path for a script in the vault"
+    );
 
-    // no temp files left behind
-    let left: Vec<String> = std::fs::read_dir(root.join("scripts"))
-        .unwrap()
-        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .collect();
-    assert!(left.iter().all(|n| !n.contains("d256tmp")), "{left:?}");
-
+    // it survives lock / unlock, and delete removes it
+    call(&svc, "lock", json!({}));
+    assert!(svc.call("scripts_list", json!({})).is_err());
+    call(&svc, "unlock", json!({"master": "long-enough-pw"}));
+    assert_eq!(
+        call(&svc, "script_read", json!({"id": "own:win.ps1"}))["text"],
+        ps
+    );
     call(&svc, "script_delete", json!({"id": "own:hello.sh"}));
-    assert!(!root.join("scripts/hello.sh").exists());
+    assert!(svc
+        .call("script_read", json!({"id": "own:hello.sh"}))
+        .is_err());
     assert!(
         svc.call("script_read", json!({"id": "own:../vault.bin"}))
             .is_err(),
-        "no way out of the scripts folder"
+        "no way out through a name"
     );
+}
+
+#[test]
+fn scripts_of_version_1_1_move_from_data_scripts_into_the_vault() {
+    let (svc, root) = service("scripts-migrate");
+    std::fs::create_dir_all(root.join("scripts")).unwrap();
+    std::fs::write(root.join("scripts/old.sh"), "echo old\n").unwrap();
+    std::fs::write(root.join("scripts/win.bat"), b"@echo hi\r\n").unwrap();
+    std::fs::write(root.join("scripts/readme.txt"), "not a script").unwrap();
+    // a script of the same name already in the vault is not overwritten
+    call(
+        &svc,
+        "script_create",
+        json!({"name": "old.sh", "text": "echo new\n"}),
+    );
+    let list = call(&svc, "scripts_list", json!({}));
+    assert_eq!(list["migrated"], 2);
+    let names: Vec<&str> = list["scripts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["old (2).sh", "old.sh", "win.bat"]);
+    assert_eq!(
+        call(&svc, "script_read", json!({"id": "own:old.sh"}))["text"],
+        "echo new\n"
+    );
+    assert_eq!(
+        call(&svc, "script_read", json!({"id": "own:old (2).sh"}))["text"],
+        "echo old\n"
+    );
+    assert_eq!(
+        std::fs::read(root.join("scripts/win.bat")).ok(),
+        None,
+        "the plain copy is gone"
+    );
+    assert!(
+        root.join("scripts/readme.txt").exists(),
+        "other files are not touched"
+    );
+    assert_eq!(call(&svc, "scripts_list", json!({}))["migrated"], 0, "once");
 }
 
 #[test]
@@ -331,17 +435,28 @@ fn local_shells_are_listed_and_run_in_a_terminal_and_scripts_run_in_theirs() {
     read_until(&svc, &term, "local-42");
     call(&svc, "term_close", json!({"term_id": term}));
 
-    // a script runs in a terminal in its own folder
+    // an own script runs from a decrypted private copy that is removed with its terminal
     call(
         &svc,
         "script_create",
-        json!({"name": "where.sh", "text": "echo ran-in-$(basename \"$PWD\")\n"}),
+        json!({"name": "where.sh", "text": "echo ran-$((20+22))-$(basename \"$0\")\n"}),
     );
+    let before = std::fs::read_dir(root.join("staging")).unwrap().count();
     let r = call(&svc, "script_run", json!({"id": "own:where.sh"}));
     let term = r["term_id"].as_str().unwrap().to_string();
-    read_until(&svc, &term, "ran-in-scripts");
+    read_until(&svc, &term, "ran-42-where.sh");
+    assert_eq!(
+        std::fs::read_dir(root.join("staging")).unwrap().count(),
+        before + 1,
+        "a decrypted copy exists while it runs"
+    );
     call(&svc, "term_close", json!({"term_id": term}));
-    assert!(root.join("scripts/where.sh").exists());
+    assert_eq!(
+        std::fs::read_dir(root.join("staging")).unwrap().count(),
+        before,
+        "and is gone after the terminal closed"
+    );
+    assert!(!root.join("scripts").exists(), "no plain scripts folder");
     // other types are refused with a reason
     call(
         &svc,
