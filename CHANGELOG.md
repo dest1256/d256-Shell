@@ -2,6 +2,12 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.1.4 — 2026-11-04
+Another fix for the GitHub Actions build; the program itself is unchanged.
+
+**Fixed**
+- The Windows jobs could not build the frontend: `npm ci` on Windows did not install the native packages of TypeScript 7, rolldown and lightningcss, because the lock file (made on Linux) lists only the Linux ones ("Unable to resolve @typescript/typescript-win32-x64"). The workflows now install the Windows packages at the exact versions of the lock after `npm ci` (nothing is saved to the lock file).
+
 ## 1.1.3 — 2026-11-04
 A fix for the GitHub Actions build; the program itself is unchanged.
 

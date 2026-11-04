@@ -26,6 +26,9 @@ jobs:
         run: |
           cd ui
           npm ci
+          # The lock file was made on Linux and lists only the Linux native packages of TypeScript 7, rolldown and lightningcss;
+          # npm ci on Windows therefore misses them. Install the Windows ones at the exact versions of the lock (official packages).
+          npm install --no-save --ignore-scripts --no-audit @typescript/typescript-win32-x64@7.0.2 @rolldown/binding-win32-x64-msvc@1.2.15 lightningcss-win32-x64-msvc@1.33.0
           npm run build
           test -f dist/index.html
           cd ..
