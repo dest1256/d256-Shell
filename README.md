@@ -95,12 +95,12 @@ Prebuilt packages are available on the [Releases](../../releases) page.
 ### Ubuntu / Debian
 
 ```bash
-sudo apt install ./d256shell_1.2.0_amd64.deb
+sudo apt install ./d256shell_1.2.1_amd64.deb
 ```
 
 ### Arch Linux
 
-Put `PKGBUILD`, `d256shell-1.2.0-linux-x86_64.tar.gz`, `d256shell.desktop` and `LICENSE` in one folder, then run:
+Put `PKGBUILD`, `d256shell-1.2.1-linux-x86_64.tar.gz`, `d256shell.desktop` and `LICENSE` in one folder, then run:
 
 ```bash
 makepkg -si
@@ -109,7 +109,7 @@ makepkg -si
 ### Portable (any Linux)
 
 ```bash
-tar xzf d256shell-1.2.0-linux-x86_64.tar.gz && ./d256shell/d256shell
+tar xzf d256shell-1.2.1-linux-x86_64.tar.gz && ./d256shell/d256shell
 ```
 
 Requires WebKitGTK 4.1, GTK 3 and OpenSSH. The binary is built on Ubuntu 22.04 (glibc ≥ 2.34) and tested by installing on clean Ubuntu 22.04, 24.04 and Arch.

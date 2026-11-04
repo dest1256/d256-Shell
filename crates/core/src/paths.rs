@@ -170,6 +170,8 @@ mod tests {
         fs::remove_dir_all(exe).unwrap();
     }
 
+    // XDG paths are Unix paths (on Windows "/x/share" is not even absolute)
+    #[cfg(unix)]
     #[test]
     fn xdg_locations() {
         let p = |s: &str| Some(PathBuf::from(s));

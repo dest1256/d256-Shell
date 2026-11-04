@@ -2,6 +2,12 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.2.1 — 2026-11-04
+A fix for the GitHub Actions build; the program itself is unchanged.
+
+**Fixed**
+- The Windows unit test job failed in `paths::tests::xdg_locations`: that test checks Unix (XDG) paths, which are not absolute paths on Windows. It now runs on Unix only.
+
 ## 1.2.0 — 2026-11-04
 Scripts: a choice of the encoding and encrypted storage; a check for new releases on GitHub.
 
