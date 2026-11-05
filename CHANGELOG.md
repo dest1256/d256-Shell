@@ -2,6 +2,12 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.3.1 — 2026-11-05
+A fix for the release workflow; the program itself is unchanged.
+
+**Fixed**
+- The release job failed with "a release with the same tag name already exists" when the release had been created by hand before the workflow finished. It now adds the files to the existing release (`gh release upload --clobber`) and creates the release only when there is none.
+
 ## 1.3.0 — 2026-11-05
 The monitor of this computer: a bar under local terminals, a column next to the terminal, the video card and the processes.
 
