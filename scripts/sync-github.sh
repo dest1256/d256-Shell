@@ -13,7 +13,7 @@ rm -f "$G"/COPYRIGHT "$G"/NOTICE   # old private-repository notice files
 rm -rf "$G"/crates "$G"/src-tauri "$G"/ui "$G"/e2e "$G"/test-server "$G"/packaging "$G"/scripts "$G"/.devcontainer "$G"/.cargo "$G"/.github/workflows "$G"/releases
 tar cf - --exclude=node_modules --exclude=./ui/dist --exclude=target --exclude=./dist --exclude=./github \
   --exclude=test-results --exclude=./e2e/screenshots --exclude=./PROMPT.md --exclude=./src-tauri/gen \
-  --exclude=./new_files --exclude=./demo-v1.1.html --exclude=./README.md --exclude=./.gitignore --exclude=./.git . | tar xf - -C "$G"
+  --exclude=./new_files --exclude=./demo-v1.1.html --exclude=./demo-v1.3.html --exclude=./README.md --exclude=./.gitignore --exclude=./.git . | tar xf - -C "$G"
 # the README of the repository mentions the package file names: keep them at the current version
 perl -pi -e "s/(d256shell[_-])\d+\.\d+\.\d+([_-](?:amd64|linux))/\${1}$VER\$2/g" "$G/README.md"
 # builds for the Release page

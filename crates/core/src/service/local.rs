@@ -488,6 +488,13 @@ impl Service {
         }
     }
 
+    // ------------------------------------------------------------ monitor of this computer
+
+    pub(super) fn local_monitor_sample(&self, params: &Value) -> Value {
+        let info = params.get("info").and_then(Value::as_bool).unwrap_or(false);
+        self.localmon.lock().expect("lock").sample(info)
+    }
+
     // ------------------------------------------------------------ local explorer
 
     pub(super) fn lfs_list(&self, params: &Value) -> Result<Value, ApiError> {

@@ -2,6 +2,20 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.3.0 — 2026-11-05
+The monitor of this computer: a bar under local terminals, a column next to the terminal, the video card and the processes.
+
+**Added**
+- **Monitor of this computer:** a local terminal now has the same bar under it as an SSH session (processor, memory, disks, network, uptime, small graphs). A click opens the same task-manager tab as for servers, for your computer.
+- **Video card:** 3D load, CUDA (Compute) load, Copy and Video engines, video memory (VRAM), temperature, power, fan and clock. On Windows the loads come from the performance counters “GPU Engine” and “GPU Adapter Memory” (the data of the Task Manager, any card, no extra programs); if `nvidia-smi` is installed (it comes with the NVIDIA driver) it adds temperature, power, fan, clock and the total VRAM. On Linux: `nvidia-smi` and, for AMD, sysfs. Several cards are listed separately. Without a video card or tool nothing about it is shown.
+- **Processor temperature** when the system reports it (Windows thermal zones; Linux hwmon).
+- **Processes:** a new “Processes” item shows the busiest processes with processor load, video load, video memory and memory (for example `python` of ComfyUI).
+- **Monitor column to the right of the terminal**, in local **and SSH** tabs: the button at the right end of the bar folds and unfolds it, a splitter changes its width. The resources (CPU, Memory, GPU, Disk, Network, Processes) are chips at the top, the details of the chosen one are below, in a column. The “Monitor” tab stays as it was, both use the same data. (A server has no video card and no process list: SFTP cannot give them.)
+
+**Notes**
+- Everything is read on your own computer: performance counters, `/proc`, `/sys` and, when present, `nvidia-smi` (`D256SHELL_NVIDIA_SMI` can point to it) and `reg query` for the processor name. Nothing is sent anywhere. The refresh rate of the Monitor settings applies (the video card is asked at most once a second).
+- The Windows counters were built and checked for compilation only; they could not be run on a real Windows computer with a video card during development.
+
 ## 1.2.1 — 2026-11-04
 A fix for the GitHub Actions build; the program itself is unchanged.
 

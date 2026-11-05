@@ -357,3 +357,24 @@ h4 { margin: 10px 0 2px; font-size: 12px; color: var(--muted); text-transform: u
 .vtab-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .vtab .dot { flex: none; }
 .titlebar.tabs-left .tabs, .titlebar.tabs-left .tab-add { display: none; }
+
+/* ---------- monitor of this computer: processes, video card, the column next to the terminal ---------- */
+.tm-procs { width: 100%; border-collapse: collapse; font-size: 12px; }
+.tm-procs th, .tm-procs td { padding: 4px 6px; text-align: right; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.tm-procs th:first-child, .tm-procs td:first-child { text-align: left; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tm-procs th { color: var(--muted); font-weight: 400; font-size: 11px; } .tm-procs td.hot { color: #4ade80; font-weight: 600; }
+.mon-col-btn { margin-left: auto; flex: none; background: transparent; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); padding: 2px 6px; display: inline-flex; }
+.mon-col-btn:hover { background: var(--hover); color: var(--fg); }
+.mon-col { flex: none; display: flex; min-width: 260px; max-width: 70%; border-left: 1px solid var(--line); background: var(--side); }
+.mon-col.hidden, .mon-col-split.hidden { display: none; }
+.tm-compact { flex-direction: column; width: 100%; min-width: 0; }
+.tm-compact .tm-left { width: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+.tm-compact .tm-side { display: flex; flex-wrap: wrap; gap: 4px; padding: 6px; overflow: visible; flex: none; }
+.tm-compact .tm-item { width: auto; padding: 3px 9px; border: 1px solid var(--line); border-radius: 14px; gap: 6px; }
+.tm-compact .tm-item.active { border-color: var(--accent); background: rgba(96,205,255,.12); }
+.tm-compact .tm-thumb, .tm-compact .tm-sub { display: none; }
+.tm-compact .tm-name { font-size: 12px; }
+.tm-compact .tm-main { padding: 10px 12px; }
+.tm-compact .tm-head h2 { font-size: 17px; } .tm-compact .tm-model { font-size: 11px; }
+.tm-compact .tm-chart { height: 90px !important; } .tm-compact .tm-core { height: 38px; }
+.tm-compact .tm-stats { gap: 12px; } .tm-compact .tm-sgrid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; width: 100%; } .tm-compact .tm-sv { font-size: 17px; }

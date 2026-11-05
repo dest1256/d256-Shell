@@ -131,6 +131,45 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     else renderTabs();
   }
 
+  /** The monitor column to the right of a terminal (resources as chips on top, details below), folded by the button of the
+   * bar and resized by its splitter; the choice is remembered. */
+  function monitorColumn(src: MonitorSource): { el: HTMLElement; split: HTMLElement; toggle: () => void; dispose: () => void } {
+    // the details exist only while the column is shown (a folded column draws nothing and has no elements)
+    let detail: MonitorDetail | null = null;
+    const el = h('div', { class: 'mon-col', 'data-testid': 'mon-col' });
+    const w = Number(pref.get('mon-col-width'));
+    el.style.width = `${w >= 260 && w <= 900 ? w : 340}px`;
+    const split = h('div', { class: 'splitter mon-col-split', role: 'separator', 'aria-orientation': 'vertical', 'data-testid': 'mon-col-splitter' });
+    const show = (on: boolean) => {
+      el.classList.toggle('hidden', !on);
+      split.classList.toggle('hidden', !on);
+      pref.set('mon-col', on ? '1' : '0');
+      if (on && !detail) {
+        detail = new MonitorDetail(src, true);
+        el.append(detail.el);
+      } else if (!on && detail) {
+        detail.dispose();
+        detail.el.remove();
+        detail = null;
+      }
+    };
+    show(pref.get('mon-col') === '1');
+    split.addEventListener('pointerdown', (e) => {
+      const x0 = e.clientX;
+      const w0 = el.getBoundingClientRect().width;
+      split.setPointerCapture(e.pointerId);
+      const move = (ev: PointerEvent) => (el.style.width = `${Math.min(900, Math.max(260, w0 - (ev.clientX - x0)))}px`);
+      const up = () => {
+        split.removeEventListener('pointermove', move);
+        split.removeEventListener('pointerup', up);
+        pref.set('mon-col-width', String(Math.round(el.getBoundingClientRect().width)));
+      };
+      split.addEventListener('pointermove', move);
+      split.addEventListener('pointerup', up);
+    });
+    return { el, split, toggle: () => show(el.classList.contains('hidden')), dispose: () => detail?.dispose() };
+  }
+
   // ---------- local tabs: shells, scripts, notes ----------
   let localCounter = 0;
   const dropTab = (tb: Tab) => {
@@ -198,16 +237,32 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       split.addEventListener('pointermove', move);
       split.addEventListener('pointerup', up);
     });
-    panes.add({ id: 'term', title: t('Terminal'), view: h('div', { class: 'session-term' }, h('div', { class: 'term-col' }, term.el)), closable: false, onShow: () => term.show() });
-    tab.view.append(exWrap, split, panes.el);
+    // load of THIS computer (processor, memory, disks, network, video card): a bar under the terminal and a column on the right
+    const mon = new MonitorSource(() => '', () => activeId === id, true);
+    const mcol = monitorColumn(mon);
+    const bar = new MonitorBar(mon, () => openMonitor(), undefined, () => mcol.toggle());
+    bar.setVisible(getSettings().monitor_enabled);
+    const offSettings = onSettings((st) => bar.setVisible(st.monitor_enabled));
+    function openMonitor(): void {
+      if (panes.has('monitor')) return panes.activate('monitor');
+      const detail = new MonitorDetail(mon);
+      panes.add({ id: 'monitor', title: t('Monitor'), view: detail.el, closable: true, onShow: () => mon.start(), dispose: () => detail.dispose() });
+    }
+    panes.add({ id: 'term', title: t('Terminal'), view: h('div', { class: 'session-term' }, h('div', { class: 'term-col' }, term.el, bar.el)), closable: false, onShow: () => term.show() });
+    tab.view.append(exWrap, split, panes.el, mcol.split, mcol.el);
     tab.onShow = () => panes.activate(panes.active || 'term');
     tab.dispose = () => {
       term.dispose();
+      mon.stop();
+      bar.dispose();
+      mcol.dispose();
+      offSettings();
       panes.disposeAll();
     };
     tab.dirty = () => panes.anyDirty();
     addLocalTab(tab);
     requestAnimationFrame(() => void term.start());
+    mon.start();
     void explorer.load();
 
     /** A file chosen in the local explorer opens in the built-in editor (same codec as the remote editor). */
@@ -381,7 +436,8 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     const panes = new PaneSet();
     // mini task manager under the terminal (numbers, small graphs); a click opens the detailed pane
     const mon = new MonitorSource(() => tab.sessions![tab.sessions!.length - 1], () => activeId === id);
-    const bar = new MonitorBar(mon, () => openMonitor(), info.sftp_error ? t('Monitoring is unavailable: the server has no SFTP') : undefined);
+    const mcol = monitorColumn(mon);
+    const bar = new MonitorBar(mon, () => openMonitor(), info.sftp_error ? t('Monitoring is unavailable: the server has no SFTP') : undefined, () => mcol.toggle());
     bar.setVisible(getSettings().monitor_enabled);
     const offSettings = onSettings((st) => bar.setVisible(st.monitor_enabled));
     const sessionNow = () => tab.sessions![tab.sessions!.length - 1];
@@ -390,6 +446,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       terminal.dispose();
       mon.stop();
       bar.dispose();
+      mcol.dispose();
       offSettings();
       side.disposeAll();
     };
@@ -478,7 +535,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       sideSplit.addEventListener('pointerup', up);
     });
     setSide(false);
-    tab.view.append(exWrap, split, panes.el, sideSplit, sideCol);
+    tab.view.append(exWrap, split, panes.el, sideSplit, sideCol, mcol.split, mcol.el);
     work.append(tab.view);
     tabs.push(tab);
     activate(id);

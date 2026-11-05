@@ -6,9 +6,9 @@ import { drawChart, fmtBits, fmtBytes, fmtDuration, fmtRate, MonitorSource, Poin
 import { t, locale } from './i18n';
 
 /** Resource colours, as in the task manager: blue CPU, purple memory, green disks, orange network. */
-const C = { cpu: '#4aa8e8', mem: '#b072e8', disk: '#5cc258', net: '#f08a3c' };
+const C = { cpu: '#4aa8e8', mem: '#b072e8', disk: '#5cc258', net: '#f08a3c', gpu: '#4ade80', cuda: '#f472b6', vram: '#fbbf24', temp: '#f87171', proc: '#94a3b8' };
 
-type Key = 'cpu' | 'mem' | `disk:${string}` | `net:${string}`;
+type Key = 'cpu' | 'mem' | 'procs' | `gpu:${string}` | `disk:${string}` | `net:${string}`;
 
 const fmt1 = (v: number) => v.toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const fmtPct = (v: number | null) => (v === null ? '…' : `${Math.round(v)}%`);
@@ -62,6 +62,8 @@ function cpuView(onToggle: () => void, total: boolean): View {
   const speed = stat('cpu-speed', t('Speed'));
   const threads = stat('cpu-threads', t('Threads (tasks)'));
   const up = stat('cpu-uptime', t('Uptime'));
+  const ctemp = stat('cpu-temp', t('CPU temp.'), C.temp);
+  ctemp.el.style.display = 'none';
   const tb = table([
     [t('Logical processors'), '—'],
     [t('Load over 1 / 5 / 15 min'), '—'],
@@ -74,7 +76,7 @@ function cpuView(onToggle: () => void, total: boolean): View {
     hd.el,
     h('div', { class: 'tm-row' }, cap, toggle),
     total ? one.el : grid,
-    h('div', { class: 'tm-stats' }, h('div', { class: 'tm-sgrid' }, util.el, speed.el, threads.el, up.el), tb.el),
+    h('div', { class: 'tm-stats' }, h('div', { class: 'tm-sgrid' }, util.el, speed.el, threads.el, up.el, ctemp.el), tb.el),
   );
   return {
     el,
@@ -82,6 +84,8 @@ function cpuView(onToggle: () => void, total: boolean): View {
       const { pts, n } = windowOf(hist, iv);
       const last = pts[pts.length - 1];
       hd.setRight(info?.cpu_model ?? '');
+      ctemp.el.style.display = s.cpu_temp != null ? '' : 'none';
+      if (s.cpu_temp != null) ctemp.set(`${Math.round(s.cpu_temp)} °C`);
       cap.textContent = t('% used over {0} s', Math.round((n - 1) * iv));
       one.peak.textContent = '100%';
       util.set(fmtPct(last?.cpu ?? null));
@@ -246,6 +250,96 @@ function netView(name: string): View {
   };
 }
 
+// ------------------------------------------------------------------ video card (this computer only)
+
+const fmtW = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v)} W`);
+const fmtC = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v)} °C`);
+
+function gpuView(id: string): View {
+  const hd = head('GPU', '');
+  const eng = chartBox(`gpu-${id}-eng`, t('Engines: 3D, CUDA (Compute), Copy'), C.gpu, 180);
+  const mem = chartBox(`gpu-${id}-vram`, t('Video memory (VRAM)'), C.vram, 110);
+  const tmp = chartBox(`gpu-${id}-temp`, t('Temperature'), C.temp, 80);
+  const d3 = stat('gpu-3d', '3D', C.gpu);
+  const cu = stat('gpu-cuda', 'CUDA (Compute)', C.cuda);
+  const cp = stat('gpu-copy', t('Copy'));
+  const vd = stat('gpu-video', t('Video engine'));
+  const vr = stat('gpu-vram', t('VRAM'), C.vram);
+  const tp = stat('gpu-temp', t('Temperature'), C.temp);
+  const pw = stat('gpu-power', t('Power'));
+  const fn = stat('gpu-fan', t('Fan'));
+  const tb = table([
+    [t('Clock'), '—'],
+    [t('Power limit'), '—'],
+    [t('Overall load'), '—'],
+  ]);
+  const el = h('div', { class: 'tm-pane' }, hd.el, eng.el, mem.el, tmp.el, h('div', { class: 'tm-stats' }, h('div', { class: 'tm-sgrid' }, d3.el, cu.el, cp.el, vd.el, vr.el, tp.el, pw.el, fn.el), tb.el));
+  return {
+    el,
+    update(s, hist, iv) {
+      const { pts, n } = windowOf(hist, iv);
+      const g = s.gpus?.find((x) => x.id === id);
+      if (!g) return;
+      const gp = (p: Point | undefined) => p?.gpus.find((x) => x.id === id);
+      const last = gp(pts[pts.length - 1]);
+      hd.setRight(g.name);
+      eng.peak.textContent = '100%';
+      mem.peak.textContent = g.vram_total ? fmtBytes(g.vram_total) : '';
+      tmp.peak.textContent = '100 °C';
+      const ser = (f: (x: NonNullable<ReturnType<typeof gp>>) => number | null) => pts.map((p) => (gp(p) ? f(gp(p)!) : null));
+      drawChart(eng.canvas, [{ data: ser((x) => x.d3), color: C.gpu, fill: true }, { data: ser((x) => x.compute), color: C.cuda }, { data: ser((x) => x.copy), color: C.vram, dash: true }], { max: 100, grid: true, vgrid: true, frame: C.gpu, points: n });
+      drawChart(mem.canvas, [{ data: ser((x) => x.vram), color: C.vram, fill: true }], { max: 100, grid: true, vgrid: true, frame: C.vram, points: n });
+      drawChart(tmp.canvas, [{ data: ser((x) => x.temp), color: C.temp, fill: true }], { max: 100, grid: true, vgrid: true, frame: C.temp, points: n });
+      d3.set(fmtPct(last?.d3 ?? null));
+      cu.set(last?.compute == null ? '—' : fmtPct(last.compute));
+      cp.set(last?.copy == null ? '—' : fmtPct(last.copy));
+      vd.set(last?.video == null ? '—' : fmtPct(last.video));
+      vr.set(g.vram_used === null ? '—' : g.vram_total ? `${fmtBytes(g.vram_used)} / ${fmtBytes(g.vram_total)}` : fmtBytes(g.vram_used));
+      tp.set(fmtC(g.temp));
+      pw.set(fmtW(g.power));
+      fn.set(g.fan == null ? '—' : `${Math.round(g.fan)}%`);
+      tb.set(0, g.clock == null ? '—' : `${Math.round(g.clock)} MHz`);
+      tb.set(1, fmtW(g.power_limit));
+      tb.set(2, g.util == null ? '—' : fmtPct(g.util));
+    },
+  };
+}
+
+function procsView(): View {
+  const hd = head(t('Processes'), '');
+  const body = h('tbody');
+  const el = h(
+    'div',
+    { class: 'tm-pane' },
+    hd.el,
+    h('div', { class: 'muted' }, t('The busiest processes: processor, video card and memory.')),
+    h('table', { class: 'tm-procs', 'data-testid': 'md-procs' }, h('thead', {}, h('tr', {}, h('th', {}, t('Name')), h('th', {}, 'PID'), h('th', {}, 'CPU'), h('th', {}, 'GPU'), h('th', {}, t('VRAM')), h('th', {}, t('Memory')))), body),
+  );
+  return {
+    el,
+    update(s) {
+      clear(body);
+      const list = s.procs ?? [];
+      hd.setRight(String(list.length));
+      for (const p of list) {
+        body.append(
+          h(
+            'tr',
+            { 'data-testid': 'md-proc', 'data-pid': String(p.pid) },
+            h('td', {}, p.name),
+            h('td', {}, String(p.pid)),
+            h('td', {}, fmtPct(p.cpu)),
+            h('td', { class: p.gpu != null && p.gpu >= 50 ? 'hot' : '' }, p.gpu == null ? '—' : fmtPct(p.gpu)),
+            h('td', {}, p.vram ? fmtBytes(p.vram) : '—'),
+            h('td', {}, fmtBytes(p.mem)),
+          ),
+        );
+      }
+      if (!list.length) body.append(h('tr', {}, h('td', { colspan: '6', class: 'muted' }, t('Nothing is busy right now.'))));
+    },
+  };
+}
+
 // ------------------------------------------------------------------ the tab
 
 export class MonitorDetail {
@@ -259,8 +353,12 @@ export class MonitorDetail {
   private raf = 0;
   private thumbs = new Map<Key, HTMLCanvasElement>();
 
-  constructor(private src: MonitorSource) {
-    this.el = h('div', { class: 'monitor tm', 'data-testid': 'monitor' }, h('div', { class: 'tm-left' }, this.side, this.rateBox()), this.main);
+  /** `compact`: the column next to the terminal: the resources are chips on top, the details one below the other. */
+  constructor(
+    private src: MonitorSource,
+    private compact = false,
+  ) {
+    this.el = h('div', { class: 'monitor tm' + (compact ? ' tm-compact' : ''), 'data-testid': compact ? 'monitor-column' : 'monitor' }, h('div', { class: 'tm-left' }, this.side, compact ? null : this.rateBox()), this.main);
     this.off = src.subscribe(() => this.schedule());
     new ResizeObserver(() => this.schedule()).observe(this.el);
     this.render();
@@ -340,16 +438,23 @@ export class MonitorDetail {
       const dp = last?.disks.find((x) => x.name === d.name);
       out.push({ key: `disk:${d.name}`, title: t('Disk {0} ({1})', idx, d.name), sub: `${dev?.kind ? dev.kind + ' ' : ''}${fmtPct(dp?.util ?? null)}`, color: C.disk, data: pts.map((p) => p.disks.find((x) => x.name === d.name)?.util ?? null), max: 100 });
     });
+    (s.gpus ?? []).forEach((g) => {
+      const gp = last?.gpus.find((x) => x.id === g.id);
+      out.push({ key: `gpu:${g.id}`, title: g.name || 'GPU', sub: `3D ${fmtPct(gp?.d3 ?? null)}${gp?.compute != null ? ` · CUDA ${fmtPct(gp.compute)}` : ''}`, color: C.gpu, data: pts.map((p) => p.gpus.find((x) => x.id === g.id)?.d3 ?? null), max: 100, data2: pts.map((p) => p.gpus.find((x) => x.id === g.id)?.compute ?? null) });
+    });
     (s.ifaces ?? []).forEach((i) => {
       const ip = last?.ifaces.find((x) => x.name === i.name);
       out.push({ key: `net:${i.name}`, title: i.name, sub: ip ? `Tx: ${fmtBits(ip.tx)} Rx: ${fmtBits(ip.rx)}` : '…', color: C.net, data: pts.map((p) => p.ifaces.find((x) => x.name === i.name)?.rx ?? null), data2: pts.map((p) => p.ifaces.find((x) => x.name === i.name)?.tx ?? null) });
     });
+    if (s.procs) out.push({ key: 'procs', title: t('Processes'), sub: s.procs[0] ? `${s.procs[0].name} ${fmtPct(s.procs[0].cpu)}` : '', color: C.proc, data: [], max: 100 });
     return out;
   }
 
   private viewFor(key: Key): View {
     if (key === 'cpu') return cpuView(() => ((this.cpuTotal = !this.cpuTotal), (this.view = null), this.schedule()), this.cpuTotal);
     if (key === 'mem') return memView();
+    if (key === 'procs') return procsView();
+    if (key.startsWith('gpu:')) return gpuView(key.slice(4));
     if (key.startsWith('disk:')) return diskView(key.slice(5));
     return netView(key.slice(4));
   }

@@ -61,6 +61,14 @@ One window for everything command-line. The left column switches between **Sessi
 
 ![Notes](docs/screenshots/notes.png)
 
+### Monitor of this computer
+
+Local terminals get the same bar as SSH sessions, for your own computer: processor, memory, disks, network and the **video card** (3D and CUDA load, video memory, temperature, power; from the Windows performance counters and, if present, `nvidia-smi`), plus the processor temperature and the busiest processes (for example the `python` of ComfyUI). A column to the right of any terminal, local or SSH, shows the same data next to your work; a click on the bar opens the full task-manager tab.
+
+![Monitor bar of this computer](docs/screenshots/local-monitor-bar.png)
+
+![Monitor column](docs/screenshots/monitor-column.png)
+
 ### Languages
 
 English, Русский, Español, Deutsch, Français, Português (Brasil), 简体中文 and 日本語. The default follows the system language; change it in Settings → Language.
@@ -95,12 +103,12 @@ Prebuilt packages are available on the [Releases](../../releases) page.
 ### Ubuntu / Debian
 
 ```bash
-sudo apt install ./d256shell_1.2.1_amd64.deb
+sudo apt install ./d256shell_1.3.0_amd64.deb
 ```
 
 ### Arch Linux
 
-Put `PKGBUILD`, `d256shell-1.2.1-linux-x86_64.tar.gz`, `d256shell.desktop` and `LICENSE` in one folder, then run:
+Put `PKGBUILD`, `d256shell-1.3.0-linux-x86_64.tar.gz`, `d256shell.desktop` and `LICENSE` in one folder, then run:
 
 ```bash
 makepkg -si
@@ -109,7 +117,7 @@ makepkg -si
 ### Portable (any Linux)
 
 ```bash
-tar xzf d256shell-1.2.1-linux-x86_64.tar.gz && ./d256shell/d256shell
+tar xzf d256shell-1.3.0-linux-x86_64.tar.gz && ./d256shell/d256shell
 ```
 
 Requires WebKitGTK 4.1, GTK 3 and OpenSSH. The binary is built on Ubuntu 22.04 (glibc ≥ 2.34) and tested by installing on clean Ubuntu 22.04, 24.04 and Arch.

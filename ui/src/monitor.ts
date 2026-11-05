@@ -3,6 +3,7 @@
 // executed on the server), so it needs SFTP and a Linux server.
 import { api, ApiError } from './api';
 import { clear, h } from './dom';
+import { icon } from './icons';
 import { getSettings } from './settings';
 import { t, locale } from './i18n';
 
@@ -18,6 +19,10 @@ export interface Sample {
   ifaces?: { name: string; rx: number; tx: number }[] | null;
   /** Average current core frequency, MHz (null when the kernel does not report it). */
   cpu_mhz?: number | null;
+  /** This computer only: video cards, processor temperature (°C) and the busiest processes. */
+  gpus?: GpuSample[];
+  cpu_temp?: number | null;
+  procs?: ProcSample[];
   info?: {
     hostname: string | null;
     os: string | null;
@@ -27,6 +32,43 @@ export interface Sample {
       ifaces: Record<string, { speed_mbit: number | null; state: string | null; mac: string | null }>;
     };
   };
+}
+
+export interface GpuSample {
+  id: string;
+  name: string;
+  /** Overall load, 0..100 (nvidia-smi / sysfs). */
+  util: number | null;
+  /** Load per engine type (Windows counters): 3D, Compute (CUDA), Copy, VideoDecode ... */
+  engines: Record<string, number>;
+  vram_used: number | null;
+  vram_total: number | null;
+  temp: number | null;
+  power: number | null;
+  power_limit: number | null;
+  fan: number | null;
+  clock: number | null;
+}
+
+export interface ProcSample {
+  pid: number;
+  name: string;
+  cpu: number;
+  mem: number;
+  gpu: number | null;
+  vram: number | null;
+}
+
+/** A video card at one moment (percentages, no deltas needed). */
+export interface GpuPoint {
+  id: string;
+  d3: number | null;
+  compute: number | null;
+  copy: number | null;
+  video: number | null;
+  vram: number | null;
+  temp: number | null;
+  power: number | null;
 }
 
 /** One point of the history, already converted to percentages and rates. */
@@ -54,6 +96,8 @@ export interface IfacePoint {
 }
 
 export interface Point {
+  gpus: GpuPoint[];
+  cpuTemp: number | null;
   disks: DiskPoint[];
   ifaces: IfacePoint[];
   mhz: number | null;
@@ -134,6 +178,8 @@ export class MonitorSource {
   constructor(
     private session: () => string,
     private active: () => boolean,
+    /** The monitor of THIS computer (local terminal tabs) instead of a server. */
+    readonly local = false,
   ) {}
 
   subscribe(fn: () => void): () => void {
@@ -187,7 +233,8 @@ export class MonitorSource {
     try {
       // device facts (disk size / model, link speed) are read with the first sample and again when a disk or an
       // interface shows up later (idle disks are hidden at first)
-      const s = (await api.monitorSample(this.session(), !this.info || this.missingDevices())) as unknown as Sample;
+      const wantInfo = !this.info || this.missingDevices();
+      const s = (this.local ? await api.localMonitorSample(wantInfo) : await api.monitorSample(this.session(), wantInfo)) as unknown as Sample;
       const at = performance.now();
       if (s.info) this.info = s.info;
       this.last = s;
@@ -226,7 +273,19 @@ export class MonitorSource {
       if (!o || c.some((v, i) => i < 7 && v < o[i])) return { name: d.name, r: 0, w: 0, ri: 0, wi: 0, util: 0, queue: c[7], resp: 0 };
       return { name: d.name, r: ((c[1] - o[1]) * 512) / dt, w: ((c[4] - o[4]) * 512) / dt, ri: (c[0] - o[0]) / dt, wi: (c[3] - o[3]) / dt, util: Math.min(100, ((c[6] - o[6]) / (dt * 1000)) * 100), queue: c[7], resp: ops(c, o) > 0 ? (c[2] - o[2] + (c[5] - o[5])) / ops(c, o) : 0 };
     });
+    const gpus: GpuPoint[] = (b.s.gpus ?? []).map((g) => ({
+      id: g.id,
+      d3: g.engines['3D'] ?? g.util ?? null,
+      compute: g.engines['Compute'] ?? null,
+      copy: g.engines['Copy'] ?? null,
+      video: Math.max(g.engines['VideoDecode'] ?? -1, g.engines['VideoEncode'] ?? -1, g.engines['VideoProcessing'] ?? -1) >= 0 ? Math.max(g.engines['VideoDecode'] ?? 0, g.engines['VideoEncode'] ?? 0, g.engines['VideoProcessing'] ?? 0) : null,
+      vram: g.vram_used !== null && g.vram_total ? (g.vram_used / g.vram_total) * 100 : null,
+      temp: g.temp,
+      power: g.power,
+    }));
     return {
+      gpus,
+      cpuTemp: b.s.cpu_temp ?? null,
       cpu: delta(a.s.cpu, b.s.cpu),
       cores: b.s.cores.map((c, i) => delta(a.s.cores[i], c) ?? 0),
       mem: m && m.total > 0 ? ((m.total - m.available) / m.total) * 100 : null,
@@ -245,7 +304,7 @@ export class MonitorSource {
 
 // ------------------------------------------------------------------ drawing
 
-export const COLORS = { cpu: '#60cdff', mem: '#b4a0ff', swap: '#ff9ac1', rx: '#6ccb5f', tx: '#ffb454', grid: 'rgba(255,255,255,.08)' };
+export const COLORS = { cpu: '#60cdff', mem: '#b4a0ff', swap: '#ff9ac1', rx: '#6ccb5f', tx: '#ffb454', grid: 'rgba(255,255,255,.08)', gpu3d: '#4ade80', cuda: '#f472b6', vram: '#fbbf24', temp: '#f87171' };
 
 interface Series {
   data: (number | null)[];
@@ -330,7 +389,7 @@ export function drawChart(canvas: HTMLCanvasElement, series: Series[], opts: { m
   }
 }
 
-export const level = (v: number | null): string => (v === null ? '' : v >= 90 ? 'crit' : v >= 70 ? 'warn' : '');
+export const level = (v: number | null, warn = 70, crit = 90): string => (v === null ? '' : v >= crit ? 'crit' : v >= warn ? 'warn' : '');
 
 // ------------------------------------------------------------------ the bar
 
@@ -341,6 +400,8 @@ export class MonitorBar {
   private cCpu = h('canvas', { class: 'mon-spark', title: t('Processor load') }) as HTMLCanvasElement;
   private cMem = h('canvas', { class: 'mon-spark', title: t('Memory') }) as HTMLCanvasElement;
   private cNet = h('canvas', { class: 'mon-spark', title: t('Network') }) as HTMLCanvasElement;
+  private cGpu = h('canvas', { class: 'mon-spark', title: t('GPU') }) as HTMLCanvasElement;
+  private cVram = h('canvas', { class: 'mon-spark', title: t('Video memory') }) as HTMLCanvasElement;
   private off: () => void;
   private raf = 0;
 
@@ -348,8 +409,10 @@ export class MonitorBar {
     private src: MonitorSource,
     onOpen: () => void,
     private unavailable?: string,
+    /** When given, the bar has a button that folds / unfolds the monitor column next to the terminal. */
+    private onColumn?: () => void,
   ) {
-    this.graphs.append(this.cCpu, this.cMem, this.cNet);
+    this.graphs.append(this.cCpu, this.cMem, this.cGpu, this.cVram, this.cNet);
     this.el = h('div', { class: 'mon-bar', role: 'button', tabindex: '0', title: t('Click to open the detailed monitor'), 'data-testid': 'monitor-bar', onclick: onOpen, onkeydown: (e) => ((e as KeyboardEvent).key === 'Enter' && onOpen()) }, this.nums, h('div', { class: 'mon-gap' }), this.graphs);
     this.off = src.subscribe(() => this.schedule());
     this.render();
@@ -403,13 +466,37 @@ export class MonitorBar {
       this.item('RAM', memPct === null || !mem ? '—' : `${Math.round(memPct)}% · ${fmtBytes(used)} of ${fmtBytes(mem.total)}`, level(memPct), 'mon-mem'),
       ...(mem && mem.swap_total > 0 ? [this.item(t('Swap'), `${Math.round(p?.swap ?? ((mem.swap_total - mem.swap_free) / mem.swap_total) * 100)}%`, level(p?.swap ?? null))] : []),
       ...(s.load ? [this.item(t('Load'), `${s.load.l1.toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`, '', 'mon-load')] : []),
+      ...(s.cpu_temp != null ? [this.item(t('CPU temp.'), `${Math.round(s.cpu_temp)} °C`, level(s.cpu_temp, 70, 85), 'mon-cputemp')] : []),
+      ...this.gpuItems(s, p),
       this.item(t('Network'), p ? `↓ ${fmtRate(p.rx)}  ↑ ${fmtRate(p.tx)}` : '…', '', 'mon-net'),
       this.item(t('Uptime'), fmtUptime(s.uptime)),
     );
+    if (this.onColumn && !this.colBtn.isConnected) this.el.append(this.colBtn);
     const hist = this.src.history;
     drawChart(this.cCpu, [{ data: hist.map((x) => x.cpu), color: COLORS.cpu, fill: true }], { max: 100 });
     drawChart(this.cMem, [{ data: hist.map((x) => x.mem), color: COLORS.mem, fill: true }], { max: 100 });
     drawChart(this.cNet, [{ data: hist.map((x) => x.rx), color: COLORS.rx }, { data: hist.map((x) => x.tx), color: COLORS.tx }], { min: 10 * 1024 });
+    const hasGpu = !!s.gpus?.length;
+    this.cGpu.style.display = hasGpu ? '' : 'none';
+    this.cVram.style.display = hasGpu && s.gpus![0].vram_total ? '' : 'none';
+    if (hasGpu) {
+      drawChart(this.cGpu, [{ data: hist.map((x) => x.gpus[0]?.d3 ?? null), color: COLORS.gpu3d, fill: true }, { data: hist.map((x) => x.gpus[0]?.compute ?? null), color: COLORS.cuda }], { max: 100 });
+      drawChart(this.cVram, [{ data: hist.map((x) => x.gpus[0]?.vram ?? null), color: COLORS.vram, fill: true }], { max: 100 });
+    }
+  }
+
+  private colBtn = h('button', { class: 'mon-col-btn', type: 'button', title: t('Monitor column on the right'), 'aria-label': t('Monitor column on the right'), 'data-testid': 'mon-col-toggle', onclick: (e) => (e.stopPropagation(), this.onColumn?.()) }, icon('sidebar', 13));
+
+  /** Numbers of the first video card: 3D load, CUDA (Compute) load, video memory, temperature and power. */
+  private gpuItems(s: Sample, p: Point | undefined): HTMLElement[] {
+    const g = s.gpus?.[0];
+    if (!g) return [];
+    const gp = p?.gpus[0];
+    const out: HTMLElement[] = [this.item(t('GPU 3D'), gp?.d3 == null ? '…' : `${Math.round(gp.d3)}%`, level(gp?.d3 ?? null), 'mon-gpu3d')];
+    if (gp?.compute != null) out.push(this.item('CUDA', `${Math.round(gp.compute)}%`, level(gp.compute), 'mon-cuda'));
+    if (g.vram_used !== null) out.push(this.item(t('VRAM'), g.vram_total ? `${fmtBytes(g.vram_used)} / ${fmtBytes(g.vram_total)}` : fmtBytes(g.vram_used), level(gp?.vram ?? null), 'mon-vram'));
+    if (g.temp !== null || g.power !== null) out.push(this.item(t('GPU'), [g.temp !== null ? `${Math.round(g.temp)} °C` : '', g.power !== null ? `${Math.round(g.power)} W` : ''].filter(Boolean).join(' · '), level(g.temp, 75, 88), 'mon-gputemp'));
+    return out;
   }
 }
 

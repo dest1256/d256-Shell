@@ -30,6 +30,7 @@ and the absence of a fresh suspicious release (for npm and `tauri-plugin-dialog`
 | hmac, sha1 | 0.13.0, 0.11.0 | Matching hashed `known_hosts` entries (HMAC-SHA1) | github.com/RustCrypto/MACs, /hashes | MIT OR Apache-2.0 | OpenSSH known_hosts format |
 | sha2 | 0.11.1 | SHA-256 of the file version in the editor | github.com/RustCrypto/hashes | MIT OR Apache-2.0 | Detecting that a file changed on the server |
 | base64ct | 1.8.3 | Base64 (known_hosts, terminal IPC) | github.com/RustCrypto/formats | Apache-2.0 OR MIT | OpenSSH formats, terminal input |
+| windows-sys | 0.61.2 | Performance counters (PDH), memory status: the local monitor on Windows (Windows target only) | github.com/microsoft/windows-rs | MIT OR Apache-2.0 | Task-manager data of this computer: processor, disks, network, video card |
 | serde, serde_json | 1.0.229, 1.0.154 | API and settings serialization | github.com/serde-rs | MIT OR Apache-2.0 | JSON API, settings.json |
 
 Tests only (`dev-dependencies` of devbridge): base64ct, getrandom, hmac, sha1 — generating the TOTP code for the 2FA test.

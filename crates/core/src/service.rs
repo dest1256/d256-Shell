@@ -103,6 +103,8 @@ pub struct Service {
     settings: Mutex<Settings>,
     /// Program that ssh starts as SSH_ASKPASS: this executable (it switches to helper mode by env var).
     askpass_exe: std::path::PathBuf,
+    /// Counters of this computer (the local monitor keeps state between samples).
+    localmon: Mutex<crate::localmon::LocalMonitor>,
 }
 
 fn now() -> u64 {
@@ -166,6 +168,7 @@ impl Service {
             hub,
             settings: Mutex::new(settings),
             askpass_exe: std::env::current_exe().unwrap_or_default(),
+            localmon: Mutex::new(crate::localmon::LocalMonitor::new()),
         }
     }
 
@@ -446,6 +449,7 @@ impl Service {
             "set_settings" => self.set_settings(&params),
             "ssh_info" => Ok(self.ssh_info()),
             "shell_profiles" => Ok(self.shell_profiles()),
+            "local_monitor_sample" => Ok(self.local_monitor_sample(&params)),
             "lfs_list" => self.lfs_list(&params),
             "lfs" => self.lfs(&params),
             "local_term_open" => self.local_term_open(&params),

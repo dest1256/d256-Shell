@@ -199,6 +199,7 @@ export const api = {
   termClose: (term_id: string) => call<object>('term_close', { term_id }),
   lfsList: (path?: string) => call<Listing>('lfs_list', { path }),
   lfs: <T = Record<string, never>>(op: string, params: Record<string, unknown> = {}) => call<T>('lfs', { op, ...params }),
+  localMonitorSample: (info = false) => call<Record<string, unknown>>('local_monitor_sample', { info }),
   shellProfiles: () => call<{ profiles: ShellProfile[]; startup: string }>('shell_profiles'),
   localOpen: (profile_id: string, cols: number, rows: number) => call<{ term_id: string }>('local_term_open', { profile_id, cols, rows }),
   scriptsList: () => call<{ scripts: ScriptItem[]; migrated: number }>('scripts_list'),

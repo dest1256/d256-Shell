@@ -653,3 +653,91 @@ fn local_explorer_lists_changes_and_edits_files_through_the_service() {
         "system folders are refused"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn local_monitor_samples_have_the_server_shape_plus_gpu_temperature_and_processes() {
+    use std::os::unix::fs::PermissionsExt;
+    let (svc, _root) = service("localmon");
+    // a stand-in for nvidia-smi (the real one needs an NVIDIA card): the program is found through D256SHELL_NVIDIA_SMI
+    let dir = tmp("localmon-smi");
+    let smi = dir.join("nvidia-smi");
+    let me = std::process::id();
+    std::fs::write(
+        &smi,
+        format!(
+            "#!/bin/sh\ncase \"$1\" in\n  --query-gpu*) echo '0, NVIDIA GeForce RTX 4090, 92, 21914, 24564, 71, 312.45, 450.00, 64, 2535';;\n  --query-compute-apps*) echo '{me}, 20800';;\nesac\n"
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&smi, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::env::set_var("D256SHELL_NVIDIA_SMI", &smi);
+
+    let first = call(&svc, "local_monitor_sample", json!({"info": true}));
+    // the shape of the server monitor
+    assert_eq!(first["cpu"].as_array().unwrap().len(), 2);
+    assert!(!first["cores"].as_array().unwrap().is_empty());
+    assert!(first["mem"]["total"].as_u64().unwrap() > 0);
+    assert!(first["uptime"].as_f64().unwrap() > 0.0);
+    assert!(first["net"].is_object() && first["disks"].is_array() && first["ifaces"].is_array());
+    assert!(
+        first["info"]["cpu_model"].is_string() || first["info"]["hostname"].is_string(),
+        "{}",
+        first["info"]
+    );
+    assert!(first["info"]["devices"].is_object());
+    // the video card (from the stand-in) with its numbers
+    let g = &first["gpus"][0];
+    assert_eq!(g["name"], "NVIDIA GeForce RTX 4090");
+    assert_eq!(
+        (g["util"].as_f64(), g["temp"].as_f64(), g["power"].as_f64()),
+        (Some(92.0), Some(71.0), Some(312.45))
+    );
+    assert_eq!(g["vram_total"].as_u64(), Some(24564 * 1024 * 1024));
+    assert!(first.get("cpu_temp").is_some());
+    assert!(first["procs"].as_array().is_some());
+
+    // burn a little CPU so that this very process shows up, then the second sample has the process list
+    let t = std::time::Instant::now();
+    let mut x = 0u64;
+    while t.elapsed() < Duration::from_millis(300) {
+        x = x.wrapping_add(std::hint::black_box(1));
+    }
+    assert!(x > 0);
+    let second = call(&svc, "local_monitor_sample", json!({}));
+    assert!(
+        second.get("info").is_none(),
+        "the machine description comes only when asked"
+    );
+    assert!(
+        second["cpu"][1].as_u64() >= first["cpu"][1].as_u64(),
+        "cumulative counters only grow"
+    );
+    let procs = second["procs"].as_array().unwrap();
+    let mine = procs
+        .iter()
+        .find(|p| p["pid"].as_u64() == Some(u64::from(me)))
+        .unwrap_or_else(|| panic!("this process is busy and must be listed: {procs:?}"));
+    assert_eq!(
+        mine["vram"].as_u64(),
+        Some(20800 * 1024 * 1024),
+        "memory of a compute app comes from nvidia-smi"
+    );
+    assert!(mine["cpu"].as_f64().unwrap() > 0.0 && mine["mem"].as_u64().unwrap() > 0);
+    std::env::remove_var("D256SHELL_NVIDIA_SMI");
+
+    // a missing nvidia-smi is not an error: no cards, everything else works
+    std::env::set_var("D256SHELL_NVIDIA_SMI", dir.join("nope"));
+    let svc2 = service("localmon2").0;
+    let s = call(&svc2, "local_monitor_sample", json!({}));
+    assert_eq!(
+        s["gpus"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|g| g["name"].as_str().is_some_and(|n| n.contains("RTX")))
+            .count(),
+        0
+    );
+    std::env::remove_var("D256SHELL_NVIDIA_SMI");
+}

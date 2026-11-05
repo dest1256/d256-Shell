@@ -3,6 +3,9 @@ pub mod hub;
 pub mod keyfile;
 pub mod known_hosts;
 pub mod localfs;
+pub mod localmon;
+#[cfg(windows)]
+mod localmon_win;
 pub mod localshell;
 pub mod logging;
 pub mod monitor;

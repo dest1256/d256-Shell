@@ -24,3 +24,7 @@ sha1 = "0.11.0"
 sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "time", "sync", "macros", "io-util", "fs"] }
 zeroize = "1.9.1"
+
+[target.'cfg(windows)'.dependencies]
+# performance counters (PDH), memory status: the local monitor on Windows
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Performance", "Win32_System_ProcessStatus", "Win32_System_SystemInformation"] }

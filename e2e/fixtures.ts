@@ -12,12 +12,12 @@ export interface Bridge {
 let nextPort = 5300;
 
 /** Start the real core behind devbridge on a throw-away data dir. Pass `dataDir` to reuse one (restart tests). */
-export async function startBridge(dataDir?: string): Promise<Bridge> {
+export async function startBridge(dataDir?: string, extraEnv: Record<string, string> = {}): Promise<Bridge> {
   const dir = dataDir ?? mkdtempSync(join(tmpdir(), 'd256shell-e2e-'));
   const port = nextPort++;
   const bin = process.env.DEVBRIDGE_BIN ?? '/build/target/debug/d256shell-devbridge';
   const child: ChildProcess = spawn(bin, [], {
-    env: { ...process.env, D256SHELL_DATA_DIR: dir, DEVBRIDGE_PORT: String(port), DEVBRIDGE_UI: join(__dirname, '..', 'ui', 'dist') },
+    env: { ...process.env, ...extraEnv, D256SHELL_DATA_DIR: dir, DEVBRIDGE_PORT: String(port), DEVBRIDGE_UI: join(__dirname, '..', 'ui', 'dist') },
     stdio: ['ignore', 'pipe', 'inherit'],
   });
   await new Promise<void>((resolve, reject) => {
