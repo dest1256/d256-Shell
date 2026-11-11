@@ -287,7 +287,7 @@ function gpuView(id: string): View {
       mem.peak.textContent = g.vram_total ? fmtBytes(g.vram_total) : '';
       tmp.peak.textContent = '100 °C';
       const ser = (f: (x: NonNullable<ReturnType<typeof gp>>) => number | null) => pts.map((p) => (gp(p) ? f(gp(p)!) : null));
-      drawChart(eng.canvas, [{ data: ser((x) => x.d3), color: C.gpu, fill: true }, { data: ser((x) => x.compute), color: C.cuda }, { data: ser((x) => x.copy), color: C.vram, dash: true }], { max: 100, grid: true, vgrid: true, frame: C.gpu, points: n });
+      drawChart(eng.canvas, [{ data: ser((x) => x.d3), color: C.gpu, fill: true }, { data: ser((x) => x.compute), color: C.cuda, fill: true }, { data: ser((x) => x.copy), color: C.vram, dash: true }], { max: 100, grid: true, vgrid: true, frame: C.gpu, points: n });
       drawChart(mem.canvas, [{ data: ser((x) => x.vram), color: C.vram, fill: true }], { max: 100, grid: true, vgrid: true, frame: C.vram, points: n });
       drawChart(tmp.canvas, [{ data: ser((x) => x.temp), color: C.temp, fill: true }], { max: 100, grid: true, vgrid: true, frame: C.temp, points: n });
       d3.set(fmtPct(last?.d3 ?? null));

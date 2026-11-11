@@ -2,6 +2,10 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.3.2 — 2026-11-11
+**Changed**
+- **Video card graph:** the CUDA (Compute) load is now filled like the 3D load and the other graphs, not only drawn as a line. A long generation at 99% or at 0% is visible at a glance.
+
 ## 1.3.1 — 2026-11-05
 A fix for the release workflow; the program itself is unchanged.
 
