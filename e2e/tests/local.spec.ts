@@ -142,7 +142,7 @@ test('notes: any title, saved by itself, encrypted in the vault', async ({ page 
   await page.getByTestId('master').fill('e2e-master-pass');
   await page.getByTestId('unlock').click();
   await page.getByTestId('rail-notes').click();
-  await page.getByTestId('note-item').filter({ hasText: 'VPS passwords' }).click();
+  await page.getByTestId('note-item').filter({ hasText: 'VPS passwords' }).dblclick();
   await expect(page.locator('[data-testid="note-editor"] .cm-content')).toContainText('very-secret-123');
 
   // delete with confirmation
@@ -295,14 +295,17 @@ test('scripts: a click runs the script or switches to its running tab; edit, run
   await expect(named).toContainText('svc.sh');
   await expect.poll(async () => ((await rpc(page, 'get_settings')) as { script_names: Record<string, string> }).script_names['own:svc.sh']).toBe('My service');
 
-  // a click starts it
+  // a single click only selects; a double click starts it
   await named.locator('.srv-name').click();
+  await expect(named).toHaveClass(/selected/);
+  await expect(page.locator('[data-testid^="tab-local"]')).toHaveCount(0);
+  await named.locator('.srv-name').dblclick();
   await expect(page.getByTestId('tab-local1')).toContainText('My service');
   await expect.poll(() => page.evaluate(() => [...document.querySelectorAll('[data-testid="local-terminal"]')].map((e) => { const t = (e as unknown as { __term: XTerm }).__term.buffer.active; let s = ''; for (let i = 0; i < t.length; i++) s += t.getLine(i)?.translateToString(true) + '\n'; return s; }).join('|')), { timeout: 20_000 }).toContain('running-here');
 
-  // a second click does NOT start another one: it switches to the running tab
+  // a second start does NOT start another one: it switches to the running tab
   await page.getByTestId('tab-home').click();
-  await page.getByTestId('script-item').filter({ hasText: 'My service' }).locator('.srv-name').click();
+  await page.getByTestId('script-item').filter({ hasText: 'My service' }).locator('.srv-name').dblclick();
   await expect(page.getByTestId('tab-local1')).toHaveAttribute('aria-selected', 'true');
   await expect(page.locator('[data-testid^="tab-local"]')).toHaveCount(1);
 

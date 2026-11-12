@@ -35,7 +35,14 @@ const fail = (e: unknown) => toast(errText(e), e instanceof ApiError ? e.code : 
 const iconBtn = (name: string, title: string, testid: string, fn: () => void) =>
   h('button', { class: 'icon-btn', title, 'aria-label': title, 'data-testid': testid, type: 'button', onclick: (e) => (e.stopPropagation(), fn()) }, icon(name, 14));
 
-/** "a b 'c d'" -> ["a","b","c d"] */
+/** A single click only selects the item (like a session), a double click or Enter opens it. */
+const pick = (e: Event) => {
+  const el = e.currentTarget as HTMLElement;
+  el.parentElement?.querySelectorAll('.selected').forEach((x) => x.classList.remove('selected'));
+  el.classList.add('selected');
+};
+
+/** "a b 'c d'" ->["a","b","c d"] */
 export function splitArgs(s: string): string[] {
   const out: string[] = [];
   const re = /"([^"]*)"|'([^']*)'|(\S+)/g;
@@ -68,7 +75,7 @@ export function createTerminals(ctx: SectionCtx): Section {
       list.append(
         h(
           'li',
-          { class: 'srv', role: 'option', tabindex: '0', 'data-testid': 'profile-item', 'data-id': p.id, ondblclick: () => ctx.openTerminal(p), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && ctx.openTerminal(p) },
+          { class: 'srv', role: 'option', tabindex: '0', 'data-testid': 'profile-item', 'data-id': p.id, onclick: pick, ondblclick: () => ctx.openTerminal(p), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && ctx.openTerminal(p) },
           h('span', { class: 'srv-ico' }, iconFor(key, p.custom ? 'box' : 'terminal')),
           h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, p.name), h('div', { class: 'sub' }, (star ? '★ ' + t('opens at start') + ' · ' : '') + p.program)),
           h(
@@ -82,7 +89,7 @@ export function createTerminals(ctx: SectionCtx): Section {
       grid.append(
         h(
           'button',
-          { class: 'card-srv', 'data-testid': 'profile-card', ondblclick: () => ctx.openTerminal(p) },
+          { class: 'card-srv', 'data-testid': 'profile-card', onclick: pick, ondblclick: () => ctx.openTerminal(p) },
           h('span', { class: 'srv-ico big' }, iconFor(key, p.custom ? 'box' : 'terminal', 20)),
           h('span', { class: 'grow left' }, h('strong', {}, p.name), h('span', { class: 'sub' }, p.program)),
         ),
@@ -275,7 +282,7 @@ export function createScripts(ctx: SectionCtx): Section {
       const open = () => (s.exists ? ctx.runScript(s) : toast(t('The file was not found: {0}', s.path)));
       return h(
         'li',
-        { class: 'srv' + (s.exists ? '' : ' missing'), role: 'option', tabindex: '0', 'data-testid': 'script-item', 'data-id': s.id, 'data-missing': s.exists ? '0' : '1', onclick: open, onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && open() },
+        { class: 'srv' + (s.exists ? '' : ' missing'), role: 'option', tabindex: '0', 'data-testid': 'script-item', 'data-id': s.id, 'data-missing': s.exists ? '0' : '1', onclick: pick, ondblclick: open, onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && open() },
         h('span', { class: 'srv-ico' }, iconFor(key, 'script')),
         h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, label(s)), h('div', { class: 'sub' }, sub(s))),
         h(
@@ -298,7 +305,7 @@ export function createScripts(ctx: SectionCtx): Section {
       grid.append(
         h(
           'button',
-          { class: 'card-srv' + (s.exists ? '' : ' missing'), 'data-testid': 'script-card', onclick: () => (s.exists ? ctx.runScript(s) : toast(t('The file was not found: {0}', s.path))) },
+          { class: 'card-srv' + (s.exists ? '' : ' missing'), 'data-testid': 'script-card', onclick: pick, ondblclick: () => (s.exists ? ctx.runScript(s) : toast(t('The file was not found: {0}', s.path))) },
           h('span', { class: 'srv-ico big' }, iconFor(key, 'script', 20)),
           h('span', { class: 'grow left' }, h('strong', {}, label(s)), h('span', { class: 'sub' }, sub(s))),
         ),
@@ -381,7 +388,7 @@ export function createNotes(ctx: SectionCtx): Section {
       list.append(
         h(
           'li',
-          { class: 'srv', role: 'option', tabindex: '0', 'data-testid': 'note-item', 'data-id': n.id, onclick: () => ctx.openNote(n.id), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && ctx.openNote(n.id) },
+          { class: 'srv', role: 'option', tabindex: '0', 'data-testid': 'note-item', 'data-id': n.id, onclick: pick, ondblclick: () => ctx.openNote(n.id), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && ctx.openNote(n.id) },
           h('span', { class: 'srv-ico' }, iconFor(key, 'note')),
           h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, n.title), h('div', { class: 'sub' }, when(n.updated))),
           h(
@@ -395,7 +402,7 @@ export function createNotes(ctx: SectionCtx): Section {
       grid.append(
         h(
           'button',
-          { class: 'card-srv', 'data-testid': 'note-card', onclick: () => ctx.openNote(n.id) },
+          { class: 'card-srv', 'data-testid': 'note-card', onclick: pick, ondblclick: () => ctx.openNote(n.id) },
           h('span', { class: 'srv-ico big' }, iconFor(key, 'note', 20)),
           h('span', { class: 'grow left' }, h('strong', {}, n.title), h('span', { class: 'sub' }, when(n.updated))),
         ),

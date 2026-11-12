@@ -2,6 +2,10 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.3.3 — 2026-11-12
+**Changed**
+- **The side sections behave alike:** in Terminals, Scripts and Notes (the lists and the cards of the home page) a single click only selects the item and a double click, or Enter, opens it, exactly like the sessions. Before, a click on a script ran it and a click on a note opened it. The row buttons (edit, run a copy, rename, icon, delete) work as before.
+
 ## 1.3.2 — 2026-11-11
 **Changed**
 - **Video card graph:** the CUDA (Compute) load is now filled like the 3D load and the other graphs, not only drawn as a line. A long generation at 99% or at 0% is visible at a glance.
