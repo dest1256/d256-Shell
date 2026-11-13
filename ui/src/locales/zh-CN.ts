@@ -660,5 +660,12 @@ const catalog: Record<string, string> = {
   "Processes": "进程",
   "The busiest processes: processor, video card and memory.": "最繁忙的进程：处理器、显卡和内存。",
   "Nothing is busy right now.": "目前没有繁忙的进程。",
+  "This computer": "这台电脑",
+  "GPU temperature": "GPU 温度",
+  "Disks": "磁盘",
+  "What the column monitors": "该栏监控的对象",
+  "Indicators on the monitor": "监视器指标",
+  "Default set": "默认组合",
+  "Nothing is chosen: use the button above to pick the indicators.": "尚未选择：请用上方按钮选择指标。",
 };
 export default catalog;

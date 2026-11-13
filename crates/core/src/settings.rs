@@ -69,6 +69,10 @@ pub struct Settings {
     pub tabs_position: String,
     /// Ask GitHub for a newer release at start (one HTTPS request made by the UI; never installs anything).
     pub check_updates: bool,
+    /// Monitor column: the indicators shown for every target ("this" computer or "server:<id>"); empty = the default set.
+    pub monitor_cols: std::collections::BTreeMap<String, Vec<String>>,
+    /// Monitor column: which target it shows, "auto" = the one the tab is connected to, or a target key.
+    pub monitor_col_target: String,
 }
 
 impl Default for Settings {
@@ -101,6 +105,8 @@ impl Default for Settings {
             icons: Default::default(),
             tabs_position: "top".into(),
             check_updates: true,
+            monitor_cols: Default::default(),
+            monitor_col_target: "auto".into(),
         }
     }
 }
@@ -128,6 +134,20 @@ impl Settings {
             .map(|(k, v)| (k, v.trim().chars().take(100).collect::<String>()))
             .filter(|(_, v)| !v.is_empty())
             .collect();
+        self.monitor_cols
+            .retain(|k, _| !k.is_empty() && k.len() <= 200);
+        let keys: Vec<String> = self.monitor_cols.keys().skip(200).cloned().collect();
+        for k in keys {
+            self.monitor_cols.remove(&k);
+        }
+        for v in self.monitor_cols.values_mut() {
+            v.retain(|x| !x.is_empty() && x.len() <= 100);
+            v.truncate(60);
+        }
+        self.monitor_col_target = self.monitor_col_target.chars().take(200).collect();
+        if self.monitor_col_target.is_empty() {
+            self.monitor_col_target = "auto".into();
+        }
         self.script_links.retain(|p| !p.trim().is_empty());
         self.script_links.dedup();
         if self.language != "auto" && !LANGUAGES.contains(&self.language.as_str()) {
@@ -294,5 +314,24 @@ mod language_tests {
         }
         .sanitized();
         assert_eq!(s.language, "auto");
+    }
+
+    #[test]
+    fn monitor_column_choices_are_limited_and_default_to_auto() {
+        let mut s = Settings::default();
+        assert_eq!(s.monitor_col_target, "auto");
+        s.monitor_col_target = String::new();
+        s.monitor_cols.insert(String::new(), vec!["cpu".into()]);
+        s.monitor_cols.insert(
+            "local".into(),
+            (0..100)
+                .map(|i| format!("k{i}"))
+                .chain([String::new()])
+                .collect(),
+        );
+        let s = s.sanitized();
+        assert_eq!(s.monitor_col_target, "auto");
+        assert!(!s.monitor_cols.contains_key(""));
+        assert_eq!(s.monitor_cols["local"].len(), 60);
     }
 }

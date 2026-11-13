@@ -126,6 +126,8 @@ export interface Settings {
   icons: Record<string, string>;
   tabs_position: string;
   check_updates: boolean;
+  monitor_cols: Record<string, string[]>;
+  monitor_col_target: string;
   paste_warn_lines: number;
   paste_warn_bytes: number;
 }

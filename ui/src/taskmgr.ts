@@ -10,12 +10,12 @@ const C = { cpu: '#4aa8e8', mem: '#b072e8', disk: '#5cc258', net: '#f08a3c', gpu
 
 type Key = 'cpu' | 'mem' | 'procs' | `gpu:${string}` | `disk:${string}` | `net:${string}`;
 
-const fmt1 = (v: number) => v.toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const fmtPct = (v: number | null) => (v === null ? '…' : `${Math.round(v)}%`);
-const fmtGhz = (mhz: number | null | undefined) => (mhz ? `${(mhz / 1000).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GHz` : '—');
+export const fmt1 = (v: number) => v.toLocaleString(locale(), { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+export const fmtPct = (v: number | null) => (v === null ? '…' : `${Math.round(v)}%`);
+export const fmtGhz = (mhz: number | null | undefined) => (mhz ? `${(mhz / 1000).toLocaleString(locale(), { minimumFractionDigits: 2, maximumFractionDigits: 2 })} GHz` : '—');
 
 /** The part of the history shown on the graphs (about a minute, like the task manager). */
-function windowOf(hist: Point[], intervalSec: number): { pts: Point[]; n: number } {
+export function windowOf(hist: Point[], intervalSec: number): { pts: Point[]; n: number } {
   const n = Math.max(20, Math.round(60 / Math.max(0.1, intervalSec)) + 1);
   return { pts: hist.slice(-n), n };
 }
@@ -353,12 +353,8 @@ export class MonitorDetail {
   private raf = 0;
   private thumbs = new Map<Key, HTMLCanvasElement>();
 
-  /** `compact`: the column next to the terminal: the resources are chips on top, the details one below the other. */
-  constructor(
-    private src: MonitorSource,
-    private compact = false,
-  ) {
-    this.el = h('div', { class: 'monitor tm' + (compact ? ' tm-compact' : ''), 'data-testid': compact ? 'monitor-column' : 'monitor' }, h('div', { class: 'tm-left' }, this.side, compact ? null : this.rateBox()), this.main);
+  constructor(private src: MonitorSource) {
+    this.el = h('div', { class: 'monitor tm', 'data-testid': 'monitor' }, h('div', { class: 'tm-left' }, this.side, this.rateBox()), this.main);
     this.off = src.subscribe(() => this.schedule());
     new ResizeObserver(() => this.schedule()).observe(this.el);
     this.render();

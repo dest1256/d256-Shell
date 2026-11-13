@@ -11,7 +11,8 @@ import { connectFlow } from './connect';
 import { changeMasterDialog, serverForm, settingsDialog } from './dialogs';
 import { clear, confirmDialog, h, promptDialog, toast } from './dom';
 import { Explorer } from './explorer';
-import { MonitorBar, MonitorSource } from './monitor';
+import { LOCAL_TARGET, MonitorBar, monitors } from './monitor';
+import { MonitorColumn } from './moncol';
 import { MonitorDetail } from './taskmgr';
 import { getSettings, onSettings } from './settings';
 import { autoCheck, dismissUpdate, openRelease } from './updates';
@@ -131,11 +132,11 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     else renderTabs();
   }
 
-  /** The monitor column to the right of a terminal (resources as chips on top, details below), folded by the button of the
-   * bar and resized by its splitter; the choice is remembered. */
-  function monitorColumn(src: MonitorSource): { el: HTMLElement; split: HTMLElement; toggle: () => void; dispose: () => void } {
+  /** The monitor column to the right of a terminal (the ticked indicators of the chosen target), folded by the button of
+   * the bar and resized by its splitter; the choice is remembered. */
+  function monitorColumn(own: string, active: () => boolean): { el: HTMLElement; split: HTMLElement; toggle: () => void; dispose: () => void } {
     // the details exist only while the column is shown (a folded column draws nothing and has no elements)
-    let detail: MonitorDetail | null = null;
+    let detail: MonitorColumn | null = null;
     const el = h('div', { class: 'mon-col', 'data-testid': 'mon-col' });
     const w = Number(pref.get('mon-col-width'));
     el.style.width = `${w >= 260 && w <= 900 ? w : 340}px`;
@@ -145,7 +146,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       split.classList.toggle('hidden', !on);
       pref.set('mon-col', on ? '1' : '0');
       if (on && !detail) {
-        detail = new MonitorDetail(src, true);
+        detail = new MonitorColumn(own, active);
         el.append(detail.el);
       } else if (!on && detail) {
         detail.dispose();
@@ -238,8 +239,9 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       split.addEventListener('pointerup', up);
     });
     // load of THIS computer (processor, memory, disks, network, video card): a bar under the terminal and a column on the right
-    const mon = new MonitorSource(() => '', () => activeId === id, true);
-    const mcol = monitorColumn(mon);
+    const watch = monitors.watch(LOCAL_TARGET, () => activeId === id);
+    const mon = watch.src;
+    const mcol = monitorColumn(LOCAL_TARGET, () => activeId === id);
     const bar = new MonitorBar(mon, () => openMonitor(), undefined, () => mcol.toggle());
     bar.setVisible(getSettings().monitor_enabled);
     const offSettings = onSettings((st) => bar.setVisible(st.monitor_enabled));
@@ -253,7 +255,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     tab.onShow = () => panes.activate(panes.active || 'term');
     tab.dispose = () => {
       term.dispose();
-      mon.stop();
+      watch.release();
       bar.dispose();
       mcol.dispose();
       offSettings();
@@ -262,7 +264,6 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     tab.dirty = () => panes.anyDirty();
     addLocalTab(tab);
     requestAnimationFrame(() => void term.start());
-    mon.start();
     void explorer.load();
 
     /** A file chosen in the local explorer opens in the built-in editor (same codec as the remote editor). */
@@ -435,16 +436,21 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     });
     const panes = new PaneSet();
     // mini task manager under the terminal (numbers, small graphs); a click opens the detailed pane
-    const mon = new MonitorSource(() => tab.sessions![tab.sessions!.length - 1], () => activeId === id);
-    const mcol = monitorColumn(mon);
+    // one monitor per server, shared by all its tabs; a quick connection has none to share
+    const target = s.serverId ? `server:${s.serverId}` : `adhoc:${id}`;
+    const sessionNow = () => tab.sessions![tab.sessions!.length - 1];
+    let unregister: (() => void) | null = info.sftp_error ? null : monitors.register(target, info.name, sessionNow);
+    const watch = monitors.watch(target, () => activeId === id);
+    const mon = watch.src;
+    const mcol = monitorColumn(target, () => activeId === id);
     const bar = new MonitorBar(mon, () => openMonitor(), info.sftp_error ? t('Monitoring is unavailable: the server has no SFTP') : undefined, () => mcol.toggle());
     bar.setVisible(getSettings().monitor_enabled);
     const offSettings = onSettings((st) => bar.setVisible(st.monitor_enabled));
-    const sessionNow = () => tab.sessions![tab.sessions!.length - 1];
     tab.onShow = () => panes.activate(panes.active || 'term');
     tab.dispose = () => {
       terminal.dispose();
-      mon.stop();
+      watch.release();
+      unregister?.();
       bar.dispose();
       mcol.dispose();
       offSettings();
@@ -549,6 +555,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       explorer.setSession(r.session_id);
       if (!r.sftp_error) {
         bar.setUnavailable(undefined);
+        unregister ??= monitors.register(target, info.name, sessionNow);
         mon.start();
       }
       if (r.sftp_error) {
@@ -618,7 +625,6 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     requestAnimationFrame(() => void terminal.start());
     if (info.sftp_error) explorer.showUnavailable(info.sftp_error);
     else {
-      mon.start();
       await explorer.load(initialDir || undefined);
     }
   }

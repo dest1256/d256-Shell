@@ -660,5 +660,12 @@ const catalog: Record<string, string> = {
   "Processes": "Prozesse",
   "The busiest processes: processor, video card and memory.": "Die aktivsten Prozesse: Prozessor, Grafikkarte und Speicher.",
   "Nothing is busy right now.": "Im Moment ist nichts ausgelastet.",
+  "This computer": "Dieser Computer",
+  "GPU temperature": "GPU-Temperatur",
+  "Disks": "Laufwerke",
+  "What the column monitors": "Was die Spalte überwacht",
+  "Indicators on the monitor": "Anzeigen des Monitors",
+  "Default set": "Standardauswahl",
+  "Nothing is chosen: use the button above to pick the indicators.": "Nichts ausgewählt: Wählen Sie die Anzeigen mit der Schaltfläche oben.",
 };
 export default catalog;

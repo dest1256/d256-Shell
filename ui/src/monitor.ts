@@ -229,6 +229,7 @@ export class MonitorSource {
   private async tick(): Promise<void> {
     if (this.stopped || this.running) return;
     if (this.paused || !getSettings().monitor_enabled || !this.active() || document.hidden) return this.schedule();
+    if (!this.local && !this.session()) return this.schedule(); // no connection to ask through (yet)
     this.running = true;
     try {
       // device facts (disk size / model, link speed) are read with the first sample and again when a disk or an
@@ -302,11 +303,92 @@ export class MonitorSource {
   }
 }
 
+// ------------------------------------------------------------------ monitors shared by the tabs
+
+/** The target of the monitor of this computer; servers are "server:<id>" (a quick connection: "adhoc:<tab>"). */
+export const LOCAL_TARGET = 'local';
+
+interface Entry {
+  name: string;
+  /** Connections (one per open tab) through which the target can be asked. */
+  sessions: Set<() => string>;
+  /** Who looks at the data (bars, columns, panes): the target is polled while one of them is visible. */
+  watchers: Set<() => boolean>;
+  src: MonitorSource | null;
+}
+
+const entries = new Map<string, Entry>();
+const targetSubs = new Set<() => void>();
+const emitTargets = () => targetSubs.forEach((f) => f());
+const entryOf = (key: string): Entry => {
+  let e = entries.get(key);
+  if (!e) entries.set(key, (e = { name: '', sessions: new Set(), watchers: new Set(), src: null }));
+  return e;
+};
+const drop = (key: string, e: Entry): void => {
+  if (key === LOCAL_TARGET || e.sessions.size || e.watchers.size) return;
+  e.src?.stop();
+  entries.delete(key);
+};
+
+/**
+ * One monitor per target, not per tab: three tabs of one server (or three scripts on this computer) share one source
+ * and one history, so the target is asked once. A tab registers the connection it has to a server; bars, columns and
+ * panes `watch` a target and may look at another one than their own tab.
+ */
+export const monitors = {
+  /** A tab connected to a server: the target becomes available. Returns the function that withdraws it. */
+  register(key: string, name: string, session: () => string): () => void {
+    const e = entryOf(key);
+    const first = e.sessions.size === 0;
+    e.name = name;
+    e.sessions.add(session);
+    if (first && e.watchers.size) e.src?.start();
+    emitTargets();
+    return () => {
+      e.sessions.delete(session);
+      if (!e.sessions.size) {
+        e.src?.stop();
+        drop(key, e);
+      }
+      emitTargets();
+    };
+  },
+  /** Follow a target; `active` tells whether the viewer is on screen (nobody on screen: no polling). */
+  watch(key: string, active: () => boolean): { src: MonitorSource; release: () => void } {
+    const e = entryOf(key);
+    e.watchers.add(active);
+    e.src ??= new MonitorSource(
+      () => [...e.sessions].map((f) => f()).find(Boolean) ?? '',
+      () => [...e.watchers].some((w) => w()),
+      key === LOCAL_TARGET,
+    );
+    if (key === LOCAL_TARGET || e.sessions.size) e.src.start();
+    const src = e.src;
+    return {
+      src,
+      release: () => {
+        e.watchers.delete(active);
+        drop(key, e);
+      },
+    };
+  },
+  /** What can be monitored now: this computer first, then the servers that have a connection. */
+  targets(): { key: string; name: string }[] {
+    const servers = [...entries].filter(([k, e]) => k !== LOCAL_TARGET && e.sessions.size).map(([key, e]) => ({ key, name: e.name })).sort((a, b) => a.name.localeCompare(b.name));
+    return [{ key: LOCAL_TARGET, name: t('This computer') }, ...servers];
+  },
+  onTargets(fn: () => void): () => void {
+    targetSubs.add(fn);
+    return () => targetSubs.delete(fn);
+  },
+};
+
 // ------------------------------------------------------------------ drawing
 
 export const COLORS = { cpu: '#60cdff', mem: '#b4a0ff', swap: '#ff9ac1', rx: '#6ccb5f', tx: '#ffb454', grid: 'rgba(255,255,255,.08)', gpu3d: '#4ade80', cuda: '#f472b6', vram: '#fbbf24', temp: '#f87171' };
 
-interface Series {
+export interface Series {
   data: (number | null)[];
   color: string;
   fill?: boolean;

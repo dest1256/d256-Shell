@@ -660,5 +660,12 @@ const catalog: Record<string, string> = {
   "Processes": "プロセス",
   "The busiest processes: processor, video card and memory.": "最も負荷の高いプロセス：プロセッサ、グラフィックスカード、メモリ。",
   "Nothing is busy right now.": "今は負荷の高いものはありません。",
+  "This computer": "このコンピューター",
+  "GPU temperature": "GPU 温度",
+  "Disks": "ディスク",
+  "What the column monitors": "列が監視する対象",
+  "Indicators on the monitor": "モニターの項目",
+  "Default set": "既定の組み合わせ",
+  "Nothing is chosen: use the button above to pick the indicators.": "何も選択されていません。上のボタンで項目を選んでください。",
 };
 export default catalog;

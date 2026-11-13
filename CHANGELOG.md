@@ -2,6 +2,19 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.4.0 — 2026-11-13
+One monitor per computer or server, not per tab; the column shows the indicators you tick.
+
+**Changed**
+- **A monitor belongs to a target, not to a tab.** Three tabs of one server, or three scripts running on this computer, no longer start three monitors: they share one source and one history, so the server (or your computer) is asked once, and a new tab shows data at once instead of an empty graph. Nobody on screen: nothing is polled, as before. When the last tab of a server is closed, its monitor stops.
+- **The monitor column has a target selector.** The list at the top of the column offers “This computer” and every connected server; the column shows the chosen one in any tab. You can work on a server and keep the monitor of your own computer (ComfyUI and the like) next to the terminal. The bar under the terminal still shows the target of the tab. The choice is remembered (`settings.json`); “auto” (the default) means the target of the tab, and the column falls back to it when the chosen server is no longer connected.
+- **The column shows ticked indicators, one below the other,** instead of switching between chips: CPU, Memory, GPU 3D, CUDA (Compute), Video memory, GPU temperature, CPU temperature, Disks, Network, Processes. The gear button at the top opens the list; only what the target can give is offered (a server has no video card and no process list). The choice is remembered **separately for this computer and for every server** (`monitor_cols` in `settings.json`); “Default set” brings the defaults back (this computer: CPU, Memory, GPU 3D, CUDA, Video memory; a server: CPU, Memory, Network).
+- The “Monitor” tab (the full task manager) is unchanged and uses the same shared data.
+
+**Notes**
+- A quick connection (without a saved server) has a monitor of its own: there is nothing to match it with.
+- CUDA is offered where the load comes from the Windows counters; with only `nvidia-smi` (Linux) there is no CUDA figure.
+
 ## 1.3.3 — 2026-11-12
 **Changed**
 - **The side sections behave alike:** in Terminals, Scripts and Notes (the lists and the cards of the home page) a single click only selects the item and a double click, or Enter, opens it, exactly like the sessions. Before, a click on a script ran it and a click on a note opened it. The row buttons (edit, run a copy, rename, icon, delete) work as before.
