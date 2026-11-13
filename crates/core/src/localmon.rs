@@ -24,7 +24,7 @@ pub struct Gpu {
     pub name: String,
     /// Overall utilization (nvidia-smi / sysfs), 0..100.
     pub util: Option<f64>,
-    /// Utilization per engine type: "3D", "Compute" (CUDA), "Copy", "VideoDecode", "VideoEncode" ... (Windows counters).
+    /// Utilization per engine type: "3D", "Cuda", "Compute" (DirectCompute), "Copy", "VideoDecode", "VideoEncode" ... (Windows counters).
     pub engines: BTreeMap<String, f64>,
     pub vram_used: Option<u64>,
     pub vram_total: Option<u64>,
@@ -170,10 +170,11 @@ pub fn gpu_engines(instances: &[(String, f64)]) -> BTreeMap<String, BTreeMap<Str
     }
     let mut out: BTreeMap<String, BTreeMap<String, f64>> = BTreeMap::new();
     for ((adapter, _eng, ty), v) in sums {
-        // "Compute_0" and friends are one family; CUDA work shows up as Compute (and "Cuda" on some drivers)
+        // "Compute_0" and friends are one family (DirectCompute); CUDA is its own engine type "Cuda", which is what
+        // the Task Manager calls "Cuda": the two must not be mixed (a browser or a game computes too)
         let ty = ty.split('_').next().unwrap_or(&ty).to_string();
         let ty = if ty.eq_ignore_ascii_case("cuda") {
-            "Compute".to_string()
+            "Cuda".to_string()
         } else {
             ty
         };
@@ -651,6 +652,10 @@ mod tests {
                 "pid_300_luid_0x00000000_0x0000B2_phys_0_eng_0_engtype_3D",
                 5.0,
             ),
+            inst(
+                "pid_100_luid_0x00000000_0x0000A1_phys_0_eng_4_engtype_Cuda",
+                0.0,
+            ),
             inst("garbage", 50.0),
         ]);
         let a = &e["luid_0x00000000_0x0000A1"];
@@ -658,6 +663,10 @@ mod tests {
             (a["3D"], a["Compute"], a["Copy"]),
             (90.0, 88.0, 4.0),
             "two processes on one engine add up"
+        );
+        assert_eq!(
+            a["Cuda"], 0.0,
+            "CUDA is not the same as the Compute engines"
         );
         assert_eq!(e["luid_0x00000000_0x0000B2"]["3D"], 5.0);
         assert_eq!(e.len(), 2);

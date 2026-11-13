@@ -25,7 +25,7 @@ function available(s: Sample | null): Set<Ind> {
   if (!s) return out;
   if (s.gpus?.length) {
     out.add('gpu3d');
-    if (s.gpus.some((g) => 'Compute' in g.engines)) out.add('cuda'); // only the Windows counters tell the CUDA load
+    if (s.gpus.some((g) => Object.keys(g.engines).length > 0)) out.add('cuda'); // only the Windows counters tell the CUDA load
     out.add('vram');
     out.add('gputemp');
   }

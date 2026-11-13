@@ -2,6 +2,10 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.4.2 — 2026-11-14
+**Fixed**
+- **The CUDA load did not match the Task Manager.** The program added the DirectCompute engines (`Compute_0` ...: a browser, a game, the desktop use them) to the real `Cuda` engine and showed the larger one, so “CUDA” showed a few percent while the Task Manager's “Cuda” graph was at 0%. Now only the `Cuda` engine is CUDA, as in the Task Manager; while no process uses CUDA there is no such engine and the load is 0%. Without the Windows counters (Linux with `nvidia-smi` only) the CUDA figure is still unknown and not offered.
+
 ## 1.4.1 — 2026-11-14
 Far fewer requests to a server for the load monitor, and one connection for all tabs of a server.
 

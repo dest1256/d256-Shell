@@ -39,7 +39,7 @@ export interface GpuSample {
   name: string;
   /** Overall load, 0..100 (nvidia-smi / sysfs). */
   util: number | null;
-  /** Load per engine type (Windows counters): 3D, Compute (CUDA), Copy, VideoDecode ... */
+  /** Load per engine type (Windows counters): 3D, Cuda, Compute (DirectCompute), Copy, VideoDecode ... */
   engines: Record<string, number>;
   vram_used: number | null;
   vram_total: number | null;
@@ -279,7 +279,9 @@ export class MonitorSource {
     const gpus: GpuPoint[] = (b.s.gpus ?? []).map((g) => ({
       id: g.id,
       d3: g.engines['3D'] ?? g.util ?? null,
-      compute: g.engines['Compute'] ?? null,
+      // as the Task Manager: the "Cuda" engine; no such engine instance while no process uses CUDA is 0%, and without
+      // the Windows counters (no engines at all) the figure is unknown
+      compute: g.engines['Cuda'] ?? (Object.keys(g.engines).length ? 0 : null),
       copy: g.engines['Copy'] ?? null,
       video: Math.max(g.engines['VideoDecode'] ?? -1, g.engines['VideoEncode'] ?? -1, g.engines['VideoProcessing'] ?? -1) >= 0 ? Math.max(g.engines['VideoDecode'] ?? 0, g.engines['VideoEncode'] ?? 0, g.engines['VideoProcessing'] ?? 0) : null,
       vram: g.vram_used !== null && g.vram_total ? (g.vram_used / g.vram_total) * 100 : null,
