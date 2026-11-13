@@ -223,3 +223,32 @@ test('server monitor: two tabs of one server share one monitor, closing the firs
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('tab-s2')).toHaveCount(0);
 });
+
+test('server monitor: only the parts on screen are asked of the server; a second tab shares the connection', async ({ page }) => {
+  bridge = await startBridge();
+  const asked: { want?: string[]; session_id: string }[] = [];
+  page.on('request', (r) => {
+    const b = r.postData();
+    if (!b || !b.includes('"monitor_sample"')) return;
+    asked.push((JSON.parse(b) as { params: { want?: string[]; session_id: string } }).params);
+  });
+  await page.goto(bridge.url);
+  await createVault(page);
+  await addServer(page, { name: 'Lean', host: 'sshd-password', password: PASS });
+  await connectFirst(page);
+  await acceptHostKey(page);
+  await expect(page.getByTestId('mon-cpu')).toContainText(/\d+%/, { timeout: 15_000 });
+  await expect.poll(() => asked.length).toBeGreaterThan(2);
+  // the bar shows processor, memory, load, uptime and network: the disks are not read
+  const bar = asked[asked.length - 1].want!;
+  expect([...bar].sort()).toEqual(['cpu', 'load', 'mem', 'net', 'uptime']);
+  // the full Monitor tab needs everything: no restriction is sent
+  await page.getByTestId('monitor-bar').click({ position: { x: 20, y: 5 } });
+  const mark = asked.length;
+  await expect.poll(() => asked.slice(mark).some((a) => a.want === undefined), { timeout: 15_000 }).toBe(true);
+  // a second tab of the same server shares the connection: both tabs have the same session to ask through
+  await page.getByTestId('tab-home').click();
+  await connectFirst(page);
+  await expect(page.getByTestId('tab-s2')).toBeVisible();
+  await expect(page.getByTestId('mon-cpu').filter({ visible: true })).toContainText(/\d+%/, { timeout: 5000 });
+});

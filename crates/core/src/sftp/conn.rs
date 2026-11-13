@@ -284,6 +284,10 @@ pub struct SftpConnection {
     pub user: String,
     /// Temporary files that could not be removed (lost link); retried by `cleanup_stale`.
     pub stale: Mutex<Vec<String>>,
+    /// A second SFTP channel for small reads (see `light`).
+    light: tokio::sync::OnceCell<Option<SftpSession>>,
+    /// Open `/proc` files of the monitor (kept between samples).
+    pub(crate) mon: tokio::sync::Mutex<crate::monitor::MonState>,
 }
 
 impl SftpConnection {
@@ -383,7 +387,39 @@ impl SftpConnection {
             home_uid,
             user: p.username.clone(),
             stale: Mutex::new(Vec::new()),
+            light: tokio::sync::OnceCell::new(),
+            mon: Default::default(),
         })
+    }
+
+    /// The SFTP channel for small reads (`/proc`, `/sys`, the files read by the terminal duplication): a second channel
+    /// of the same connection (no new login) that sends ONE read at a time. The channel of the file panel reads ahead
+    /// (16 requests in flight), which is the right thing for a download and pure waste for a file of a few hundred
+    /// bytes: every small file used to cost about twenty requests. Falls back to the main channel when the server
+    /// refuses a second one.
+    pub async fn light(&self) -> &SftpSession {
+        let l = self
+            .light
+            .get_or_init(|| async {
+                let mut ch = self.handle.channel_open_session().await.ok()?;
+                ch.request_subsystem(true, "sftp").await.ok()?;
+                loop {
+                    match tokio::time::timeout(Duration::from_secs(5), ch.wait()).await {
+                        Ok(Some(russh::ChannelMsg::Success)) => break,
+                        Ok(Some(russh::ChannelMsg::Failure)) | Ok(None) | Err(_) => return None,
+                        Ok(Some(_)) => continue,
+                    }
+                }
+                let cfg = russh_sftp::client::Config {
+                    max_concurrent_reads: 1,
+                    ..Default::default()
+                };
+                SftpSession::new_with_config(ch.into_stream(), cfg)
+                    .await
+                    .ok()
+            })
+            .await;
+        l.as_ref().unwrap_or(&self.sftp)
     }
 
     /// Drop the link without consuming the connection (used when the user cancels everything, and in tests).

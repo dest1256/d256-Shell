@@ -11,7 +11,7 @@ import { connectFlow } from './connect';
 import { changeMasterDialog, serverForm, settingsDialog } from './dialogs';
 import { clear, confirmDialog, h, promptDialog, toast } from './dom';
 import { Explorer } from './explorer';
-import { LOCAL_TARGET, MonitorBar, monitors } from './monitor';
+import { BAR_PARTS, LOCAL_TARGET, MonitorBar, monitors } from './monitor';
 import { MonitorColumn } from './moncol';
 import { MonitorDetail } from './taskmgr';
 import { getSettings, onSettings } from './settings';
@@ -239,7 +239,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       split.addEventListener('pointerup', up);
     });
     // load of THIS computer (processor, memory, disks, network, video card): a bar under the terminal and a column on the right
-    const watch = monitors.watch(LOCAL_TARGET, () => activeId === id);
+    const watch = monitors.watch(LOCAL_TARGET, () => activeId === id, () => (panes.active === 'monitor' ? null : BAR_PARTS));
     const mon = watch.src;
     const mcol = monitorColumn(LOCAL_TARGET, () => activeId === id);
     const bar = new MonitorBar(mon, () => openMonitor(), undefined, () => mcol.toggle());
@@ -440,7 +440,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     const target = s.serverId ? `server:${s.serverId}` : `adhoc:${id}`;
     const sessionNow = () => tab.sessions![tab.sessions!.length - 1];
     let unregister: (() => void) | null = info.sftp_error ? null : monitors.register(target, info.name, sessionNow);
-    const watch = monitors.watch(target, () => activeId === id);
+    const watch = monitors.watch(target, () => activeId === id, () => (panes.active === 'monitor' ? null : BAR_PARTS));
     const mon = watch.src;
     const mcol = monitorColumn(target, () => activeId === id);
     const bar = new MonitorBar(mon, () => openMonitor(), info.sftp_error ? t('Monitoring is unavailable: the server has no SFTP') : undefined, () => mcol.toggle());

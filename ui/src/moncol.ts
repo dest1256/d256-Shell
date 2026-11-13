@@ -3,7 +3,7 @@
 import { clear, h } from './dom';
 import { t } from './i18n';
 import { icon } from './icons';
-import { COLORS, drawChart, fmtBytes, fmtRate, LOCAL_TARGET, monitors, MonitorSource, Point, Sample, Series } from './monitor';
+import { COLORS, drawChart, fmtBytes, fmtRate, LOCAL_TARGET, monitors, MonitorSource, Part, Point, Sample, Series } from './monitor';
 import { getSettings, onSettings, updateSettings } from './settings';
 import { fmt1, fmtGhz, fmtPct, windowOf } from './taskmgr';
 
@@ -147,6 +147,12 @@ export class MonitorColumn {
     return c !== 'auto' && monitors.targets().some((x) => x.key === c) ? c : this.own;
   }
 
+  /** What a server has to read for the ticked indicators (the video card and the processes exist only on this computer). */
+  private parts(): Part[] {
+    const map: Partial<Record<Ind, Part>> = { cpu: 'cpu', mem: 'mem', disk: 'disks', net: 'net' };
+    return this.chosen().flatMap((k) => (map[k] ? [map[k]!] : []));
+  }
+
   private chosen(): Ind[] {
     const saved = getSettings().monitor_cols[this.key];
     const set = new Set(saved ?? DEFAULTS[this.key === LOCAL_TARGET ? 'local' : 'server']);
@@ -160,7 +166,7 @@ export class MonitorColumn {
       this.offSrc?.();
       this.watch?.release();
       this.key = key;
-      this.watch = monitors.watch(key, this.active);
+      this.watch = monitors.watch(key, this.active, () => this.parts());
       this.offSrc = this.watch.src.subscribe(() => this.schedule());
       for (const tl of this.tiles.values()) tl.el.remove();
       this.tiles.clear();

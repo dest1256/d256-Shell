@@ -180,6 +180,8 @@ export class MonitorSource {
     private active: () => boolean,
     /** The monitor of THIS computer (local terminal tabs) instead of a server. */
     readonly local = false,
+    /** The parts of a server sample that are on screen (null: everything); the others are not read on the server. */
+    private wants: () => Part[] | null = () => null,
   ) {}
 
   subscribe(fn: () => void): () => void {
@@ -235,7 +237,7 @@ export class MonitorSource {
       // device facts (disk size / model, link speed) are read with the first sample and again when a disk or an
       // interface shows up later (idle disks are hidden at first)
       const wantInfo = !this.info || this.missingDevices();
-      const s = (this.local ? await api.localMonitorSample(wantInfo) : await api.monitorSample(this.session(), wantInfo)) as unknown as Sample;
+      const s = (this.local ? await api.localMonitorSample(wantInfo) : await api.monitorSample(this.session(), wantInfo, this.wants())) as unknown as Sample;
       const at = performance.now();
       if (s.info) this.info = s.info;
       this.last = s;
@@ -305,6 +307,11 @@ export class MonitorSource {
 
 // ------------------------------------------------------------------ monitors shared by the tabs
 
+/** Parts of a server sample (each is one or two files of /proc): processor, memory, load average, uptime, network, disks. */
+export type Part = 'cpu' | 'mem' | 'load' | 'uptime' | 'net' | 'disks';
+/** What the bars of a tab show; the full "Monitor" pane needs everything (null). */
+export const BAR_PARTS: Part[] = ['cpu', 'mem', 'load', 'uptime', 'net'];
+
 /** The target of the monitor of this computer; servers are "server:<id>" (a quick connection: "adhoc:<tab>"). */
 export const LOCAL_TARGET = 'local';
 
@@ -312,8 +319,9 @@ interface Entry {
   name: string;
   /** Connections (one per open tab) through which the target can be asked. */
   sessions: Set<() => string>;
-  /** Who looks at the data (bars, columns, panes): the target is polled while one of them is visible. */
-  watchers: Set<() => boolean>;
+  /** Who looks at the data (bars, columns, panes): the target is polled while one of them is visible, and only the
+   * parts the visible ones show are read on the server. */
+  watchers: Map<() => boolean, () => Part[] | null>;
   src: MonitorSource | null;
 }
 
@@ -322,7 +330,7 @@ const targetSubs = new Set<() => void>();
 const emitTargets = () => targetSubs.forEach((f) => f());
 const entryOf = (key: string): Entry => {
   let e = entries.get(key);
-  if (!e) entries.set(key, (e = { name: '', sessions: new Set(), watchers: new Set(), src: null }));
+  if (!e) entries.set(key, (e = { name: '', sessions: new Set(), watchers: new Map(), src: null }));
   return e;
 };
 const drop = (key: string, e: Entry): void => {
@@ -355,13 +363,19 @@ export const monitors = {
     };
   },
   /** Follow a target; `active` tells whether the viewer is on screen (nobody on screen: no polling). */
-  watch(key: string, active: () => boolean): { src: MonitorSource; release: () => void } {
+  watch(key: string, active: () => boolean, parts: () => Part[] | null = () => null): { src: MonitorSource; release: () => void } {
     const e = entryOf(key);
-    e.watchers.add(active);
+    e.watchers.set(active, parts);
     e.src ??= new MonitorSource(
       () => [...e.sessions].map((f) => f()).find(Boolean) ?? '',
-      () => [...e.watchers].some((w) => w()),
+      () => [...e.watchers.keys()].some((w) => w()),
       key === LOCAL_TARGET,
+      () => {
+        // the union of what the visible watchers show; one that wants everything (null) makes it everything
+        const on = [...e.watchers].filter(([w]) => w()).map(([, p]) => p());
+        if (!on.length || on.some((p) => p === null)) return null;
+        return [...new Set((on as Part[][]).flat())];
+      },
     );
     if (key === LOCAL_TARGET || e.sessions.size) e.src.start();
     const src = e.src;

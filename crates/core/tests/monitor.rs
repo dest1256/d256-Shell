@@ -45,3 +45,52 @@ async fn samples_proc_files_over_sftp() {
         .await
         .is_none());
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn samples_reuse_open_files_and_read_only_what_is_wanted() {
+    use d256shell_core::monitor::Want;
+    if !enabled() {
+        return;
+    }
+    let d = tmp("mon2");
+    let (i, _) = interaction(true, |_| None);
+    let c = SftpConnection::connect(params("sshd-password", Some(PASS), &d.join("kh")), i)
+        .await
+        .expect("connect");
+    let all = c.monitor_sample(false).await.expect("first sample");
+    let opened = c.monitor_opens().await;
+    assert!((1..=7).contains(&opened), "{opened}");
+    // later samples re-read the same open files: nothing is opened again, and the numbers still move
+    let mut last = all["cpu"][1].as_u64().unwrap();
+    for _ in 0..3 {
+        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+        let s = c.monitor_sample(false).await.expect("sample");
+        let now = s["cpu"][1].as_u64().unwrap();
+        assert!(now > last, "the counters must grow: {last} -> {now}");
+        last = now;
+        assert!(s["mem"]["total"].as_u64().unwrap() > 0);
+        assert!(s["cpu_mhz"].is_number(), "{s}");
+    }
+    assert_eq!(
+        c.monitor_opens().await,
+        opened,
+        "files must not be reopened"
+    );
+    // only the memory: the other parts are absent (their files are not read at all)
+    let only_mem = Want::from_names(&["mem"]);
+    let s = c
+        .monitor_sample_for(false, only_mem)
+        .await
+        .expect("mem only");
+    assert!(s["mem"]["total"].as_u64().unwrap() > 0);
+    assert!(
+        s["cpu"].is_null() && s["load"].is_null() && s["net"].is_null() && s["disks"].is_null()
+    );
+    assert!(s["uptime"].is_null());
+    // only the network: the answer is not "unavailable"
+    let s = c
+        .monitor_sample_for(false, Want::from_names(&["net"]))
+        .await
+        .expect("net only");
+    assert!(s["net"]["rx"].is_u64() && s["mem"].is_null());
+}

@@ -258,51 +258,207 @@ pub fn parse_info(
 }
 
 use crate::sftp::SftpConnection;
-use tokio::io::AsyncReadExt;
+use russh_sftp::client::{fs::File, SftpSession};
+use std::collections::HashMap;
+use std::io::SeekFrom;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+/// Which parts of a sample are wanted. The UI asks only for what is on screen, so the files of an unused part are
+/// not read at all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Want {
+    pub cpu: bool,
+    pub mem: bool,
+    pub load: bool,
+    pub uptime: bool,
+    pub net: bool,
+    pub disks: bool,
+}
+
+impl Want {
+    pub fn all() -> Want {
+        Want {
+            cpu: true,
+            mem: true,
+            load: true,
+            uptime: true,
+            net: true,
+            disks: true,
+        }
+    }
+
+    /// From the names the UI sends (`cpu`, `mem`, `load`, `uptime`, `net`, `disks`); unknown names are ignored.
+    pub fn from_names<S: AsRef<str>>(names: &[S]) -> Want {
+        let has = |n: &str| names.iter().any(|x| x.as_ref() == n);
+        Want {
+            cpu: has("cpu"),
+            mem: has("mem"),
+            load: has("load"),
+            uptime: has("uptime"),
+            net: has("net"),
+            disks: has("disks"),
+        }
+    }
+}
+
+/// How often the (large) `/proc/cpuinfo` is read again for the clock speed: every Nth sample.
+const MHZ_EVERY: u32 = 10;
+
+/// What the monitor keeps between two samples of one connection: the open `/proc` files (re-read from the start, so
+/// a sample costs no open / close), the last clock speed and counters.
+#[derive(Default)]
+pub struct MonState {
+    files: HashMap<&'static str, File>,
+    mhz: Option<f64>,
+    samples: u32,
+    /// How many times a file had to be opened (tests: must not grow with every sample).
+    pub opens: u64,
+}
+
+/// Read the whole file from the start. `None` when it cannot be read.
+async fn read_all(f: &mut File, max: u64) -> Option<String> {
+    let mut buf = Vec::new();
+    f.take(max).read_to_end(&mut buf).await.ok()?;
+    Some(String::from_utf8_lossy(&buf).into_owned())
+}
+
+/// One `/proc` file through the open handle of the previous sample (re-read from offset 0); a missing or stale handle
+/// is replaced by a fresh open. Returns the text, the handle to keep and whether a file was opened.
+async fn read_proc(
+    sftp: &SftpSession,
+    path: &str,
+    cached: Option<File>,
+    max: u64,
+) -> (Option<String>, Option<File>, bool) {
+    if let Some(mut f) = cached {
+        if f.seek(SeekFrom::Start(0)).await.is_ok() {
+            // an empty answer is never right for these files: the handle is stale (or the server does not
+            // re-read a file from the start), so open it again
+            if let Some(t) = read_all(&mut f, max).await.filter(|t| !t.is_empty()) {
+                return (Some(t), Some(f), false);
+            }
+        }
+    }
+    let Ok(mut f) = sftp.open(path.to_string()).await else {
+        return (None, None, true);
+    };
+    match read_all(&mut f, max).await {
+        Some(t) => (Some(t), Some(f), true),
+        None => (None, None, true),
+    }
+}
 
 impl SftpConnection {
     /// Read a small text file (a `/proc` entry reports size 0, so it is read until EOF). `None` if unreadable.
     pub async fn read_small(&self, path: &str, max: u64) -> Option<String> {
-        let f = self.sftp.open(path.to_string()).await.ok()?;
-        let mut buf = Vec::new();
-        f.take(max).read_to_end(&mut buf).await.ok()?;
-        Some(String::from_utf8_lossy(&buf).into_owned())
+        let mut f = self.light().await.open(path.to_string()).await.ok()?;
+        let text = read_all(&mut f, max).await;
+        let _ = f.close().await; // closes the handle and waits for the answer
+        text
     }
 
-    /// One sample of the server load (`with_info`: also the machine description, read once by the UI).
+    /// One sample of the whole server load (`with_info`: also the machine description, read once by the UI).
     pub async fn monitor_sample(&self, with_info: bool) -> Option<Value> {
+        self.monitor_sample_for(with_info, Want::all()).await
+    }
+
+    /// One sample with only the wanted parts. The files stay open between samples; a sample is one read of each wanted
+    /// file, all in flight at once.
+    pub async fn monitor_sample_for(&self, with_info: bool, want: Want) -> Option<Value> {
         const MAX: u64 = 256 * 1024;
-        let (stat, mem, load, up, net, disks, cpuinfo) = tokio::join!(
-            self.read_small("/proc/stat", MAX),
-            self.read_small("/proc/meminfo", MAX),
-            self.read_small("/proc/loadavg", 4096),
-            self.read_small("/proc/uptime", 4096),
-            self.read_small("/proc/net/dev", MAX),
-            self.read_small("/proc/diskstats", MAX),
-            self.read_small("/proc/cpuinfo", MAX),
+        let sftp = self.light().await;
+        let mut st = self.mon.lock().await;
+        st.samples = st.samples.wrapping_add(1);
+        // the clock speed changes slowly: /proc/cpuinfo (the biggest file) is read now and then, or for the description
+        let mhz_now = want.cpu && (with_info || st.mhz.is_none() || st.samples % MHZ_EVERY == 0);
+        let plan: [(&'static str, bool, u64); 7] = [
+            ("/proc/stat", want.cpu, MAX),
+            ("/proc/meminfo", want.mem, MAX),
+            ("/proc/loadavg", want.load, 4096),
+            ("/proc/uptime", want.uptime, 4096),
+            ("/proc/net/dev", want.net, MAX),
+            ("/proc/diskstats", want.disks, MAX),
+            ("/proc/cpuinfo", mhz_now || with_info, MAX),
+        ];
+        // all wanted files are read at the same time (a part nobody wants costs nothing)
+        let mut cached: Vec<Option<File>> = plan
+            .iter()
+            .map(|(p, on, _)| if *on { st.files.remove(p) } else { None })
+            .collect();
+        let job = |i: usize, c: Option<File>| {
+            let (path, on, max) = plan[i];
+            async move {
+                if on {
+                    read_proc(sftp, path, c, max).await
+                } else {
+                    (None, None, false)
+                }
+            }
+        };
+        let (d0, d1, d2, d3, d4, d5, d6) = tokio::join!(
+            job(0, cached[0].take()),
+            job(1, cached[1].take()),
+            job(2, cached[2].take()),
+            job(3, cached[3].take()),
+            job(4, cached[4].take()),
+            job(5, cached[5].take()),
+            job(6, cached[6].take()),
         );
-        if stat.is_none() && mem.is_none() {
+        let mut text: HashMap<&'static str, String> = HashMap::new();
+        let mut asked = 0;
+        for ((path, on, _), (t, keep, opened)) in plan.iter().zip([d0, d1, d2, d3, d4, d5, d6]) {
+            if !*on {
+                continue;
+            }
+            asked += 1;
+            if opened {
+                st.opens += 1;
+            }
+            if let Some(f) = keep {
+                st.files.insert(path, f);
+            }
+            if let Some(t) = t {
+                text.insert(path, t);
+            }
+        }
+        // nothing could be read of what was asked: not a Linux server (or the link is gone)
+        if asked > 0 && text.is_empty() {
             return None;
         }
+        let get = |p: &str| text.get(p).map(String::as_str);
+        let cpuinfo = get("/proc/cpuinfo");
+        if let Some(m) = cpuinfo.and_then(avg_mhz) {
+            st.mhz = Some(m);
+        }
         let mut v = parse_sample(&RawSample {
-            stat: stat.as_deref(),
-            meminfo: mem.as_deref(),
-            loadavg: load.as_deref(),
-            uptime: up.as_deref(),
-            netdev: net.as_deref(),
-            diskstats: disks.as_deref(),
-            cpuinfo: cpuinfo.as_deref(),
+            stat: get("/proc/stat"),
+            meminfo: get("/proc/meminfo"),
+            loadavg: get("/proc/loadavg"),
+            uptime: get("/proc/uptime"),
+            netdev: get("/proc/net/dev"),
+            diskstats: get("/proc/diskstats"),
+            cpuinfo,
         });
+        if want.cpu {
+            v["cpu_mhz"] = json!(st.mhz);
+        }
+        let cpuinfo_text = cpuinfo.map(str::to_string);
+        drop(st);
         if with_info {
             let (h, os) = tokio::join!(
                 self.read_small("/proc/sys/kernel/hostname", 4096),
                 self.read_small("/etc/os-release", 16 * 1024),
             );
-            let mut info = parse_info(h.as_deref(), os.as_deref(), cpuinfo.as_deref());
+            let mut info = parse_info(h.as_deref(), os.as_deref(), cpuinfo_text.as_deref());
             info["devices"] = self.device_info(&v).await;
             v["info"] = info;
         }
         Some(v)
+    }
+
+    /// How many `/proc` files the monitor had to open so far (tests).
+    pub async fn monitor_opens(&self) -> u64 {
+        self.mon.lock().await.opens
     }
 
     /// Capacity / type / model of every disk and speed of every interface found in `sample` (read once).

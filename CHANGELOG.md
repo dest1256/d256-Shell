@@ -2,6 +2,18 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.4.1 — 2026-11-14
+Far fewer requests to a server for the load monitor, and one connection for all tabs of a server.
+
+**Changed**
+- **The monitor asks the server for much less.** Before, every sample opened, read and closed seven `/proc` files, and the file channel read ahead 16 blocks per file, so one sample was well over a hundred SFTP requests. Now: (1) the monitor has its own light SFTP channel (a second channel of the same connection, no new login) that sends one read at a time; (2) the `/proc` files stay open and are re-read from the start, so a sample is about two requests per file instead of about twenty; (3) only the parts that are on screen are read: the bar needs processor, memory, load, uptime and network, the column only what you ticked, the full Monitor tab everything (the disks are not read while nobody looks at them); (4) `/proc/cpuinfo` (the biggest file) is read only every tenth sample for the clock speed. If a server does not allow a second channel, the main one is used; a file handle that stops answering is opened again by itself.
+- **All tabs of one saved server share one connection.** A second (third ...) tab of a server you already have open no longer logs in again: no second password, key or 2FA code and no second SFTP session on the server; it only gets a session of its own on the live connection. Closing a tab closes the connection only with the last tab. A tab opened with a different password, a quick connection, or a connection that was lost log in as before.
+- The terminal duplication reads its small files through the same light channel.
+
+**Notes**
+- Numbers (from reading the library, not measured on a network): about 130 requests per sample before; about 12 now with everything shown, about 10 for the bar alone and about 4 for a column with only processor and memory, and with no open or close in between.
+- The terminal itself is still a separate `ssh` process: it logs in on its own, as before.
+
 ## 1.4.0 — 2026-11-13
 One monitor per computer or server, not per tab; the column shows the indicators you tick.
 

@@ -243,7 +243,39 @@ impl Hub {
         })
     }
 
+    /// A live connection of the same saved server with the same login: a second tab shares it instead of logging in
+    /// again (no second password, key or 2FA code, no second SFTP session to the server).
+    fn shared_connection(&self, a: &ConnectArgs) -> Option<Arc<SftpConnection>> {
+        let id = a.server_id.as_deref()?;
+        let password = a.password.clone().filter(|p| !p.is_empty());
+        self.sessions
+            .lock()
+            .expect("lock")
+            .values()
+            .find(|s| {
+                s.info.server_id.as_deref() == Some(id)
+                    && s.info.host == a.host
+                    && s.info.port == a.port
+                    && s.info.username == a.username
+                    && s.info.key_path == a.key_path
+                    && s.info.password() == password
+                    && s.sftp.as_ref().is_some_and(|c| !c.is_closed())
+            })
+            .and_then(|s| s.sftp.clone())
+    }
+
     pub fn connect(&self, a: ConnectArgs) -> Result<ConnectOk, ApiError> {
+        let (sftp, sftp_error) = match self.shared_connection(&a) {
+            Some(conn) => (Some(conn), None),
+            None => self.connect_new(&a)?,
+        };
+        self.register_session(a, sftp, sftp_error)
+    }
+
+    fn connect_new(
+        &self,
+        a: &ConnectArgs,
+    ) -> Result<(Option<Arc<SftpConnection>>, Option<String>), ApiError> {
         let notify = Arc::new(Notify::new());
         self.attempts
             .lock()
@@ -271,13 +303,21 @@ impl Hub {
         self.attempts.lock().expect("lock").remove(&a.attempt);
         self.prompts.cancel_attempt(&a.attempt);
 
-        let (sftp, sftp_error) = match res {
+        Ok(match res {
             None => return Err(api_err("cancelled", "Connection cancelled.")),
             Some(Ok(conn)) => (Some(Arc::new(conn)), None),
             // Logged in, but no SFTP: the terminal can still work.
             Some(Err(ConnectError::SftpUnavailable(m))) => (None, Some(m)),
             Some(Err(e)) => return Err(self.map_connect_error(&a.attempt, e)),
-        };
+        })
+    }
+
+    fn register_session(
+        &self,
+        a: ConnectArgs,
+        sftp: Option<Arc<SftpConnection>>,
+        sftp_error: Option<String>,
+    ) -> Result<ConnectOk, ApiError> {
         let home = sftp.as_ref().map(|c| c.home.clone());
         let id = new_id();
         let info = Arc::new(SessionInfo {
@@ -640,10 +680,15 @@ impl Hub {
     }
 
     /// Server load sample, read from `/proc` over SFTP (no command is run on the server).
-    pub fn monitor_sample(&self, session_id: &str, with_info: bool) -> Result<Value, ApiError> {
+    pub fn monitor_sample(
+        &self,
+        session_id: &str,
+        with_info: bool,
+        want: crate::monitor::Want,
+    ) -> Result<Value, ApiError> {
         let conn = self.sftp(session_id)?;
         let started = std::time::Instant::now();
-        match self.rt.block_on(conn.monitor_sample(with_info)) {
+        match self.rt.block_on(conn.monitor_sample_for(with_info, want)) {
             Some(mut v) => {
                 v["ms"] = json!(started.elapsed().as_millis() as u64);
                 Ok(v)

@@ -290,3 +290,63 @@ fn server_without_sftp_still_gives_a_session() {
 fn svc_known_hosts(svc: &Service) -> std::path::PathBuf {
     svc.known_hosts_path()
 }
+
+#[test]
+fn a_second_tab_of_the_same_server_shares_the_connection() {
+    need_servers!();
+    let svc = service("flow_share");
+    let id = add_server(&svc, "sshd-password", PASS);
+    let h = connect_in_thread(&svc, json!({"server_id": id, "attempt": "s1"}));
+    let p = wait_prompt(&svc, "s1");
+    svc.call("answer_prompt", json!({"id": p["id"], "accept": true}))
+        .unwrap();
+    let first = h.join().unwrap().unwrap()["session_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // the second tab: no login, no prompt, a session of its own on the same connection
+    let t = Instant::now();
+    let second = svc
+        .call("connect", json!({"server_id": id, "attempt": "s2"}))
+        .unwrap();
+    let second = second["session_id"].as_str().unwrap().to_string();
+    assert_ne!(first, second);
+    assert!(
+        t.elapsed() < Duration::from_millis(500),
+        "sharing must not log in again"
+    );
+    for s in [&first, &second] {
+        assert!(svc.call("list_dir", json!({"session_id": s})).is_ok());
+    }
+    // one monitor connection serves both: the files opened by the first sample are reused by the second tab's samples
+    let a = svc
+        .call(
+            "monitor_sample",
+            json!({"session_id": first, "want": ["cpu", "mem"]}),
+        )
+        .unwrap();
+    let b = svc
+        .call(
+            "monitor_sample",
+            json!({"session_id": second, "want": ["cpu", "mem"]}),
+        )
+        .unwrap();
+    assert!(a["cpu"][1].as_u64().unwrap() > 0 && b["cpu"][1].as_u64().unwrap() > 0);
+    assert!(a["net"].is_null(), "net was not asked for: {a}");
+    // closing the first tab does not break the second
+    svc.call("disconnect", json!({"session_id": first}))
+        .unwrap();
+    assert!(svc.call("list_dir", json!({"session_id": second})).is_ok());
+    assert!(svc
+        .call("monitor_sample", json!({"session_id": second}))
+        .is_ok());
+    // another login (a different password) is not shared: it is checked by the server
+    let r = svc.call(
+        "connect",
+        json!({"server_id": id, "attempt": "s3", "password": "wrong-password-x"}),
+    );
+    assert!(
+        r.is_err(),
+        "a different password must not ride on the open connection"
+    );
+}

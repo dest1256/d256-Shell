@@ -544,7 +544,16 @@ impl Service {
             "term_context" => self.hub.term_context(&need("term_id")?),
             "monitor_sample" => {
                 let info = params.get("info").and_then(Value::as_bool).unwrap_or(false);
-                self.hub.monitor_sample(&need("session_id")?, info)
+                // the parts on screen (cpu, mem, load, uptime, net, disks); without the list: everything
+                let want = params
+                    .get("want")
+                    .and_then(Value::as_array)
+                    .map(|a| {
+                        let names: Vec<&str> = a.iter().filter_map(Value::as_str).collect();
+                        crate::monitor::Want::from_names(&names)
+                    })
+                    .unwrap_or_else(crate::monitor::Want::all);
+                self.hub.monitor_sample(&need("session_id")?, info, want)
             }
             m if m.starts_with("transfer_") || m == "stage_clear" => self.transfer_call(m, &params),
             m if m.starts_with("edit_") => self.edit_call(m, &params),

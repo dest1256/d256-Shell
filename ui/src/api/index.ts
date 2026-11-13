@@ -193,7 +193,7 @@ export const api = {
   setSettings: (patch: Partial<Settings>) => call<Settings>('set_settings', { ...patch }),
   sshInfo: () => call<SshInfo>('ssh_info'),
   termContext: (term_id: string) => call<TermContext>('term_context', { term_id }),
-  monitorSample: (session_id: string, info = false) => call<Record<string, unknown>>('monitor_sample', { session_id, info }),
+  monitorSample: (session_id: string, info = false, want: string[] | null = null) => call<Record<string, unknown>>('monitor_sample', want ? { session_id, info, want } : { session_id, info }),
   setServerPassword: (id: string, password: string) => call<object>('set_server_password', { id, password }),
   termOpen: (session_id: string, cols: number, rows: number) => call<TermOpened>('term_open', { session_id, cols, rows }),
   termWrite: (term_id: string, bytes: Uint8Array) => call<object>('term_write', { term_id, data_b64: toBase64(bytes) }),
