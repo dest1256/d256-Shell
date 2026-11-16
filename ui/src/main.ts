@@ -137,3 +137,18 @@ async function start(): Promise<void> {
 }
 
 void start();
+
+// The window is an application, not a web page: the browser menu of the web view ("Reload", "Back" ...) would throw
+// away every open tab and session, and F5 / Ctrl+R do the same. Our own menus (explorer, terminal) stop the event
+// first; text fields and the editor keep the native menu (copy, paste).
+document.addEventListener('contextmenu', (e) => {
+  if (e.defaultPrevented) return;
+  const el = e.target as HTMLElement | null;
+  if (el?.closest('input, textarea, [contenteditable="true"], .cm-content')) return;
+  if (getSettings().right_click === 'menu' && el?.closest('.xterm')) return; // the terminal setting "menu" asks for the native menu
+  e.preventDefault();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.defaultPrevented) return;
+  if (e.key === 'F5' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'r')) e.preventDefault();
+});

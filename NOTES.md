@@ -236,3 +236,7 @@ Author: dest1256.
 ## 1.5.0: owner column
 
 - SFTP v3 returns only `uid`/`gid` (`owner`/`group` were always `None`: checked against the test sshd); russh-sftp's `read_dir` drops the `longname` (which OpenSSH fills with names resolved by the server), so `SftpConnection::name_owners` reads `/etc/passwd` and `/etc/group` through the light channel, caches the maps in `Names` and reloads them at most once a minute when a listed id is missing. NSS-only accounts (LDAP, SSSD) stay numbers. UI: `ownerText()` (name, else the number), sort key `owner`, class `has-owner` on remote explorers (the local one has no owner data).
+
+## 1.5.1: no browser menu
+
+- `main.ts`: a document-level `contextmenu` listener cancels the web view's menu unless something else already handled the event (`defaultPrevented`), the target is an input / textarea / editor, or the terminal is set to the native menu. F5 / Ctrl+R are cancelled when nobody handled them. Programmatic reloads (language change) are unaffected.

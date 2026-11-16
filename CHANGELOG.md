@@ -2,6 +2,10 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.5.1 — 2026-11-16
+**Fixed**
+- **A right click on a tab (or on the title bar, or on an empty place) opened the web view's browser menu with “Reload”, and choosing it closed every tab and session.** The browser menu is no longer shown; the menus of the program (explorer, tabs of the terminal ...) work as before, and text fields and the editor keep the native menu for copy and paste. The reload keys (F5, Ctrl+R) of the web view are ignored too (F5 still refreshes the explorer, Ctrl+R still goes to the shell). With the terminal setting “Right click: menu” the terminal keeps the native menu, as that setting asks for.
+
 ## 1.5.0 — 2026-11-16
 **Added**
 - **Owner column in the file explorer of a server:** a new column between the name and the size shows the user that owns every file and folder (the tooltip shows `user:group`). Click the header to sort by it (folders stay first). SFTP only reports numeric ids, so the names are looked up in the server's `/etc/passwd` and `/etc/group` (two plain file reads, no command; read once per connection and again at most once a minute when an unknown id shows up). A user that only the server's directory service knows (LDAP ...) stays a number. The properties window shows the names too. When the panel is narrow the columns drop in this order: permissions, modified, and, below 300 px, the owner. The explorer of your own computer has no owner column.

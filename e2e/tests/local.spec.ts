@@ -389,3 +389,29 @@ test('the explorer of this computer has no owner column (no owner names there)',
   await expect(ex.getByTestId('sort-owner')).toHaveCount(0);
   await expect(ex.locator('.c-owner')).toHaveCount(0);
 });
+
+test('the browser menu and the reload keys of the web view do not reload the window', async ({ page }) => {
+  bridge = await startBridge();
+  await page.goto(bridge.url);
+  await createVault(page);
+  await page.getByTestId('rail-terminals').click();
+  await page.getByTestId('profile-item').first().dblclick();
+  await expect(page.getByTestId('tab-local1')).toBeVisible();
+  const r = await page.evaluate(() => {
+    const fire = (sel: string) => !document.querySelector(sel)!.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const key = (k: string, ctrl = false) => !document.body.dispatchEvent(new KeyboardEvent('keydown', { key: k, ctrlKey: ctrl, bubbles: true, cancelable: true }));
+    return { tab: fire('[data-testid="tab-local1"]'), bar: fire('[data-testid="titlebar"], .titlebar'), f5: key('F5'), ctrlR: key('r', true) };
+  });
+  expect(r).toEqual({ tab: true, bar: true, f5: true, ctrlR: true }); // true = the default (the reload menu) was cancelled
+  // text fields keep the native menu (copy / paste)
+  await page.getByTestId('rail-notes').click();
+  const input = await page.evaluate(() => {
+    const i = document.createElement('input');
+    document.body.append(i);
+    const cancelled = !i.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    i.remove();
+    return cancelled;
+  });
+  expect(input).toBe(false);
+  await expect(page.getByTestId('tab-local1')).toBeVisible(); // nothing was reloaded
+});
