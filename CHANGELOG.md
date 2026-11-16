@@ -2,6 +2,13 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.5.2 — 2026-11-17
+**Changed**
+- **Video cards are ticked one by one in the monitor column.** With several video cards (the real one plus idle or virtual adapters that Windows lists) one tick used to add a graph for every card. Now the list has a line per card (“GPU 3D · NVIDIA GeForce RTX 3090”, “Video memory · …”), so you can show one graph of one card. By default only the first, real card is shown. The plain “GPU 3D / CUDA / Video memory” entries saved by earlier versions mean the first card too; the first change of a video card line turns them into per-card choices.
+
+**Fixed**
+- The list of indicators was drawn with the labels below the check boxes and centred; it is one line per indicator again.
+
 ## 1.5.1 — 2026-11-16
 **Fixed**
 - **A right click on a tab (or on the title bar, or on an empty place) opened the web view's browser menu with “Reload”, and choosing it closed every tab and session.** The browser menu is no longer shown; the menus of the program (explorer, tabs of the terminal ...) work as before, and text fields and the editor keep the native menu for copy and paste. The reload keys (F5, Ctrl+R) of the web view are ignored too (F5 still refreshes the explorer, Ctrl+R still goes to the shell). With the terminal setting “Right click: menu” the terminal keeps the native menu, as that setting asks for.

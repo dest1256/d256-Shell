@@ -240,3 +240,7 @@ Author: dest1256.
 ## 1.5.1: no browser menu
 
 - `main.ts`: a document-level `contextmenu` listener cancels the web view's menu unless something else already handled the event (`defaultPrevented`), the target is an input / textarea / editor, or the terminal is set to the native menu. F5 / Ctrl+R are cancelled when nobody handled them. Programmatic reloads (language change) are unaffected.
+
+## 1.5.2: per-card video indicators
+
+- Column keys: a card is `kind:id` (`gpu3d:0`, `vram:1`; kinds gpu3d, cuda, vram, gputemp); the plain kind means the first card (`s.gpus[0]`: nvidia-smi cards come first, unpaired Windows adapters after them). Ids are indexes in the order of the sample, so they are stable for a given set of cards but not a hardware identity; if the order of the cards changes (a card appears / disappears) a saved `kind:id` may point to another card. The popover lists only the cards that can give the indicator (CUDA: Windows counters; temperature: nvidia-smi).

@@ -9,11 +9,13 @@ let bridge: Bridge;
 test.afterEach(async () => bridge?.stop());
 
 /** A stand-in for nvidia-smi (a real card is not available in the test container). */
-function fakeSmi(): string {
+function fakeSmi(cards = 1): string {
   const dir = join(tmpdir(), `d256shell-e2e-smi-${Date.now()}`);
   mkdirSync(dir, { recursive: true });
   const p = join(dir, 'nvidia-smi');
-  writeFileSync(p, "#!/bin/sh\ncase \"$1\" in\n  --query-gpu*) echo '0, NVIDIA GeForce RTX 4090, 92, 21914, 24564, 71, 312.45, 450.00, 64, 2535';;\n  --query-compute-apps*) echo '1, 20800';;\nesac\n");
+  const second = cards > 1 ? "; echo '1, NVIDIA GeForce GTX 1050, 7, 300, 4096, 40, 20.00, 75.00, 30, 1000'" : '';
+  const lines = ['#!/bin/sh', 'case "$1" in', "  --query-gpu*) echo '0, NVIDIA GeForce RTX 4090, 92, 21914, 24564, 71, 312.45, 450.00, 64, 2535'" + second + ';;', "  --query-compute-apps*) echo '1, 20800';;", 'esac', ''];
+  writeFileSync(p, lines.join('\n'));
   chmodSync(p, 0o755);
   return p;
 }
@@ -251,4 +253,39 @@ test('server monitor: only the parts on screen are asked of the server; a second
   await connectFirst(page);
   await expect(page.getByTestId('tab-s2')).toBeVisible();
   await expect(page.getByTestId('mon-cpu').filter({ visible: true })).toContainText(/\d+%/, { timeout: 5000 });
+});
+
+test('local monitor: with two video cards each card is ticked on its own', async ({ page }) => {
+  bridge = await startBridge(undefined, { D256SHELL_NVIDIA_SMI: fakeSmi(2) });
+  await page.goto(bridge.url);
+  await createVault(page);
+  await openLocal(page);
+  await page.getByTestId('mon-col-toggle').click();
+  const col = page.getByTestId('mon-col');
+  const tile = (id: string) => col.locator(`[data-tile="${id}"]`);
+  // by default only the first (the real) card is shown, not one graph per card
+  await expect(tile('gpu3d:0')).toBeVisible({ timeout: 15_000 });
+  await expect(tile('vram:0')).toBeVisible();
+  await expect(tile('gpu3d:1')).toHaveCount(0);
+  await expect(tile('vram:1')).toHaveCount(0);
+  // the list offers every card separately, named
+  await col.getByTestId('mon-col-pick').click();
+  await expect(col.getByTestId('mon-pick-gpu3d:0')).toBeChecked();
+  await expect(col.getByTestId('mon-pick-gpu3d:1')).not.toBeChecked();
+  await expect(col.locator('.mc-pick', { hasText: 'GPU 3D · NVIDIA GeForce GTX 1050' })).toHaveCount(1);
+  // one graph of one card: the second card's video memory only
+  await col.getByTestId('mon-pick-vram:1').check();
+  await expect(tile('vram:1')).toBeVisible();
+  await expect(tile('gpu3d:1')).toHaveCount(0);
+  // and the first card's 3D off
+  await col.getByTestId('mon-pick-gpu3d:0').uncheck();
+  await expect(tile('gpu3d:0')).toHaveCount(0);
+  await expect(tile('vram:0')).toBeVisible();
+  await expect.poll(async () => ((await rpc(bridge.url, 'get_settings')) as { monitor_cols: Record<string, string[]> }).monitor_cols['local']).toEqual(['cpu', 'mem', 'cuda', 'vram:0', 'vram:1']);
+  await page.screenshot({ path: 'screenshots/87-two-cards.png' });
+  // the choice survives a restart of the page
+  await page.reload();
+  await openLocal(page);
+  await expect(page.getByTestId('mon-col').locator('[data-tile="vram:1"]')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByTestId('mon-col').locator('[data-tile="gpu3d:0"]')).toHaveCount(0);
 });

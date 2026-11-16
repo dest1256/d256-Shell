@@ -3,7 +3,7 @@
 import { clear, h } from './dom';
 import { t } from './i18n';
 import { icon } from './icons';
-import { COLORS, drawChart, fmtBytes, fmtRate, LOCAL_TARGET, monitors, MonitorSource, Part, Point, Sample, Series } from './monitor';
+import { COLORS, drawChart, fmtBytes, fmtRate, GpuSample, LOCAL_TARGET, monitors, MonitorSource, Part, Point, Sample, Series } from './monitor';
 import { getSettings, onSettings, updateSettings } from './settings';
 import { fmt1, fmtGhz, fmtPct, windowOf } from './taskmgr';
 
@@ -16,6 +16,16 @@ const DEFAULTS: Record<'local' | 'server', Ind[]> = {
   server: ['cpu', 'mem', 'net'],
 };
 
+/** The indicators of a video card: each card is ticked on its own (`kind:id`); the plain `kind` (the defaults, and the
+ * settings of older versions) means the first card, which is the real one: the others are often idle or virtual adapters. */
+const GPU_KINDS: readonly Ind[] = ['gpu3d', 'cuda', 'vram', 'gputemp'];
+const isGpu = (k: Ind): boolean => GPU_KINDS.includes(k);
+const gpuOn = (set: Set<string>, kind: Ind, g: GpuSample, first: GpuSample | undefined): boolean => set.has(`${kind}:${g.id}`) || (set.has(kind) && g === first);
+/** Can this card give this indicator at all? */
+const gpuHas = (k: Ind, g: GpuSample): boolean => (k === 'cuda' ? Object.keys(g.engines).length > 0 : k === 'vram' ? g.vram_used !== null : k === 'gputemp' ? g.temp !== null || g.power !== null : true);
+/** The keys of a ticked set in a fixed order (by indicator, then by card). */
+const sorted = (set: Set<string>): string[] => [...set].sort((a, b) => ORDER.indexOf(a.split(':')[0] as Ind) - ORDER.indexOf(b.split(':')[0] as Ind) || a.localeCompare(b));
+
 const label = (k: Ind): string =>
   ({ cpu: 'CPU', mem: t('Memory'), gpu3d: t('GPU 3D'), cuda: 'CUDA (Compute)', vram: t('Video memory'), gputemp: t('GPU temperature'), cputemp: t('CPU temp.'), disk: t('Disks'), net: t('Network'), procs: t('Processes') })[k];
 
@@ -23,12 +33,7 @@ const label = (k: Ind): string =>
 function available(s: Sample | null): Set<Ind> {
   const out = new Set<Ind>(['cpu', 'mem', 'disk', 'net']);
   if (!s) return out;
-  if (s.gpus?.length) {
-    out.add('gpu3d');
-    if (s.gpus.some((g) => Object.keys(g.engines).length > 0)) out.add('cuda'); // only the Windows counters tell the CUDA load
-    out.add('vram');
-    out.add('gputemp');
-  }
+  for (const k of GPU_KINDS) if (s.gpus?.some((g) => gpuHas(k, g))) out.add(k); // CUDA: only the Windows counters tell it
   if (s.cpu_temp != null) out.add('cputemp');
   if (s.procs) out.add('procs');
   return out;
@@ -46,11 +51,12 @@ interface Spec {
   rows?: string[][];
 }
 
-function specs(chosen: Ind[], s: Sample, pts: Point[]): Spec[] {
+function specs(chosen: Set<string>, s: Sample, pts: Point[]): Spec[] {
   const last = pts[pts.length - 1];
   const out: Spec[] = [];
   const multi = (s.gpus?.length ?? 0) > 1;
-  for (const k of chosen) {
+  for (const k of ORDER) {
+    if (!isGpu(k) && !chosen.has(k)) continue;
     if (k === 'cpu') out.push({ id: 'cpu', title: 'CPU', value: `${fmtPct(last?.cpu ?? null)} ${fmtGhz(s.cpu_mhz)}`.trim(), color: COLORS.cpu, series: [{ data: pts.map((p) => p.cpu), color: COLORS.cpu, fill: true }], max: 100 });
     else if (k === 'mem') {
       const m = s.mem;
@@ -78,6 +84,7 @@ function specs(chosen: Ind[], s: Sample, pts: Point[]): Spec[] {
       if (s.procs) out.push({ id: 'procs', title: t('Processes'), value: '', color: '#94a3b8', series: [], rows: s.procs.slice(0, 5).map((p) => [p.name, fmtPct(p.cpu), p.gpu == null ? '—' : fmtPct(p.gpu), p.vram == null ? '—' : fmtBytes(p.vram)]) });
     } else {
       for (const g of s.gpus ?? []) {
+        if (!gpuOn(chosen, k, g, s.gpus![0])) continue;
         const gp = last?.gpus.find((x) => x.id === g.id);
         const of = (f: (x: NonNullable<typeof gp>) => number | null) => pts.map((p) => { const q = p.gpus.find((x) => x.id === g.id); return q ? f(q) : null; });
         const name = (base: string) => (multi ? `${base} · ${g.name}` : base);
@@ -149,14 +156,16 @@ export class MonitorColumn {
 
   /** What a server has to read for the ticked indicators (the video card and the processes exist only on this computer). */
   private parts(): Part[] {
-    const map: Partial<Record<Ind, Part>> = { cpu: 'cpu', mem: 'mem', disk: 'disks', net: 'net' };
-    return this.chosen().flatMap((k) => (map[k] ? [map[k]!] : []));
+    const map: Partial<Record<string, Part>> = { cpu: 'cpu', mem: 'mem', disk: 'disks', net: 'net' };
+    return [...this.chosen()].flatMap((k) => (map[k] ? [map[k]!] : []));
   }
 
-  private chosen(): Ind[] {
-    const saved = getSettings().monitor_cols[this.key];
-    const set = new Set(saved ?? DEFAULTS[this.key === LOCAL_TARGET ? 'local' : 'server']);
-    return ORDER.filter((k) => set.has(k));
+  private chosen(): Set<string> {
+    return new Set(getSettings().monitor_cols[this.key] ?? DEFAULTS[this.key === LOCAL_TARGET ? 'local' : 'server']);
+  }
+
+  private save(next: Set<string>): void {
+    void updateSettings({ monitor_cols: { ...getSettings().monitor_cols, [this.key]: sorted(next) } });
   }
 
   /** Targets, selected target and the indicator list may have changed. */
@@ -187,25 +196,41 @@ export class MonitorColumn {
   }
 
   private fillPop(): void {
-    const src = this.watch?.src;
-    const have = available(src?.last ?? null);
-    const on = new Set(this.chosen());
-    const sig = [...have].join() + '|' + [...on].join() + '|' + this.key;
+    const sample = this.watch?.src.last ?? null;
+    const have = available(sample);
+    const on = this.chosen();
+    const gpus = sample?.gpus ?? [];
+    const first = gpus[0];
+    // what is offered: an indicator, and for a video card one line per card (the card's name tells them apart)
+    const lines: { k: Ind; g?: GpuSample }[] = [];
+    for (const k of ORDER) {
+      if (!have.has(k)) continue;
+      if (!isGpu(k)) lines.push({ k });
+      else for (const g of gpus) if (gpuHas(k, g)) lines.push({ k, g });
+    }
+    const sig = lines.map((l) => `${l.k}:${l.g?.id ?? ''}:${l.g ? gpuOn(on, l.k, l.g, first) : on.has(l.k)}`).join() + '|' + this.key;
     if (sig === this.lastPick) return;
     this.lastPick = sig;
     clear(this.pop);
     this.pop.append(h('div', { class: 'mc-pop-title' }, t('Indicators on the monitor')));
-    for (const k of ORDER) {
-      if (!have.has(k)) continue;
-      const box = h('input', { type: 'checkbox', 'data-testid': `mon-pick-${k}` }) as HTMLInputElement;
-      box.checked = on.has(k);
+    for (const { k, g } of lines) {
+      const many = gpus.filter((x) => gpuHas(k, x)).length > 1;
+      const box = h('input', { type: 'checkbox', 'data-testid': g && many ? `mon-pick-${k}:${g.id}` : `mon-pick-${k}` }) as HTMLInputElement;
+      box.checked = g ? gpuOn(on, k, g, first) : on.has(k);
       box.addEventListener('change', () => {
-        const next = new Set(this.chosen());
-        if (box.checked) next.add(k);
-        else next.delete(k);
-        void updateSettings({ monitor_cols: { ...getSettings().monitor_cols, [this.key]: ORDER.filter((x) => next.has(x)) } });
+        const next = this.chosen();
+        if (!g) {
+          if (box.checked) next.add(k);
+          else next.delete(k);
+        } else {
+          // from now on the cards are ticked one by one: the plain kind becomes the key of the first card
+          if (next.delete(k) && first) next.add(`${k}:${first.id}`);
+          if (box.checked) next.add(`${k}:${g.id}`);
+          else next.delete(`${k}:${g.id}`);
+        }
+        this.save(next);
       });
-      this.pop.append(h('label', { class: 'mc-pick' }, box, h('span', {}, label(k))));
+      this.pop.append(h('label', { class: 'mc-pick' }, box, h('span', {}, g && many ? `${label(k)} · ${g.name}` : label(k))));
     }
     this.pop.append(
       h('button', { class: 'tool-sm', type: 'button', 'data-testid': 'mon-pick-reset', onclick: () => {
