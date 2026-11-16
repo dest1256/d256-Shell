@@ -286,6 +286,8 @@ pub struct SftpConnection {
     pub stale: Mutex<Vec<String>>,
     /// A second SFTP channel for small reads (see `light`).
     light: tokio::sync::OnceCell<Option<SftpSession>>,
+    /// User and group names of the server (`/etc/passwd`, `/etc/group`), for the owner column.
+    names: tokio::sync::Mutex<Names>,
     /// Open `/proc` files of the monitor (kept between samples).
     pub(crate) mon: tokio::sync::Mutex<crate::monitor::MonState>,
 }
@@ -389,6 +391,7 @@ impl SftpConnection {
             stale: Mutex::new(Vec::new()),
             light: tokio::sync::OnceCell::new(),
             mon: Default::default(),
+            names: Default::default(),
         })
     }
 
@@ -442,7 +445,7 @@ impl SftpConnection {
     /// List a directory. Entry types come from `lstat` data; for symlinks the target type is resolved with `stat`.
     pub async fn list_dir(&self, path: &str) -> Result<Vec<DirEntry>, String> {
         let rd = self.sftp.read_dir(path).await.map_err(describe)?;
-        let mut out = Vec::new();
+        let mut out: Vec<DirEntry> = Vec::new();
         for e in rd {
             let m = e.metadata();
             let ft = m.file_type();
@@ -479,7 +482,45 @@ impl SftpConnection {
                 group: m.group.clone(),
             });
         }
+        self.name_owners(&mut out).await;
         Ok(out)
+    }
+
+    /// SFTP (version 3) lists only numeric ids: the names are looked up in `/etc/passwd` and `/etc/group` of the server
+    /// (two plain file reads, no command). The tables are read once and again only when an id is not in them (at most
+    /// once a minute); a user that only the server's directory service knows (LDAP ...) stays a number.
+    async fn name_owners(&self, entries: &mut [DirEntry]) {
+        let missing = |n: &Names, entries: &[DirEntry]| {
+            entries.iter().any(|e| {
+                e.uid.is_some_and(|u| !n.users.contains_key(&u))
+                    || e.gid.is_some_and(|g| !n.groups.contains_key(&g))
+            })
+        };
+        let mut n = self.names.lock().await;
+        let stale = n
+            .loaded
+            .is_none_or(|t| t.elapsed() > Duration::from_secs(60));
+        if stale && missing(&n, entries) {
+            let (p, g) = tokio::join!(
+                self.read_small("/etc/passwd", 1 << 20),
+                self.read_small("/etc/group", 1 << 20)
+            );
+            if let Some(p) = p {
+                n.users = parse_ids(&p);
+            }
+            if let Some(g) = g {
+                n.groups = parse_ids(&g);
+            }
+            n.loaded = Some(std::time::Instant::now());
+        }
+        for e in entries.iter_mut() {
+            if e.owner.is_none() {
+                e.owner = e.uid.and_then(|u| n.users.get(&u).cloned());
+            }
+            if e.group.is_none() {
+                e.group = e.gid.and_then(|g| n.groups.get(&g).cloned());
+            }
+        }
     }
 
     pub async fn close(self) {
@@ -489,6 +530,32 @@ impl SftpConnection {
             .disconnect(russh::Disconnect::ByApplication, "", "en")
             .await;
     }
+}
+
+/// Names of the users / groups of a server, by id.
+#[derive(Default)]
+pub(crate) struct Names {
+    loaded: Option<std::time::Instant>,
+    users: std::collections::HashMap<u32, String>,
+    groups: std::collections::HashMap<u32, String>,
+}
+
+/// `name:x:id:...` lines of `/etc/passwd` or `/etc/group` -> id -> name (the first name of an id wins).
+pub(crate) fn parse_ids(text: &str) -> std::collections::HashMap<u32, String> {
+    let mut m = std::collections::HashMap::new();
+    for l in text.lines() {
+        let mut f = l.split(':');
+        let (Some(name), Some(_), Some(id)) = (f.next(), f.next(), f.next()) else {
+            continue;
+        };
+        if let (false, Ok(id)) = (
+            name.is_empty() || name.starts_with('#'),
+            id.trim().parse::<u32>(),
+        ) {
+            m.entry(id).or_insert_with(|| name.to_string());
+        }
+    }
+    m
 }
 
 fn sftp_unavailable(e: &dyn std::fmt::Display) -> ConnectError {
@@ -702,4 +769,33 @@ async fn load_key(
         "Wrong passphrase for the key {}.",
         path.display()
     )))
+}
+
+#[cfg(test)]
+mod name_tests {
+    use super::parse_ids;
+
+    #[test]
+    fn passwd_and_group_lines_give_names_by_id() {
+        let m = parse_ids(
+            "root:x:0:0:root:/root:/bin/bash
+# comment
+daemon:x:1:1::/usr/sbin:/usr/sbin/nologin
+bad line
+tester:x:1000:1000:,,,:/home/tester:/bin/bash
+root2:x:0:0::/:/bin/sh
+:x:5:5
+",
+        );
+        assert_eq!(m[&0], "root", "the first name of an id wins");
+        assert_eq!(m[&1], "daemon");
+        assert_eq!(m[&1000], "tester");
+        assert_eq!(m.len(), 3);
+        let g = parse_ids(
+            "staff:x:50:tester,root
+users:x:100:
+",
+        );
+        assert_eq!((g[&50].as_str(), g[&100].as_str()), ("staff", "users"));
+    }
 }

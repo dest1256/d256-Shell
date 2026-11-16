@@ -2,6 +2,10 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.5.0 — 2026-11-16
+**Added**
+- **Owner column in the file explorer of a server:** a new column between the name and the size shows the user that owns every file and folder (the tooltip shows `user:group`). Click the header to sort by it (folders stay first). SFTP only reports numeric ids, so the names are looked up in the server's `/etc/passwd` and `/etc/group` (two plain file reads, no command; read once per connection and again at most once a minute when an unknown id shows up). A user that only the server's directory service knows (LDAP ...) stays a number. The properties window shows the names too. When the panel is narrow the columns drop in this order: permissions, modified, and, below 300 px, the owner. The explorer of your own computer has no owner column.
+
 ## 1.4.2 — 2026-11-14
 **Fixed**
 - **The CUDA load did not match the Task Manager.** The program added the DirectCompute engines (`Compute_0` ...: a browser, a game, the desktop use them) to the real `Cuda` engine and showed the larger one, so “CUDA” showed a few percent while the Task Manager's “Cuda” graph was at 0%. Now only the `Cuda` engine is CUDA, as in the Task Manager; while no process uses CUDA there is no such engine and the load is 0%. Without the Windows counters (Linux with `nvidia-smi` only) the CUDA figure is still unknown and not offered.

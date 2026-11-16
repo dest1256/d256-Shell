@@ -232,3 +232,7 @@ Author: dest1256.
 ## 1.4.2: CUDA is the Cuda engine
 
 - `gpu_engines` keeps `Cuda` (engtype_Cuda) and `Compute` (engtype_Compute_N, DirectCompute) apart, as the Task Manager does; the UI's CUDA figure is `engines.Cuda`, or 0 when the Windows counters are present but no process has a Cuda engine instance. Checked against the Task Manager only by the user's screenshots, not on real hardware here.
+
+## 1.5.0: owner column
+
+- SFTP v3 returns only `uid`/`gid` (`owner`/`group` were always `None`: checked against the test sshd); russh-sftp's `read_dir` drops the `longname` (which OpenSSH fills with names resolved by the server), so `SftpConnection::name_owners` reads `/etc/passwd` and `/etc/group` through the light channel, caches the maps in `Names` and reloads them at most once a minute when a listed id is missing. NSS-only accounts (LDAP, SSSD) stay numbers. UI: `ownerText()` (name, else the number), sort key `owner`, class `has-owner` on remote explorers (the local one has no owner data).

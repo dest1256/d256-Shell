@@ -152,8 +152,8 @@ button.link { background: none; border: 0; color: var(--accent); padding: 0 0 0 
 .vrow.lossy .nm { color: var(--warn); }
 .c-size { text-align: right; color: var(--muted); } .c-time, .c-mode { color: var(--muted); font-size: 12px; } .c-mode { font-family: 'Cascadia Mono', Consolas, monospace; font-size: 11px; }
 .ex-status { padding: 4px 10px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-@container (max-width: 520px) { .ex-head, .vrow { grid-template-columns: minmax(0, 1fr) 76px 128px; } .th:nth-child(4), .c-mode { display: none; } }
-@container (max-width: 360px) { .ex-head, .vrow { grid-template-columns: minmax(0, 1fr) 76px; } .th:nth-child(3), .c-time { display: none; } }
+@container (max-width: 520px) { .explorer:not(.has-owner) .ex-head, .explorer:not(.has-owner) .vrow { grid-template-columns: minmax(0, 1fr) 76px 128px; } .explorer:not(.has-owner) .th:nth-child(4), .explorer:not(.has-owner) .c-mode { display: none; } }
+@container (max-width: 360px) { .explorer:not(.has-owner) .ex-head, .explorer:not(.has-owner) .vrow { grid-template-columns: minmax(0, 1fr) 76px; } .explorer:not(.has-owner) .th:nth-child(3), .explorer:not(.has-owner) .c-time { display: none; } }
 
 /* ---------- connect dialogs ---------- */
 .progress { flex-direction: row; align-items: center; gap: 14px; width: 380px; }
@@ -383,3 +383,10 @@ h4 { margin: 10px 0 2px; font-size: 12px; color: var(--muted); text-transform: u
 .mt-v { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mt-chart { display: block; width: 100%; height: 56px; }
 .mt-wait, .mt-empty { padding: 12px; font-size: 12px; }
+/* the owner column (remote explorers): between the name and the size; it is dropped last-but-one when the panel is narrow */
+.has-owner .ex-head, .has-owner .vrow { grid-template-columns: minmax(0, 1fr) 92px 76px 128px 92px; }
+.has-owner .th:nth-child(2) { justify-content: flex-start; } .has-owner .th:nth-child(3) { justify-content: flex-end; }
+.c-owner { color: var(--muted); font-size: 12px; }
+@container (max-width: 640px) { .has-owner .ex-head, .has-owner .vrow { grid-template-columns: minmax(0, 1fr) 92px 76px 128px; } .has-owner .th:nth-child(5), .has-owner .c-mode { display: none; } }
+@container (max-width: 500px) { .has-owner .ex-head, .has-owner .vrow { grid-template-columns: minmax(0, 1fr) 92px 76px; } .has-owner .th:nth-child(4), .has-owner .c-time { display: none; } }
+@container (max-width: 300px) { .has-owner .ex-head, .has-owner .vrow { grid-template-columns: minmax(0, 1fr) 76px; } .has-owner .th:nth-child(2), .has-owner .c-owner { display: none; } }

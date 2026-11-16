@@ -377,3 +377,15 @@ test('scripts: choose the encoding when editing (reread, save as another one, BO
   expect(r).toMatchObject({ encoding: 'UTF-8', bom: true, eol: 'crlf', text: '@echo Привет\n' });
   await page.screenshot({ path: 'screenshots/80-script-encoding.png' });
 });
+
+test('the explorer of this computer has no owner column (no owner names there)', async ({ page }) => {
+  bridge = await startBridge();
+  await page.goto(bridge.url);
+  await createVault(page);
+  await page.getByTestId('rail-terminals').click();
+  await page.getByTestId('profile-item').first().dblclick();
+  const ex = page.getByTestId('local-ex');
+  await expect(ex.getByTestId('sort-name')).toBeVisible();
+  await expect(ex.getByTestId('sort-owner')).toHaveCount(0);
+  await expect(ex.locator('.c-owner')).toHaveCount(0);
+});

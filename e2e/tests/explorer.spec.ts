@@ -219,3 +219,28 @@ test('cancelling the connection to an unreachable server', async ({ page }) => {
   await expect(page.getByTestId('connecting')).toHaveCount(0);
   await expect(page.getByTestId('tab-s1')).toHaveCount(0);
 });
+
+test('owner column: the user name of every file and folder, sortable, left out in the local explorer', async ({ page }) => {
+  await start(page);
+  await addServer(page, { name: 'Owners', host: 'sshd-password', password: PASS });
+  await connectFirst(page);
+  await acceptHostKey(page);
+  await expect(row(page, '.bashrc')).toBeVisible();
+  // between the name and the size: the header and the cells
+  const order = await page.locator('.ex-head .th').evaluateAll((els) => els.map((e) => (e as HTMLElement).dataset.testid));
+  expect(order).toEqual(['sort-name', 'sort-owner', 'sort-size', 'sort-mtime', 'sort-mode']);
+  // names, not numbers: my files belong to tester, the folder zone to root (as the server says in /etc/passwd)
+  await expect(row(page, '.bashrc').locator('.c-owner')).toHaveText('tester');
+  await expect(row(page, 'zone').locator('.c-owner')).toHaveText('root');
+  await expect(row(page, 'zone').locator('.c-owner')).toHaveAttribute('title', 'root:root');
+  await page.screenshot({ path: 'screenshots/86-owner-column.png' });
+  // sorting by the owner: folders stay first, then root before tester
+  await page.getByTestId('sort-owner').click();
+  await expect(page.getByTestId('sort-owner')).toContainText('▲');
+  await row(page, 'zone').dblclick();
+  await expect(page.getByTestId('path-input')).toHaveValue('/home/tester/zone');
+  await page.getByTestId('sort-owner').click(); // the order of the new folder is kept: check the cells are filled
+  const owners = await page.locator('[data-testid="explorer-row"] .c-owner').allTextContents();
+  expect(owners.length).toBeGreaterThan(3);
+  expect(owners.filter((o) => o.length > 0).length).toBeGreaterThan(3); // every entry except the ".." row
+});

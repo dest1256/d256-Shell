@@ -17,7 +17,7 @@ interface BatchResult {
 }
 const collator = new Intl.Collator('en', { numeric: true, sensitivity: 'base' });
 
-type SortKey = 'name' | 'size' | 'mtime' | 'mode';
+type SortKey = 'name' | 'owner' | 'size' | 'mtime' | 'mode';
 
 export function formatSize(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -55,6 +55,9 @@ const isDirLike = (e: DirEntry) => e.kind === 'dir' || (e.kind === 'symlink' && 
 
 /** The "go up" row shown above all folders (like MobaXterm); it is not a real entry and takes part in no operation. */
 const UP = '..';
+/** The owner shown in the list: the name (looked up on the server), else the number. */
+const ownerText = (e: DirEntry): string => e.owner ?? (e.uid === null || e.uid === undefined ? '' : String(e.uid));
+
 const PARENT_ENTRY: DirEntry = { name: UP, kind: 'dir', target_is_dir: null, size: 0, mtime: null, mode: null, uid: null, gid: null, owner: null, group: null, name_lossy: false };
 
 export interface ExplorerHooks {
@@ -134,7 +137,7 @@ export class Explorer {
       const el = h('button', { class: 'th', 'data-testid': `sort-${key}`, onclick: () => this.setSort(key) }, label);
       return el;
     };
-    this.headers = { name: col('name', t('Name')), size: col('size', t('Size')), mtime: col('mtime', t('Modified')), mode: col('mode', t('Permissions')) };
+    this.headers = { name: col('name', t('Name')), owner: col('owner', t('Owner')), size: col('size', t('Size')), mtime: col('mtime', t('Modified')), mode: col('mode', t('Permissions')) };
 
     this.pathInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') void this.load(this.pathInput.value.trim());
@@ -157,7 +160,7 @@ export class Explorer {
 
     this.el = h(
       'div',
-      { class: 'explorer', 'data-testid': 'explorer' },
+      { class: 'explorer' + (this.local ? '' : ' has-owner'), 'data-testid': 'explorer' },
       h(
         'div',
         { class: 'ex-bar' },
@@ -177,7 +180,7 @@ export class Explorer {
       ),
       this.crumbs,
       this.banner,
-      h('div', { class: 'ex-head' }, this.headers.name, this.headers.size, this.headers.mtime, this.headers.mode),
+      h('div', { class: 'ex-head' }, this.headers.name, this.local ? null : this.headers.owner, this.headers.size, this.headers.mtime, this.headers.mode),
       this.body,
       this.xfer.el,
       this.status,
@@ -203,7 +206,7 @@ export class Explorer {
   }
 
   private updateHeaders(): void {
-    const label: Record<SortKey, string> = { name: t('Name'), size: t('Size'), mtime: t('Modified'), mode: t('Permissions') };
+    const label: Record<SortKey, string> = { name: t('Name'), owner: t('Owner'), size: t('Size'), mtime: t('Modified'), mode: t('Permissions') };
     for (const k of Object.keys(this.headers) as SortKey[]) {
       this.headers[k].textContent = label[k] + (k === this.sortKey ? (this.asc ? ' ▲' : ' ▼') : '');
     }
@@ -264,6 +267,9 @@ export class Explorer {
           break;
         case 'mode':
           c = (a.mode ?? 0) - (b.mode ?? 0);
+          break;
+        case 'owner':
+          c = collator.compare(ownerText(a), ownerText(b));
           break;
       }
       return (c || collator.compare(a.name, b.name)) * dir;
@@ -338,6 +344,7 @@ export class Explorer {
         },
       },
       h('div', { class: 'c-name' }, h('span', { class: 'fi ' + (dirLike ? 'dir' : '') }, icon(ico, 15)), h('span', { class: 'nm' }, e.name), e.kind === 'symlink' ? h('span', { class: 'tag' }, '→') : null, e.name_lossy ? h('span', { class: 'tag warn', title: t('non-UTF-8 name') }, '⚠') : null),
+      this.local ? null : h('div', { class: 'c-owner', title: [e.owner ?? e.uid, e.group ?? e.gid].filter((x) => x !== null && x !== undefined).join(':') }, ownerText(e)),
       h('div', { class: 'c-size' }, e.kind === 'file' ? formatSize(e.size) : ''),
       h('div', { class: 'c-time' }, formatTime(e.mtime)),
       h('div', { class: 'c-mode' }, modeString(e.mode, e.kind)),

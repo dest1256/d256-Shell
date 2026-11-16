@@ -130,3 +130,20 @@ async fn canonicalize_resolves_symlinks_and_dotdot() {
     );
     c.close().await;
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn owners_and_groups_are_named_from_passwd_and_group() {
+    need_servers!();
+    let c = connect("list_names").await;
+    // my own files belong to the login user, the system ones to root
+    let mine = c.list_dir(&c.home).await.unwrap();
+    let rc = mine.iter().find(|e| e.name == ".bashrc").expect(".bashrc");
+    assert_eq!(rc.owner.as_deref(), Some(USER), "{rc:?}");
+    assert!(rc.group.is_some(), "{rc:?}");
+    let zone = c.list_dir(&format!("{}/zone", c.home)).await.unwrap();
+    assert!(zone.iter().any(|e| e.owner.as_deref() == Some("root")));
+    // a number nobody knows stays a number: no name is invented
+    assert!(zone
+        .iter()
+        .all(|e| e.uid.is_none() || e.owner.is_some() || e.uid.unwrap() > 60000));
+}
