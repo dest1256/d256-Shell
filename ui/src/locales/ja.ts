@@ -667,5 +667,13 @@ const catalog: Record<string, string> = {
   "Indicators on the monitor": "モニターの項目",
   "Default set": "既定の組み合わせ",
   "Nothing is chosen: use the button above to pick the indicators.": "何も選択されていません。上のボタンで項目を選んでください。",
+  "Ask before restarting a running tab": "実行中のタブを再起動する前に確認する",
+  "Restart “{0}”?": "「{0}」を再起動しますか？",
+  "The program running in it will be stopped and started again.": "実行中のプログラムを停止して、もう一度起動します。",
+  "The terminal will be opened again: the programs running in it are interrupted. The files and the explorer stay.": "ターミナルを開き直します。実行中のプログラムは中断されます。ファイルとエクスプローラーはそのまま残ります。",
+  "Don't ask again": "今後は確認しない",
+  "Restart": "再起動",
+  "Close other tabs": "他のタブを閉じる",
+  "Close tabs to the right": "右側のタブを閉じる",
 };
 export default catalog;

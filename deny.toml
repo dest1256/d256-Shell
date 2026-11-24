@@ -10,6 +10,9 @@ ignore = [
     # `rsa` (Marvin attack, no fix): pulled in by russh for RSA host/user keys. d256 Shell performs no private-key
     # RSA operations (password login only, host keys are only verified), so the timing side channel is not reachable.
     "RUSTSEC-2023-0071",
+    # `chrono` is declared unmaintained (no vulnerability, no fix possible): it comes only through russh-sftp, which uses
+    # it to print file times. Revisit when russh-sftp moves to another time crate.
+    "RUSTSEC-2026-0543",
 ]
 
 [licenses]

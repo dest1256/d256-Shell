@@ -25,6 +25,8 @@ export interface TabHandlers {
   onAdd?: (() => void) | null;
   onClose?: (id: string) => void;
   onRename?: (id: string) => void;
+  /** Right click on a tab (the menu of the tab). */
+  onContext?: (id: string, x: number, y: number) => void;
 }
 
 export class Titlebar {
@@ -62,6 +64,10 @@ export class Titlebar {
           'data-testid': `tab-${t.id}`,
           onclick: () => hd.onSelect(t.id),
           ondblclick: () => t.closable && hd.onRename?.(t.id),
+          oncontextmenu: (e) => {
+            e.preventDefault();
+            hd.onContext?.(t.id, (e as MouseEvent).clientX, (e as MouseEvent).clientY);
+          },
           onkeydown: (e) => {
             const k = (e as KeyboardEvent).key;
             if (k === 'Enter' || k === ' ') hd.onSelect(t.id);

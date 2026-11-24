@@ -91,3 +91,42 @@ export function promptDialog(title: string, label: string, value = '', okLabel =
     );
   });
 }
+
+export interface MenuItem {
+  label: string;
+  /** Shown on the right (the shortcut). */
+  hint?: string;
+  disabled?: boolean;
+  testid?: string;
+  run: () => void;
+}
+
+/** A context menu at the pointer (the same look as the explorer menu); `null` is a separator. Closed by a click elsewhere or Esc. */
+export function popupMenu(x: number, y: number, items: (MenuItem | null)[]): void {
+  document.querySelectorAll('.ctx-menu.popup').forEach((e) => e.remove());
+  const menu = h('div', { class: 'ctx-menu popup', role: 'menu', 'data-testid': 'ctx-menu' });
+  const close = () => {
+    menu.remove();
+    document.removeEventListener('mousedown', away, true);
+    document.removeEventListener('keydown', esc, true);
+  };
+  const away = (e: Event) => {
+    if (!menu.contains(e.target as Node)) close();
+  };
+  const esc = (e: KeyboardEvent) => e.key === 'Escape' && close();
+  for (const it of items) {
+    if (!it) {
+      menu.append(h('div', { class: 'sep' }));
+      continue;
+    }
+    const b = h('button', { class: 'ctx-item', role: 'menuitem', type: 'button', 'data-testid': it.testid ?? 'ctx-' + it.label, onclick: () => (close(), it.run()) }, h('span', {}), h('span', {}, it.label), h('kbd', {}, it.hint ?? ''));
+    if (it.disabled) b.setAttribute('disabled', '');
+    menu.append(b);
+  }
+  document.body.append(menu);
+  const r = menu.getBoundingClientRect();
+  menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - r.width - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(y, window.innerHeight - r.height - 4))}px`;
+  document.addEventListener('mousedown', away, true);
+  document.addEventListener('keydown', esc, true);
+}

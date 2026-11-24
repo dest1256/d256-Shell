@@ -113,6 +113,8 @@ export class TerminalView {
   private stopStream: (() => void) | null = null;
   private stopPrompts: (() => void) | null = null;
   private exited = true;
+  /** Counts the starts of the backend terminal: events of an earlier one (stopped by a restart) are ignored. */
+  private gen = 0;
   private starting = false;
   private disposed = false;
   private wheelAcc = 0;
@@ -260,6 +262,7 @@ export class TerminalView {
         : this.local
           ? await api.localOpen(this.local.profile ?? '', this.term.cols, this.term.rows)
           : await api.termOpen(this.sessionId, this.term.cols, this.term.rows);
+      const gen = ++this.gen;
       this.termId = r.term_id;
       this.exited = false;
       this.startedAt = Date.now();
@@ -271,12 +274,13 @@ export class TerminalView {
       this.stopStream = termStream(
         r.term_id,
         (b) => {
+          if (gen !== this.gen) return;
           this.term.write(b);
           this.hooks.onState('ok');
           this.lastOutput = Date.now();
           this.armStartup();
         },
-        (code) => this.onExit(code),
+        (code) => gen === this.gen && this.onExit(code),
       );
       this.hooks.onState('ok');
     } catch (e) {
@@ -287,6 +291,27 @@ export class TerminalView {
     } finally {
       this.starting = false;
     }
+  }
+
+  /** Stop what runs in this terminal and start it again in the same place: a script is read from its file again, a
+   * shell or an SSH terminal is opened anew (the screen and the scrollback are cleared). */
+  async restart(): Promise<void> {
+    if (this.disposed || this.starting) return;
+    this.stopStream?.();
+    this.stopStream = null;
+    this.stopPrompts?.();
+    this.stopPrompts = null;
+    const id = this.termId;
+    this.gen++;
+    this.termId = null;
+    this.exited = true;
+    this.pending = [];
+    if (id) await api.termClose(id).catch(() => undefined);
+    this.typedByUser = false;
+    this.line = '';
+    this.term.reset();
+    await this.start();
+    this.term.focus();
   }
 
   private onExit(code: number): void {

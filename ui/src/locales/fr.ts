@@ -667,5 +667,13 @@ const catalog: Record<string, string> = {
   "Indicators on the monitor": "Indicateurs du moniteur",
   "Default set": "Ensemble par défaut",
   "Nothing is chosen: use the button above to pick the indicators.": "Rien n'est choisi : choisissez les indicateurs avec le bouton ci-dessus.",
+  "Ask before restarting a running tab": "Demander avant de redémarrer un onglet en cours",
+  "Restart “{0}”?": "Redémarrer « {0} » ?",
+  "The program running in it will be stopped and started again.": "Le programme qui s’y exécute sera arrêté puis relancé.",
+  "The terminal will be opened again: the programs running in it are interrupted. The files and the explorer stay.": "Le terminal sera rouvert : les programmes qui s’y exécutent seront interrompus. Les fichiers et l’explorateur restent.",
+  "Don't ask again": "Ne plus demander",
+  "Restart": "Redémarrer",
+  "Close other tabs": "Fermer les autres onglets",
+  "Close tabs to the right": "Fermer les onglets à droite",
 };
 export default catalog;

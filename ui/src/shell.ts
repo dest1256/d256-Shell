@@ -9,12 +9,12 @@ import { createNotes, createScripts, createTerminals, Section } from './sections
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { connectFlow } from './connect';
 import { changeMasterDialog, serverForm, settingsDialog } from './dialogs';
-import { clear, confirmDialog, h, promptDialog, toast } from './dom';
+import { clear, confirmDialog, h, modal, popupMenu, promptDialog, toast } from './dom';
 import { Explorer } from './explorer';
 import { BAR_PARTS, LOCAL_TARGET, MonitorBar, monitors } from './monitor';
 import { MonitorColumn } from './moncol';
 import { MonitorDetail } from './taskmgr';
-import { getSettings, onSettings } from './settings';
+import { getSettings, onSettings, updateSettings } from './settings';
 import { autoCheck, dismissUpdate, openRelease } from './updates';
 import { icon } from './icons';
 import { TerminalView } from './terminal';
@@ -53,6 +53,8 @@ interface Tab {
   runKey?: string;
   /** Open a live copy of the terminal (same server, new shell, previous output shown above). */
   duplicate?: () => void | Promise<void>;
+  /** Stop what runs in the terminal of this tab and start it again (a script is read from its file again). */
+  restart?: () => Promise<void>;
 }
 
 /** `user@host[:port]` -> parts, or null. */
@@ -93,7 +95,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     titlebar.setTabs(
       tabs.map((t) => ({ id: t.id, title: t.title, icon: t.icon, iconKey: t.iconKey, closable: t.closable, state: t.state })),
       activeId,
-      { onSelect: activate, onAdd: () => void add(), onClose: (id) => void closeTab(id), onRename: (id) => void renameTab(id) },
+      { onSelect: activate, onAdd: () => void add(), onClose: (id) => void closeTab(id), onRename: (id) => void renameTab(id), onContext: (id, x, y) => tabMenu(id, x, y) },
     );
     renderOpenTabs();
     const n = tabs.filter((t) => t.state === 'ok').length;
@@ -119,6 +121,52 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       renderTabs();
     }
   }
+  /** Restart the terminal of a tab. A running one asks first (switch off in Settings or with the check box). */
+  async function restartTab(id: string): Promise<void> {
+    const tab = tabs.find((x) => x.id === id);
+    if (!tab?.restart) return;
+    if ((tab.state ?? 'off') !== 'off' && getSettings().confirm_restart) {
+      const ok = await modal<{ never: boolean }>((close) => {
+        const never = h('input', { type: 'checkbox', 'data-testid': 'restart-never' }) as HTMLInputElement;
+        return h(
+          'form',
+          { role: 'dialog', 'data-testid': 'restart-dialog', onsubmit: (e) => (e.preventDefault(), close({ never: never.checked })) },
+          h('h3', {}, t('Restart “{0}”?', tab.title)),
+          h('p', {}, tab.local ? t('The program running in it will be stopped and started again.') : t('The terminal will be opened again: the programs running in it are interrupted. The files and the explorer stay.')),
+          h('label', { class: 'check' }, never, ' ' + t("Don't ask again")),
+          h('div', { class: 'row end' }, h('button', { type: 'button', onclick: () => close(null), 'data-testid': 'restart-cancel' }, t('Cancel')), h('button', { type: 'submit', class: 'danger', 'data-testid': 'restart-ok' }, t('Restart'))),
+        );
+      });
+      if (!ok) return;
+      if (ok.never) await updateSettings({ confirm_restart: false });
+    }
+    activate(id);
+    await tab.restart();
+  }
+
+  /** The menu of a tab (right click). */
+  function tabMenu(id: string, x: number, y: number): void {
+    const tab = tabs.find((t) => t.id === id);
+    if (!tab || !tab.closable) return;
+    const i = tabs.findIndex((t) => t.id === id);
+    const others = tabs.filter((t) => t.closable && t.id !== id);
+    const right = tabs.slice(i + 1).filter((t) => t.closable);
+    const closeMany = async (list: Tab[]) => {
+      for (const t of list) {
+        if (tabs.includes(t)) await closeTab(t.id);
+      }
+    };
+    popupMenu(x, y, [
+      { label: t('Restart'), hint: 'Ctrl+Shift+R', disabled: !tab.restart, testid: 'tabmenu-restart', run: () => void restartTab(id) },
+      { label: t('Duplicate'), hint: tab.duplicate ? 'Ctrl+Shift+D' : '', disabled: !tab.duplicate, testid: 'tabmenu-duplicate', run: () => void tab.duplicate?.() },
+      { label: t('Rename'), testid: 'tabmenu-rename', run: () => void renameTab(id) },
+      null,
+      { label: t('Close tab'), hint: 'Ctrl+Shift+W', testid: 'tabmenu-close', run: () => void closeTab(id) },
+      { label: t('Close other tabs'), disabled: !others.length, testid: 'tabmenu-close-others', run: () => void closeMany(others) },
+      { label: t('Close tabs to the right'), disabled: !right.length, testid: 'tabmenu-close-right', run: () => void closeMany(right) },
+    ]);
+  }
+
   async function closeTab(id: string): Promise<void> {
     const tab = tabs.find((x) => x.id === id);
     if (!tab || !tab.closable) return;
@@ -262,6 +310,8 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       panes.disposeAll();
     };
     tab.dirty = () => panes.anyDirty();
+    tab.restart = () => term.restart();
+    tab.duplicate = () => localTerminal(title, key, local, testid, runKey);
     addLocalTab(tab);
     requestAnimationFrame(() => void term.start());
     void explorer.load();
@@ -407,7 +457,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       openTabsEl.append(
         h(
           'div',
-          { class: 'vtab' + (tb.id === activeId ? ' active' : ''), role: 'tab', tabindex: '0', title: tb.title, 'data-testid': `vtab-${tb.id}`, onclick: () => activate(tb.id), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && activate(tb.id) },
+          { class: 'vtab' + (tb.id === activeId ? ' active' : ''), role: 'tab', tabindex: '0', title: tb.title, 'data-testid': `vtab-${tb.id}`, onclick: () => activate(tb.id), oncontextmenu: (e) => (e.preventDefault(), tabMenu(tb.id, (e as MouseEvent).clientX, (e as MouseEvent).clientY)), onkeydown: (e) => (e as KeyboardEvent).key === 'Enter' && activate(tb.id) },
           tb.state ? h('span', { class: `dot ${tb.state}` }) : null,
           tb.iconKey ? iconFor(tb.iconKey, tb.icon, 14) : icon(tb.icon, 14),
           h('span', { class: 'grow vtab-title' }, tb.title),
@@ -457,6 +507,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       side.disposeAll();
     };
     tab.dirty = () => panes.anyDirty();
+    tab.restart = () => terminal.restart();
     // Duplicate: a second LIVE shell next to the first one (right column), started where the source is: same folder,
     // virtualenv and foreground program (found on the server, shown to the user before it is typed into the copy).
     const side = new PaneSet(true, () => setSide(false));
@@ -891,6 +942,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     if (k === 't') (e.preventDefault(), void add());
     if (k === 'w' && activeId !== 'home') (e.preventDefault(), void closeTab(activeId));
     if (k === 'd') (e.preventDefault(), dupActive());
+    if (k === 'r' && e.shiftKey) (e.preventDefault(), void restartTab(activeId));
   };
   document.addEventListener('keydown', onKey);
   new MutationObserver((_, obs) => {

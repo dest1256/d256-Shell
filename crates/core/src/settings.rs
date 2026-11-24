@@ -73,6 +73,8 @@ pub struct Settings {
     pub monitor_cols: std::collections::BTreeMap<String, Vec<String>>,
     /// Monitor column: which target it shows, "auto" = the one the tab is connected to, or a target key.
     pub monitor_col_target: String,
+    /// Ask before a running tab is restarted (the programs in it are stopped).
+    pub confirm_restart: bool,
 }
 
 impl Default for Settings {
@@ -107,6 +109,7 @@ impl Default for Settings {
             check_updates: true,
             monitor_cols: Default::default(),
             monitor_col_target: "auto".into(),
+            confirm_restart: true,
         }
     }
 }

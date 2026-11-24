@@ -2,6 +2,18 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.5.3 — 2026-11-24
+**Added**
+- **The menu of a tab (right click):** Restart, Duplicate, Rename, Close tab, Close other tabs, Close tabs to the right. It works on the tabs of the title bar and on the list of open tabs in the side panel.
+- **Restart** (also Ctrl+Shift+R for the active tab): stops what runs in the terminal of the tab and starts it again **in the same tab**, in the same place. A script is read from its file again, so after editing a program one restart is enough. For an SSH tab only the terminal is opened anew on the same connection (the programs in it are interrupted); the explorer, the open files and the monitor stay. A tab with a finished program restarts at once; a running one asks first, with “Don't ask again” (Settings: “Ask before restarting a running tab”).
+- **Duplicate** now also works for local terminals and script runs (Ctrl+Shift+D, the Duplicate button): a new tab with the same shell or script. For an SSH tab it is the live copy as before.
+
+**Fixed**
+- Events of a terminal that was stopped (by a restart) can no longer end or clear the new one.
+
+**Security**
+- Libraries updated to their patched releases after new advisories: `url` 2.5.9 (RUSTSEC-2026-0592) and `cookie` 0.18.3 (RUSTSEC-2026-0594). Neither was reachable in this program (no web server, no forking). `chrono` (RUSTSEC-2026-0543) is only marked unmaintained, has no fix and comes through the SFTP library: recorded as a known notice in `deny.toml`.
+
 ## 1.5.2 — 2026-11-17
 **Changed**
 - **Video cards are ticked one by one in the monitor column.** With several video cards (the real one plus idle or virtual adapters that Windows lists) one tick used to add a graph for every card. Now the list has a line per card (“GPU 3D · NVIDIA GeForce RTX 3090”, “Video memory · …”), so you can show one graph of one card. By default only the first, real card is shown. The plain “GPU 3D / CUDA / Video memory” entries saved by earlier versions mean the first card too; the first change of a video card line turns them into per-card choices.

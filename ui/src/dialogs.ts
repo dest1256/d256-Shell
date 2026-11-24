@@ -213,6 +213,8 @@ export async function settingsDialog(): Promise<void> {
     else if (r.state === 'error') updMsg.textContent = t('Could not check for updates: {0}', r.message);
     else updMsg.append(t('Version {0} is available.', r.latest) + ' ', h('button', { type: 'button', class: 'link', 'data-testid': 'update-open', onclick: () => void openRelease(r.url) }, t('Release page')));
   } }, t('Check now'));
+  const askRestart = h('input', { type: 'checkbox', id: 'set-ask-restart', 'data-testid': 'set-ask-restart' }) as HTMLInputElement;
+  askRestart.checked = cur.confirm_restart;
   const keepMtime = h('input', { type: 'checkbox', id: 'set-mtime', 'data-testid': 'set-mtime' }) as HTMLInputElement;
   keepMtime.checked = cur.keep_mtime;
   const err = h('div', { class: 'error', 'data-testid': 'settings-error' });
@@ -250,6 +252,7 @@ export async function settingsDialog(): Promise<void> {
               language: lang.value,
               tabs_position: tabsPos.value,
               check_updates: updOn.checked,
+              confirm_restart: askRestart.checked,
               startup_profile: startup.value,
             });
             close(true);
@@ -283,6 +286,7 @@ export async function settingsDialog(): Promise<void> {
       field(t('Refresh interval, ms (from 100)'), monInterval),
       h('h4', {}, t('Updates')),
       h('label', { class: 'check' }, updOn, ' ' + t('Check for updates at start')),
+      h('label', { class: 'check' }, askRestart, ' ' + t('Ask before restarting a running tab')),
       h('p', { class: 'muted small' }, t('One request to GitHub (api.github.com) when the program starts; nothing about you is sent. Updates are never installed by themselves.')),
       h('div', { class: 'row' }, updBtn, updMsg),
       err,

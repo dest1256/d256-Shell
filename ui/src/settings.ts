@@ -29,6 +29,7 @@ const DEFAULTS: Settings = {
   check_updates: true,
   monitor_cols: {},
   monitor_col_target: 'auto',
+  confirm_restart: true,
   paste_warn_lines: 2,
   paste_warn_bytes: 5 * 1024,
 };

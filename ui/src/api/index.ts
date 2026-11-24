@@ -128,6 +128,7 @@ export interface Settings {
   check_updates: boolean;
   monitor_cols: Record<string, string[]>;
   monitor_col_target: string;
+  confirm_restart: boolean;
   paste_warn_lines: number;
   paste_warn_bytes: number;
 }

@@ -244,3 +244,7 @@ Author: dest1256.
 ## 1.5.2: per-card video indicators
 
 - Column keys: a card is `kind:id` (`gpu3d:0`, `vram:1`; kinds gpu3d, cuda, vram, gputemp); the plain kind means the first card (`s.gpus[0]`: nvidia-smi cards come first, unpaired Windows adapters after them). Ids are indexes in the order of the sample, so they are stable for a given set of cards but not a hardware identity; if the order of the cards changes (a card appears / disappears) a saved `kind:id` may point to another card. The popover lists only the cards that can give the indicator (CUDA: Windows counters; temperature: nvidia-smi).
+
+## 1.5.3: tab menu and restart
+
+- `TerminalView.restart()`: stop the stream, `term_close` the backend terminal (a script's staging folder is removed by it), reset the screen and `start()` again (a `gen` counter makes data / exit events of the old terminal harmless). The SSH tab restarts only its terminal: `start()` uses the session id of the tab, the explorer and panes are not touched. `Tab.restart` / `Tab.duplicate` are set for local and SSH tabs; `popupMenu` (dom.ts) is the shared context menu; Titlebar `onContext`, the side list of tabs has the same menu. Setting `confirm_restart` (default true).

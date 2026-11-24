@@ -667,5 +667,13 @@ const catalog: Record<string, string> = {
   "Indicators on the monitor": "监视器指标",
   "Default set": "默认组合",
   "Nothing is chosen: use the button above to pick the indicators.": "尚未选择：请用上方按钮选择指标。",
+  "Ask before restarting a running tab": "重启正在运行的标签页前先询问",
+  "Restart “{0}”?": "重启“{0}”？",
+  "The program running in it will be stopped and started again.": "其中运行的程序将被停止并重新启动。",
+  "The terminal will be opened again: the programs running in it are interrupted. The files and the explorer stay.": "终端将重新打开：其中运行的程序会被中断。文件和资源管理器保持不变。",
+  "Don't ask again": "不再询问",
+  "Restart": "重启",
+  "Close other tabs": "关闭其他标签页",
+  "Close tabs to the right": "关闭右侧标签页",
 };
 export default catalog;
