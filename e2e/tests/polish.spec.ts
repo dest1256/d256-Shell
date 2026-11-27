@@ -13,10 +13,13 @@ test('transfer/editor settings are saved, About shows the author and licences, t
 
   await page.getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByTestId('settings-dialog')).toBeVisible();
+  await page.getByTestId('settings-tab-files').click();
   await page.getByTestId('set-parallel').fill('3');
   await page.getByTestId('set-dragout').fill('50');
   await page.getByTestId('set-editlimit').fill('2');
+  await page.getByTestId('settings-tab-security').click();
   await page.getByTestId('set-autolock').fill('15');
+  await page.getByTestId('settings-tab-files').click();
   await page.getByTestId('set-mtime').uncheck();
   await page.screenshot({ path: 'screenshots/54-settings.png' });
   await page.getByTestId('settings-save').click();
@@ -28,6 +31,7 @@ test('transfer/editor settings are saved, About shows the author and licences, t
 
   // about
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByTestId('settings-tab-about').click();
   await page.getByTestId('open-about').click();
   await expect(page.getByTestId('about-author')).toHaveText('dest1256');
   await expect(page.getByTestId('about-version')).toHaveText(/^\d+\.\d+\.\d+/);

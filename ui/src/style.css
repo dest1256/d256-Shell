@@ -391,3 +391,53 @@ h4 { margin: 10px 0 2px; font-size: 12px; color: var(--muted); text-transform: u
 @container (max-width: 640px) { .has-owner .ex-head, .has-owner .vrow { grid-template-columns: minmax(0, 1fr) 92px 76px 128px; } .has-owner .th:nth-child(5), .has-owner .c-mode { display: none; } }
 @container (max-width: 500px) { .has-owner .ex-head, .has-owner .vrow { grid-template-columns: minmax(0, 1fr) 92px 76px; } .has-owner .th:nth-child(4), .has-owner .c-time { display: none; } }
 @container (max-width: 300px) { .has-owner .ex-head, .has-owner .vrow { grid-template-columns: minmax(0, 1fr) 76px; } .has-owner .th:nth-child(2), .has-owner .c-owner { display: none; } }
+
+/* the explorer as a pane of the SFTP manager: no action bar, no breadcrumbs, no own transfer panel; compared rows are coloured */
+.explorer.compact .ex-actions, .explorer.compact .ex-crumbs, .explorer.compact .xfer { display: none !important; }
+.vrow.mark-only { background: rgba(251, 191, 36, .13); } .vrow.mark-newer { background: rgba(74, 222, 128, .13); } .vrow.mark-diff { background: rgba(248, 113, 113, .16); }
+.vrow.selected.mark-only, .vrow.selected.mark-newer, .vrow.selected.mark-diff { background: rgba(96, 205, 255, .24); }
+
+/* ---------- the SFTP manager tab ---------- */
+.sm-wrap { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.sm { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.sm .off { display: none !important; }
+.sm-tb { display: flex; align-items: center; gap: 4px; padding: 5px 8px; background: var(--chrome); border-bottom: 1px solid var(--line); }
+.sm-btn { display: inline-flex; align-items: center; gap: 4px; background: transparent; border: 1px solid transparent; color: var(--fg); border-radius: 5px; padding: 4px 9px; cursor: pointer; font-size: 13px; }
+.sm-btn:hover { background: var(--hover); } .sm-btn.on { border-color: var(--accent); color: var(--accent); background: rgba(96, 205, 255, .1); }
+.sm-tb .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.sm-log { flex: none; height: 76px; overflow: auto; background: #08090a; border-bottom: 1px solid var(--line); padding: 6px 10px; font: 12px Consolas, 'Cascadia Mono', monospace; line-height: 1.45; color: #c8cbd0; }
+.sm-log .sm-t { color: #6b7078; margin-right: 8px; } .sm-log .sm-k { display: inline-block; width: 58px; color: #7d838b; } .sm-log .err { color: #f87171; } .sm-log .ok { color: #4ade80; }
+.sm-panes { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 5px minmax(0, 1fr); min-height: 0; }
+.sm-split { background: var(--line); }
+.sm-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.sm-phead { display: flex; align-items: center; gap: 8px; padding: 5px 8px; background: var(--chrome); border-bottom: 1px solid var(--line); }
+.sm-pane.active .sm-phead { box-shadow: inset 0 -2px 0 var(--accent); }
+.sm-phead b { font-weight: 600; white-space: nowrap; }
+.sm-filter { display: none; flex: 1; min-width: 0; padding: 3px 8px; font-size: 12px; } .sm-filter.on { display: block; }
+.sm-tree { flex: none; height: 28%; min-height: 80px; overflow: auto; resize: vertical; background: var(--side); border-bottom: 1px solid var(--line); padding: 4px 0; font-size: 12.5px; }
+.sm-tree .tn { display: flex; align-items: center; gap: 5px; padding: 2px 6px; cursor: default; white-space: nowrap; }
+.sm-tree .tn:hover { background: var(--hover); } .sm-tree .tn.sel { background: rgba(96, 205, 255, .16); }
+.sm-tree .arr { width: 12px; flex: none; color: var(--muted); text-align: center; cursor: pointer; font-size: 10px; }
+.sm-pane .explorer { flex: 1; min-height: 0; }
+.fkeys { display: grid; grid-template-columns: repeat(9, 1fr); background: var(--chrome); border-top: 1px solid var(--line); flex: none; }
+.fkeys button { background: transparent; border: 0; border-right: 1px solid var(--line); color: var(--fg); padding: 6px 4px; cursor: pointer; white-space: nowrap; font-size: 13px; border-radius: 0; }
+.fkeys button:hover { background: var(--hover); } .fkeys button:last-child { border-right: 0; }
+.fkeys b { color: var(--accent); font-weight: 600; margin-right: 5px; }
+.sm-queue { flex: none; height: 150px; border-top: 2px solid var(--line); display: flex; flex-direction: column; background: #0e0f10; }
+.sm-queue .qtabs { display: flex; align-items: center; gap: 2px; padding: 0 6px; background: var(--chrome); border-bottom: 1px solid var(--line); height: 30px; flex: none; }
+.sm-queue .qt { padding: 6px 12px; color: var(--muted); cursor: pointer; border-radius: 5px 5px 0 0; } .sm-queue .qt.on { background: #0e0f10; color: var(--fg); }
+.sm-queue .sp { flex: 1; } .qbtns button { margin-left: 4px; padding: 3px 9px; font-size: 12px; }
+.sm-queue .qbody { flex: 1; overflow: auto; }
+.sm-queue .ft { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.sm-queue .ft th { position: sticky; top: 0; background: var(--chrome); color: var(--muted); font-weight: 500; text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--line); }
+.sm-queue .ft td { padding: 3px 8px; white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid #131416; }
+.sm-queue .ft .r { text-align: right; } .sm-queue .ft .m { color: var(--muted); } .sm-queue .err { color: #f87171; }
+.prog { position: relative; height: 16px; background: #1a1c1e; border: 1px solid #2a2d31; border-radius: 3px; min-width: 150px; display: inline-block; vertical-align: middle; }
+.prog span { position: absolute; inset: 0 auto 0 0; background: #1f5f86; border-radius: 2px; } .prog em { position: absolute; inset: 0; text-align: center; font-style: normal; font-size: 11px; line-height: 14px; }
+.sm-legend { display: none; }
+
+/* ---------- settings dialog with tabs ---------- */
+.set-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); margin: 8px 0 12px; flex-wrap: wrap; }
+.set-tab { background: transparent; border: 0; border-radius: 6px 6px 0 0; padding: 7px 14px; color: var(--muted); cursor: pointer; }
+.set-tab.on { color: var(--fg); background: var(--chrome-2); box-shadow: inset 0 -2px 0 var(--accent); }
+.set-panel { display: none; min-height: 320px; } .set-panel.on { display: block; }

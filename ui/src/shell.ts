@@ -11,6 +11,7 @@ import { connectFlow } from './connect';
 import { changeMasterDialog, serverForm, settingsDialog } from './dialogs';
 import { clear, confirmDialog, h, modal, popupMenu, promptDialog, toast } from './dom';
 import { Explorer } from './explorer';
+import { SftpManager } from './sftpmgr';
 import { BAR_PARTS, LOCAL_TARGET, MonitorBar, monitors } from './monitor';
 import { MonitorColumn } from './moncol';
 import { MonitorDetail } from './taskmgr';
@@ -55,6 +56,8 @@ interface Tab {
   duplicate?: () => void | Promise<void>;
   /** Stop what runs in the terminal of this tab and start it again (a script is read from its file again). */
   restart?: () => Promise<void>;
+  /** How this SSH tab was connected: the SFTP manager of the same server logs in the same way. */
+  connect?: { opts: Parameters<typeof connectFlow>[0]; initialDir?: string | null };
 }
 
 /** `user@host[:port]` -> parts, or null. */
@@ -160,6 +163,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       { label: t('Restart'), hint: 'Ctrl+Shift+R', disabled: !tab.restart, testid: 'tabmenu-restart', run: () => void restartTab(id) },
       { label: t('Duplicate'), hint: tab.duplicate ? 'Ctrl+Shift+D' : '', disabled: !tab.duplicate, testid: 'tabmenu-duplicate', run: () => void tab.duplicate?.() },
       { label: t('Rename'), testid: 'tabmenu-rename', run: () => void renameTab(id) },
+      { label: t('SFTP manager'), disabled: !tab.connect, testid: 'tabmenu-sftp', run: () => void openSftpManager(tab.connect!.opts, tab.connect!.initialDir, tab) },
       null,
       { label: t('Close tab'), hint: 'Ctrl+Shift+W', testid: 'tabmenu-close', run: () => void closeTab(id) },
       { label: t('Close other tabs'), disabled: !others.length, testid: 'tabmenu-close-others', run: () => void closeMany(others) },
@@ -508,6 +512,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     };
     tab.dirty = () => panes.anyDirty();
     tab.restart = () => terminal.restart();
+    tab.connect = { opts: s, initialDir };
     // Duplicate: a second LIVE shell next to the first one (right column), started where the source is: same folder,
     // virtualenv and foreground program (found on the server, shown to the user before it is typed into the copy).
     const side = new PaneSet(true, () => setSide(false));
@@ -682,6 +687,62 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
 
   type ConnectOpts = Parameters<typeof connectFlow>[0];
 
+  /** The SFTP manager of a server in a tab of its own: it logs in again (a saved server shares the live connection, so no
+   * second password or code is asked) and owns its session; closing the tab closes only that session. */
+  let sftpCounter = 0;
+  async function openSftpManager(opts: ConnectOpts, initialDir?: string | null, from?: Tab): Promise<void> {
+    const info = await connectFlow(opts);
+    if (!info) return;
+    if (info.sftp_error) {
+      void api.disconnect(info.session_id).catch(() => undefined);
+      return void toast(info.sftp_error);
+    }
+    const id = `sftp${++sftpCounter}`;
+    const tab: Tab = { id, title: t('SFTP · {0}', opts.label), icon: 'upload', iconKey: opts.serverId ? iconKey('server', opts.serverId) : undefined, closable: true, sessions: [info.session_id], state: 'ok', view: h('div', { class: 'session', 'data-testid': 'sftp-tab' }) };
+    const mgr = new SftpManager({
+      sessionId: info.session_id,
+      initialDir,
+      reconnect: async () => {
+        const r = await connectFlow(opts);
+        if (!r || r.sftp_error) return null;
+        tab.sessions!.push(r.session_id);
+        return r.session_id;
+      },
+      closeTab: () => void closeTab(id),
+      openTerminal: (side) => {
+        if (side === 'local') {
+          void api.shellProfiles().then((r) => {
+            const want = getSettings().startup_profile;
+            const p = r.profiles.find((x) => x.id === want) ?? r.profiles[0];
+            if (p) openTerminal(p);
+            else toast(t('No shells were found on this computer. Add your own profile.'));
+          });
+          return;
+        }
+        // the terminal of the server: the SSH tab it came from, else a new one
+        const ssh = (from && tabs.includes(from) ? from : undefined) ?? tabs.find((x) => x.connect && x.connect.opts.serverId === opts.serverId && opts.serverId);
+        if (ssh) return activate(ssh.id);
+        void connectFlow(opts).then((r) => r && openSession(opts, r, initialDir));
+      },
+    });
+    tab.view.append(mgr.el);
+    tab.onShow = () => mgr.show();
+    tab.dispose = () => mgr.dispose();
+    tab.dirty = () => mgr.dirty();
+    tabs.push(tab);
+    work.append(tab.view);
+    activate(id);
+  }
+
+  /** The toolbar button: the manager for the active SSH tab, else for the selected server of the list. */
+  async function openSftpActive(): Promise<void> {
+    const tab = tabs.find((x) => x.id === activeId);
+    if (tab?.connect) return openSftpManager(tab.connect.opts, tab.connect.initialDir, tab);
+    const sv = servers.find((x) => x.id === selected);
+    if (sv) return openSftpManager({ label: sv.name, serverId: sv.id }, sv.initial_dir);
+    toast(t('Select a server in the list or open an SSH tab first.'));
+  }
+
   async function connectServer(s: ServerView): Promise<void> {
     const opts: ConnectOpts = { label: s.name, serverId: s.id };
     const info = await connectFlow(opts);
@@ -840,6 +901,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     }),
     tbtn('sidebar', t('Panel'), 'toggle-sidebar', toggleSidebar),
     tbtn('copy', t('Duplicate'), 'duplicate-term', () => dupActive()),
+    tbtn('upload', t('SFTP'), 'sftp-open', () => void openSftpActive()),
     h('div', { class: 'tool-sep' }),
     tbtn('key', t('Master password'), 'change-master', () => void changeMasterDialog()),
     tbtn('settings', t('Settings'), 'settings', () => void settingsDialog()),

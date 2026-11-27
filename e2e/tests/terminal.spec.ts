@@ -191,6 +191,7 @@ test('settings: the scheme and font size apply to the open terminal', async ({ p
   await expect(page.getByTestId('ssh-info')).toContainText('OpenSSH_');
   await expect(page.getByTestId('ssh-info')).toContainText('askpass');
   await page.screenshot({ path: 'screenshots/33-settings.png' });
+  await page.getByTestId('settings-tab-terminal').click();
   await page.getByTestId('set-scheme').selectOption('onehalfdark');
   await page.getByTestId('set-font-size').fill('18');
   await page.getByTestId('settings-save').click();

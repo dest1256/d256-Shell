@@ -215,6 +215,12 @@ export async function settingsDialog(): Promise<void> {
   } }, t('Check now'));
   const askRestart = h('input', { type: 'checkbox', id: 'set-ask-restart', 'data-testid': 'set-ask-restart' }) as HTMLInputElement;
   askRestart.checked = cur.confirm_restart;
+  const sftpLog = h('input', { type: 'checkbox', id: 'set-sftp-log', 'data-testid': 'set-sftp-log' }) as HTMLInputElement;
+  sftpLog.checked = cur.sftp_log;
+  const sftpTrees = h('input', { type: 'checkbox', id: 'set-sftp-trees', 'data-testid': 'set-sftp-trees' }) as HTMLInputElement;
+  sftpTrees.checked = cur.sftp_trees;
+  const sftpKeys = h('input', { type: 'checkbox', id: 'set-sftp-keys', 'data-testid': 'set-sftp-keys' }) as HTMLInputElement;
+  sftpKeys.checked = cur.sftp_keys;
   const keepMtime = h('input', { type: 'checkbox', id: 'set-mtime', 'data-testid': 'set-mtime' }) as HTMLInputElement;
   keepMtime.checked = cur.keep_mtime;
   const err = h('div', { class: 'error', 'data-testid': 'settings-error' });
@@ -222,6 +228,28 @@ export async function settingsDialog(): Promise<void> {
   const sshLine = info.found
     ? t('Found: {0}\n{1}\nAuto password: {2}', info.path, info.version, info.mode === 'askpass' ? 'askpass (SSH_ASKPASS)' : info.mode === 'expect' ? t('careful typing into the terminal') : 'off')
     : t('ssh not found: {0}', tm(info.error ?? ''));
+
+  /** The settings are grouped in tabs; every field stays in the form (all of them are saved together). */
+  const panels = new Map<string, HTMLElement>();
+  const buttons = new Map<string, HTMLElement>();
+  const names: [string, string][] = [['general', t('General')], ['terminal', t('Terminal')], ['files', t('Files and SFTP')], ['monitor', t('Monitor')], ['security', t('Security')], ['about', t('About')]];
+  const show = (id: string) => {
+    for (const [k, p] of panels) p.classList.toggle('on', k === id);
+    for (const [k, b] of buttons) b.classList.toggle('on', k === id);
+  };
+  const tabs = {
+    bar: h('div', { class: 'set-tabs', role: 'tablist', 'data-testid': 'settings-tabs' }, ...names.map(([id, label]) => {
+      const b = h('button', { type: 'button', class: 'set-tab', role: 'tab', 'data-testid': `settings-tab-${id}`, onclick: () => show(id) }, label);
+      buttons.set(id, b);
+      return b;
+    })),
+    panel: (id: string, ...kids: (HTMLElement | null)[]) => {
+      const p = h('div', { class: 'set-panel', role: 'tabpanel', 'data-testid': `settings-panel-${id}` }, ...kids);
+      panels.set(id, p);
+      return p;
+    },
+  };
+  queueMicrotask(() => show('general'));
 
   await modal<boolean>((close) =>
     h(
@@ -253,6 +281,9 @@ export async function settingsDialog(): Promise<void> {
               tabs_position: tabsPos.value,
               check_updates: updOn.checked,
               confirm_restart: askRestart.checked,
+              sftp_log: sftpLog.checked,
+              sftp_trees: sftpTrees.checked,
+              sftp_keys: sftpKeys.checked,
               startup_profile: startup.value,
             });
             close(true);
@@ -263,34 +294,55 @@ export async function settingsDialog(): Promise<void> {
         },
       },
       h('h3', {}, t('Settings')),
-      field(t('Language'), lang),
-      h('h4', {}, t('Tabs and start')),
-      h('div', { class: 'row' }, field(t('Tabs'), tabsPos), field(t('Open at start'), startup)),
-      h('h4', {}, t('System ssh')),
-      h('pre', { class: 'detail', style: 'display:block', 'data-testid': 'ssh-info' }, sshLine),
-      field(t('Path to ssh (ssh.exe on Windows)'), sshPath),
-      field(t('Fill in the password automatically'), mode),
-      h('h4', {}, t('Terminal')),
-      h('div', { class: 'row' }, field(t('Colour scheme'), scheme), field(t('Cursor'), cursor)),
-      h('div', { class: 'row' }, field(t('Font size'), size), field(t('Scrollback lines'), scroll)),
-      field(t('Font'), family),
-      field(t('Right mouse button'), rclick),
-      field(t('Wheel in full-screen programs'), wheel),
-      field(t('Duplicate terminal (Ctrl+Shift+D)'), cloneMode),
-      h('h4', {}, t('Transfers and editor')),
-      h('div', { class: 'row' }, field(t('Parallel transfers'), parallel), field(t('Drag-out limit, MB'), dragLimit)),
-      h('div', { class: 'row' }, field(t('File size limit in the editor, MB'), editLimit), field(t('Auto-lock, minutes (0 = off)'), autoLock)),
-      h('label', { class: 'check' }, keepMtime, ' ' + t('Keep the modification time of files on transfer')),
-      h('h4', {}, t('Server monitor')),
-      h('label', { class: 'check' }, monOn, ' ' + t('Show server load under the terminal (reads /proc over SFTP, no commands are run)')),
-      field(t('Refresh interval, ms (from 100)'), monInterval),
-      h('h4', {}, t('Updates')),
-      h('label', { class: 'check' }, updOn, ' ' + t('Check for updates at start')),
-      h('label', { class: 'check' }, askRestart, ' ' + t('Ask before restarting a running tab')),
-      h('p', { class: 'muted small' }, t('One request to GitHub (api.github.com) when the program starts; nothing about you is sent. Updates are never installed by themselves.')),
-      h('div', { class: 'row' }, updBtn, updMsg),
+      tabs.bar,
+      tabs.panel(
+        'general',
+        field(t('Language'), lang),
+        h('h4', {}, t('Tabs and start')),
+        h('div', { class: 'row' }, field(t('Tabs'), tabsPos), field(t('Open at start'), startup)),
+        h('label', { class: 'check' }, askRestart, ' ' + t('Ask before restarting a running tab')),
+        h('h4', {}, t('Updates')),
+        h('label', { class: 'check' }, updOn, ' ' + t('Check for updates at start')),
+        h('p', { class: 'muted small' }, t('One request to GitHub (api.github.com) when the program starts; nothing about you is sent. Updates are never installed by themselves.')),
+        h('div', { class: 'row' }, updBtn, updMsg),
+      ),
+      tabs.panel(
+        'terminal',
+        h('div', { class: 'row' }, field(t('Colour scheme'), scheme), field(t('Cursor'), cursor)),
+        h('div', { class: 'row' }, field(t('Font size'), size), field(t('Scrollback lines'), scroll)),
+        field(t('Font'), family),
+        field(t('Right mouse button'), rclick),
+        field(t('Wheel in full-screen programs'), wheel),
+        field(t('Duplicate terminal (Ctrl+Shift+D)'), cloneMode),
+      ),
+      tabs.panel(
+        'files',
+        h('h4', {}, t('SFTP manager')),
+        h('label', { class: 'check' }, sftpLog, ' ' + t('Show the status log')),
+        h('label', { class: 'check' }, sftpTrees, ' ' + t('Show the folder trees')),
+        h('label', { class: 'check' }, sftpKeys, ' ' + t('Show the function key bar (F2 … F9)')),
+        h('h4', {}, t('Transfers and editor')),
+        h('div', { class: 'row' }, field(t('Parallel transfers'), parallel), field(t('Drag-out limit, MB'), dragLimit)),
+        field(t('File size limit in the editor, MB'), editLimit),
+        h('label', { class: 'check' }, keepMtime, ' ' + t('Keep the modification time of files on transfer')),
+      ),
+      tabs.panel(
+        'monitor',
+        h('label', { class: 'check' }, monOn, ' ' + t('Show server load under the terminal (reads /proc over SFTP, no commands are run)')),
+        field(t('Refresh interval, ms (from 100)'), monInterval),
+      ),
+      tabs.panel(
+        'security',
+        h('h4', {}, t('System ssh')),
+        h('pre', { class: 'detail', style: 'display:block', 'data-testid': 'ssh-info' }, sshLine),
+        field(t('Path to ssh (ssh.exe on Windows)'), sshPath),
+        field(t('Fill in the password automatically'), mode),
+        h('h4', {}, t('Vault')),
+        field(t('Auto-lock, minutes (0 = off)'), autoLock),
+      ),
+      tabs.panel('about', h('p', {}, t('Portable SSH client for Windows and Linux: terminal, SFTP file explorer and built-in editor. Data is stored in the data folder next to the program (in Linux, when installed from a package, in ~/.local/share/d256shell).')), h('button', { type: 'button', onclick: () => void aboutDialog(), 'data-testid': 'open-about' }, t('About'))),
       err,
-      h('div', { class: 'row end' }, h('button', { type: 'button', class: 'left-auto', onclick: () => void aboutDialog(), 'data-testid': 'open-about' }, t('About')), h('button', { type: 'button', onclick: () => close(false), 'data-testid': 'settings-cancel' }, t('Cancel')), h('button', { type: 'submit', class: 'primary', 'data-testid': 'settings-save' }, t('Save'))),
+      h('div', { class: 'row end' }, h('button', { type: 'button', onclick: () => close(false), 'data-testid': 'settings-cancel' }, t('Cancel')), h('button', { type: 'submit', class: 'primary', 'data-testid': 'settings-save' }, t('Save'))),
     ),
   );
 }

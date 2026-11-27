@@ -30,6 +30,9 @@ const DEFAULTS: Settings = {
   monitor_cols: {},
   monitor_col_target: 'auto',
   confirm_restart: true,
+  sftp_log: true,
+  sftp_trees: true,
+  sftp_keys: true,
   paste_warn_lines: 2,
   paste_warn_bytes: 5 * 1024,
 };

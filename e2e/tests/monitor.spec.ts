@@ -118,6 +118,7 @@ test('monitor: numbers under the terminal, mini charts, detailed window, switchi
 
   // switching off in settings hides the panel
   await page.getByRole('button', { name: 'Settings' }).click();
+  await page.getByTestId('settings-tab-monitor').click();
   await page.getByTestId('set-mon').uncheck();
   await page.getByTestId('settings-save').click();
   await expect(bar).toBeHidden();

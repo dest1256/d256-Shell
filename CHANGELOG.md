@@ -2,6 +2,29 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.6.0 — 2026-11-27
+The SFTP manager: a two-pane file manager for a server, in a tab of its own.
+
+**Added**
+- **SFTP manager** (the “SFTP” toolbar button for the active SSH tab or the selected server, or “SFTP manager” in the menu of an SSH tab). Left: **this computer** with a tree of the drives and folders; right: **the server** with its tree. Each pane has the explorer list (name, owner, size, date, permissions on the server). The tab logs in on its own, but a saved server shares the live connection, so no second password or code is asked; closing the tab does not touch the SSH tab.
+- **Standard file manager functions on both sides:** **F5** copies the selection of the active pane to the folder of the other pane (to the server or from it, with the usual “exists” questions), **F6** moves (the originals are deleted only after everything arrived), **F7** new folder, **F8** delete, **F2** rename, **F3 / F4** open a file in the built-in editor (as a pane of the same tab), **F9** the terminal (of this computer or of the server), **Alt+X** closes the tab, **Tab** switches the active pane, **Insert** selects and goes down, **Ctrl+A** selects all, typing the first letters of a name jumps to it. The same commands are in the context menu and in the function key bar under the panes (it can be hidden).
+- **Selection summary** under every list: “Selected: 0 of 22,156,715 bytes · files: 0 of 3 · folders: 0 of 53”.
+- **Status log** on top (“Reading the directory …”, “The listing of … is complete”, transfers, comparison). The lines state what happened and do not speak in the first person.
+- **Transfer queue** at the bottom: “Queued files”, “Failed transfers” and “Successful transfers” with a progress bar and speed, cancel, retry, “Cancel all” and “Clear finished”.
+- **Compare folders:** rows that exist on one side only are yellow, files of a different size red, the newer copy green.
+- **Quick filter by name** in each pane.
+- **Hide what you do not need:** the buttons “Log” and “Trees” of the manager (and the check boxes in Settings) hide the status log and the folder trees; the function key bar can be hidden in Settings. The choice is remembered.
+- **Settings has tabs:** General, Terminal, Files and SFTP, Monitor, Security, About.
+
+**Changed**
+- **Deleting on this computer (in the manager and in the explorer of a local terminal) moves to the recycle bin / the trash folder** instead of deleting for good (Windows: the recycle bin; Linux: the freedesktop.org trash). The protection of the home folder and the system folders is unchanged. On a server a delete is still permanent and asked first.
+- The auto-lock setting moved to the Security tab of Settings; the “About” button to the About tab.
+
+**Notes**
+- **Passwords stay encrypted.** The SFTP manager stores no password of its own: a saved server uses the password of the vault (`vault.bin`, Argon2id + XChaCha20-Poly1305), the connection is shared with the SSH tab, and nothing in `settings.json`, the log or the staging folder holds it. A test checks that the password is nowhere in the data folder in plain text, also after files were transferred.
+- A pause button and a speed limit of the queue are not included (the transfer engine has neither); drag and drop between the panes is not included either (the explorer panes keep their own drag and drop).
+- The recycle bin on Windows is the system call `SHFileOperationW`: it was compiled for Windows but could not be run during development; on Linux the trash was tested.
+
 ## 1.5.3 — 2026-11-24
 **Added**
 - **The menu of a tab (right click):** Restart, Duplicate, Rename, Close tab, Close other tabs, Close tabs to the right. It works on the tabs of the title bar and on the list of open tabs in the side panel.

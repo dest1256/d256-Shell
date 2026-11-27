@@ -129,6 +129,9 @@ export interface Settings {
   monitor_cols: Record<string, string[]>;
   monitor_col_target: string;
   confirm_restart: boolean;
+  sftp_log: boolean;
+  sftp_trees: boolean;
+  sftp_keys: boolean;
   paste_warn_lines: number;
   paste_warn_bytes: number;
 }

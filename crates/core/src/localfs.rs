@@ -396,6 +396,143 @@ pub fn delete_entry(path: &str) -> R<()> {
     remove_tree(&real_path(&p, win())?)
 }
 
+/// Move to the recycle bin (Windows) or the trash folder (the freedesktop.org specification) instead of deleting for
+/// good. The same protection as `delete_entry` applies.
+pub fn trash_entry(path: &str) -> R<()> {
+    let p = normalize(path);
+    if forbidden(&p, &home(), win()) {
+        return Err(format!("“{}” is a home folder or its parent: such things can only be deleted by hand in a terminal.", file_name(&p)));
+    }
+    let real = real_path(&p, win())?;
+    fs::symlink_metadata(&real).map_err(|e| describe(&e))?;
+    trash_real(&real)
+}
+
+#[cfg(windows)]
+fn trash_real(real: &Path) -> R<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::UI::Shell::{
+        SHFileOperationW, FOF_ALLOWUNDO, FOF_NOCONFIRMATION, FOF_NOERRORUI, FOF_SILENT, FO_DELETE,
+        SHFILEOPSTRUCTW,
+    };
+    // the shell wants backslashes and a path ended by two NULs
+    let wide: Vec<u16> = real
+        .as_os_str()
+        .encode_wide()
+        .map(|c| {
+            if c == u16::from(b'/') {
+                u16::from(b'\\')
+            } else {
+                c
+            }
+        })
+        .chain([0, 0])
+        .collect();
+    let mut op: SHFILEOPSTRUCTW = unsafe { std::mem::zeroed() };
+    op.wFunc = FO_DELETE;
+    op.pFrom = wide.as_ptr();
+    op.fFlags = (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_NOERRORUI | FOF_SILENT) as u16;
+    // SAFETY: `op` is fully initialised and `wide` outlives the call.
+    let r = unsafe { SHFileOperationW(&mut op) };
+    if r != 0 || op.fAnyOperationsAborted != 0 {
+        return Err("Could not move it to the recycle bin.".into());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn trash_real(real: &Path) -> R<()> {
+    let base = std::env::var("XDG_DATA_HOME")
+        .ok()
+        .filter(|v| v.starts_with('/'))
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var("HOME")
+                .ok()
+                .filter(|v| !v.is_empty())
+                .map(|h| PathBuf::from(h).join(".local/share"))
+        })
+        .ok_or_else(|| "There is no trash folder for this user.".to_string())?;
+    trash_into(real, &base.join("Trash"))
+}
+
+/// The freedesktop.org trash: `files/<name>` plus `info/<name>.trashinfo` (original path and deletion time, UTC).
+#[cfg(not(windows))]
+fn trash_into(real: &Path, trash: &Path) -> R<()> {
+    let (files, info) = (trash.join("files"), trash.join("info"));
+    fs::create_dir_all(&files).map_err(|e| describe(&e))?;
+    fs::create_dir_all(&info).map_err(|e| describe(&e))?;
+    let name = real
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .ok_or_else(|| "Invalid path.".to_string())?;
+    // a free name in the trash: "name", "name.2", "name.3" ...
+    let mut target = name.clone();
+    let mut n = 1;
+    while files.join(&target).exists() || info.join(format!("{target}.trashinfo")).exists() {
+        n += 1;
+        target = format!("{name}.{n}");
+    }
+    let abs = fs::canonicalize(real.parent().unwrap_or(Path::new("/")))
+        .map_err(|e| describe(&e))?
+        .join(&name);
+    let when = std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    let text = format!(
+        "[Trash Info]\nPath={}\nDeletionDate={}\n",
+        percent_encode(&abs.to_string_lossy()),
+        iso_utc(when)
+    );
+    fs::write(info.join(format!("{target}.trashinfo")), text).map_err(|e| describe(&e))?;
+    let dest = files.join(&target);
+    if fs::rename(real, &dest).is_err() {
+        // another volume: copy, then remove the original
+        let moved = copy_tree(real, &dest, 0).and_then(|_| remove_tree(real));
+        if let Err(e) = moved {
+            let _ = fs::remove_file(info.join(format!("{target}.trashinfo")));
+            return Err(e);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn percent_encode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || b"/-_.~".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+/// `YYYY-MM-DDThh:mm:ss` of a Unix time (UTC).
+#[cfg(not(windows))]
+fn iso_utc(secs: u64) -> String {
+    let (days, rem) = (secs / 86_400, secs % 86_400);
+    // civil date from the day count (Howard Hinnant's algorithm)
+    let z = days as i64 + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60
+    )
+}
+
 /// (files, folders) in the tree, links not followed.
 pub fn count_tree(path: &str) -> R<(u64, u64)> {
     fn walk(p: &Path, depth: usize, files: &mut u64, dirs: &mut u64) -> R<()> {
@@ -528,6 +665,43 @@ mod tests {
         delete_entry(&u("b")).unwrap();
         assert!(!d.join("b").exists());
         assert!(delete_entry("/").is_err() && delete_entry("/etc").is_err());
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_trash_keeps_the_file_and_its_origin() {
+        let d = tmp("trash");
+        let trash = d.join("Trash");
+        fs::create_dir(d.join("a")).unwrap();
+        fs::write(d.join("a/f.txt"), "data").unwrap();
+        fs::write(d.join("f.txt"), "other").unwrap();
+        // a folder and two files with one name: the second gets another name in the trash
+        trash_into(&d.join("a"), &trash).unwrap();
+        trash_into(&d.join("f.txt"), &trash).unwrap();
+        fs::write(d.join("f.txt"), "again").unwrap();
+        trash_into(&d.join("f.txt"), &trash).unwrap();
+        assert!(!d.join("a").exists() && !d.join("f.txt").exists());
+        assert_eq!(
+            fs::read_to_string(trash.join("files/a/f.txt")).unwrap(),
+            "data"
+        );
+        assert_eq!(
+            fs::read_to_string(trash.join("files/f.txt")).unwrap(),
+            "other"
+        );
+        assert_eq!(
+            fs::read_to_string(trash.join("files/f.txt.2")).unwrap(),
+            "again"
+        );
+        let info = fs::read_to_string(trash.join("info/f.txt.trashinfo")).unwrap();
+        assert!(info.starts_with("[Trash Info]\nPath=/"), "{info}");
+        assert!(info.contains("DeletionDate=20"), "{info}");
+        assert_eq!(percent_encode("/a b/é"), "/a%20b/%C3%A9");
+        assert_eq!(iso_utc(0), "1970-01-01T00:00:00");
+        assert_eq!(iso_utc(1_700_000_000), "2023-11-14T22:13:20");
+        // the protection of delete applies to the trash too
+        assert!(trash_entry("/").is_err() && trash_entry("/etc").is_err());
         let _ = fs::remove_dir_all(&d);
     }
 

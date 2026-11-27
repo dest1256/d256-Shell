@@ -75,6 +75,10 @@ pub struct Settings {
     pub monitor_col_target: String,
     /// Ask before a running tab is restarted (the programs in it are stopped).
     pub confirm_restart: bool,
+    /// The SFTP manager tab: the status log, the folder trees and the function key bar are shown.
+    pub sftp_log: bool,
+    pub sftp_trees: bool,
+    pub sftp_keys: bool,
 }
 
 impl Default for Settings {
@@ -110,6 +114,9 @@ impl Default for Settings {
             monitor_cols: Default::default(),
             monitor_col_target: "auto".into(),
             confirm_restart: true,
+            sftp_log: true,
+            sftp_trees: true,
+            sftp_keys: true,
         }
     }
 }

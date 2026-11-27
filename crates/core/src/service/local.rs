@@ -539,8 +539,8 @@ impl Service {
                 }
                 Ok(json!({ "files": files, "dirs": dirs }))
             }
-            "move" | "copy" | "delete" => {
-                let dest = if op == "delete" {
+            "move" | "copy" | "delete" | "trash" => {
+                let dest = if op == "delete" || op == "trash" {
                     String::new()
                 } else {
                     need("dest")?
@@ -550,13 +550,14 @@ impl Service {
                     let r = match op.as_str() {
                         "move" => localfs::move_entry(p, &dest),
                         "copy" => localfs::copy_entry(p, &dest),
+                        "trash" => localfs::trash_entry(p).map(|_| p.clone()),
                         _ => localfs::delete_entry(p).map(|_| p.clone()),
                     };
                     match r {
                         Ok(n) => done.push(n),
                         Err(m) => {
                             errors.push(json!({ "path": p, "message": m }));
-                            if op == "delete" {
+                            if op == "delete" || op == "trash" {
                                 break; // stop at the first error, as the SFTP explorer does
                             }
                         }

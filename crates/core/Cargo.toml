@@ -27,4 +27,4 @@ zeroize = "1.9.1"
 
 [target.'cfg(windows)'.dependencies]
 # performance counters (PDH), memory status: the local monitor on Windows
-windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Performance", "Win32_System_ProcessStatus", "Win32_System_SystemInformation"] }
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Performance", "Win32_System_ProcessStatus", "Win32_System_SystemInformation", "Win32_UI_Shell"] }

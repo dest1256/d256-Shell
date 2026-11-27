@@ -248,3 +248,10 @@ Author: dest1256.
 ## 1.5.3: tab menu and restart
 
 - `TerminalView.restart()`: stop the stream, `term_close` the backend terminal (a script's staging folder is removed by it), reset the screen and `start()` again (a `gen` counter makes data / exit events of the old terminal harmless). The SSH tab restarts only its terminal: `start()` uses the session id of the tab, the explorer and panes are not touched. `Tab.restart` / `Tab.duplicate` are set for local and SSH tabs; `popupMenu` (dom.ts) is the shared context menu; Titlebar `onContext`, the side list of tabs has the same menu. Setting `confirm_restart` (default true).
+
+## 1.6.0: SFTP manager
+
+- `ui/src/sftpmgr.ts`: `SftpManager` (a `PaneSet`: the "files" pane and one pane per open file), two compact `Explorer`s (`hooks.compact`: no action bar / breadcrumbs / own transfer panel, the status line is the selection summary, `onCopy/onMove/onTransfer/onLog/onListed/onFocus`), `FolderTree` (lazy, one shared read per node, `reveal(path)` follows the list), `QueuePanel` (polls `transfer_list` for the sessions of the tab), `StatusLog`. A transfer between the panes is `startTransfer` (upload: local OS paths -> remote folder; download: remote paths -> OS path of the local folder; `osPath()` turns `/C:/x` into `C:\x`); a move waits for the job (`TransferPanel.wait`) and deletes the originals only when it is `done` with nothing skipped. Compare is done in the browser from the two listings (size, then mtime with 2 s tolerance); rows get `mark-only/newer/diff`.
+- The tab owns its session (`connectFlow` with the options of the SSH tab, `Tab.connect`); a saved server shares the live connection since 1.4.1, so there is no second login.
+- `localfs::trash_entry` (op `trash` of `lfs`): Windows `SHFileOperationW` with `FOF_ALLOWUNDO` (feature `Win32_UI_Shell` of windows-sys; compile-checked only), elsewhere the freedesktop.org trash (`files/` + `info/*.trashinfo`, UTC time, copy + remove across volumes). The local explorer uses it for Delete too.
+- Settings: `sftp_log`, `sftp_trees`, `sftp_keys`. The settings dialog groups the same fields in tabs (all stay in one form, saved together).

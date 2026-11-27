@@ -68,7 +68,23 @@ export interface ExplorerHooks {
   /** Re-open the SFTP session; true when it works again. Called by the banner button and automatically on the next operation. */
   onReconnect?: () => Promise<boolean> | void;
   onPathChange?: (path: string) => void;
+  /** Part of the SFTP manager: the manager shows the transfers and the log, the status line is the selection summary. */
+  compact?: boolean;
+  /** A transfer was queued (the manager's queue shows it). */
+  onTransfer?: (id: string) => void;
+  /** Copy / move the selection to the other pane of the manager (F5 / F6). */
+  onCopy?: () => void;
+  onMove?: () => void;
+  /** One line for the status log of the manager. */
+  onLog?: (msg: string) => void;
+  /** The folder was read. */
+  onListed?: (path: string, entries: DirEntry[]) => void;
+  /** The pane got the keyboard focus. */
+  onFocus?: () => void;
 }
+
+/** How the row of a compared folder is marked: only on this side, newer here, different size. */
+export type Mark = 'only' | 'newer' | 'diff';
 
 export class Explorer {
   /** Copy/cut buffer shared by all explorers (paste works inside one server session). */
@@ -84,6 +100,10 @@ export class Explorer {
   private selected = new Set<string>();
   private cursor = -1;
   private seq = 0;
+  private filter = '';
+  private marks = new Map<string, Mark>();
+  private typed = '';
+  private typedAt = 0;
 
   private pathInput = h('input', { class: 'path-input', 'data-testid': 'path-input', spellcheck: 'false', 'aria-label': t('Path') }) as HTMLInputElement;
   private body = h('div', { class: 'vbody', tabindex: '0', 'data-testid': 'explorer-list' });
@@ -160,7 +180,7 @@ export class Explorer {
 
     this.el = h(
       'div',
-      { class: 'explorer' + (this.local ? '' : ' has-owner'), 'data-testid': 'explorer' },
+      { class: 'explorer' + (this.local ? '' : ' has-owner') + (this.hooks.compact ? ' compact' : ''), 'data-testid': 'explorer' },
       h(
         'div',
         { class: 'ex-bar' },
@@ -187,12 +207,55 @@ export class Explorer {
     );
     this.updateHeaders();
     this.hiddenBtn.classList.toggle('on', this.showHidden);
+    this.body.addEventListener('focusin', () => this.hooks.onFocus?.());
     Explorer.byEl.set(this.el, this);
     Explorer.initDrop();
   }
 
   get currentPath(): string {
     return this.path;
+  }
+
+  /** What is read from the folder now (all entries, hidden ones too, filter not applied). */
+  entryList(): DirEntry[] {
+    return this.entries;
+  }
+
+  /** The selected entries with their full paths. */
+  selectedItems(): { entry: DirEntry; path: string }[] {
+    return this.usable(this.selectedEntries()).map((entry) => ({ entry, path: this.join(entry.name) }));
+  }
+
+  /** The entry under the cursor (for the commands that work on one file). */
+  cursorEntry(): DirEntry | null {
+    const e = this.cursor >= 0 ? this.view[this.cursor] : null;
+    return e && e.name !== UP ? e : null;
+  }
+
+  focusList(): void {
+    this.body.focus();
+  }
+
+  /** Quick filter by name (the ".." row stays). */
+  setFilter(q: string): void {
+    this.filter = q.trim().toLowerCase();
+    this.rebuild();
+  }
+
+  /** Colour the rows of a compared folder. */
+  setMarks(m: Map<string, Mark>): void {
+    this.marks = m;
+    this.render();
+  }
+
+  /** Open the entry under the cursor like Enter (a folder is entered, a file goes to the editor). */
+  openCursor(): void {
+    const e = this.cursorEntry();
+    if (e) this.open(e);
+  }
+
+  reload(): Promise<void> {
+    return this.load(this.path);
   }
 
   private setSort(key: SortKey): void {
@@ -215,6 +278,7 @@ export class Explorer {
   async load(path?: string): Promise<void> {
     const my = ++this.seq;
     this.el.classList.add('loading');
+    if (path) this.hooks.onLog?.(t('Reading the directory “{0}”…', path));
     try {
       const l = await this.retrying(() => (this.local ? api.lfsList(path) : api.listDir(this.sessionId, path)));
       if (my !== this.seq) return;
@@ -229,6 +293,8 @@ export class Explorer {
       this.body.scrollTop = 0;
       this.rebuild();
       this.hooks.onPathChange?.(l.path);
+      this.hooks.onListed?.(l.path, l.entries);
+      this.hooks.onLog?.(t('The listing of “{0}” is complete: {1} objects', l.path, l.entries.length));
     } catch (e) {
       if (my !== this.seq) return;
       this.pathInput.value = this.path;
@@ -237,6 +303,7 @@ export class Explorer {
       } else if (e instanceof ApiError && (e.code === 'connection_lost' || e.code === 'no_session')) {
         this.showLost();
       } else {
+        this.hooks.onLog?.(t('Could not read “{0}”: {1}', path ?? this.path, e instanceof ApiError ? e.message : String(e)));
         toast(e instanceof ApiError ? e.message : String(e), e instanceof ApiError ? `${e.code}\n${JSON.stringify(e.details ?? {})}` : undefined);
       }
     } finally {
@@ -253,7 +320,8 @@ export class Explorer {
   private rebuild(): void {
     const dirs = (e: DirEntry) => (isDirLike(e) ? 0 : 1);
     const dir = this.asc ? 1 : -1;
-    const v = this.showHidden ? [...this.entries] : this.entries.filter((e) => !e.name.startsWith('.'));
+    let v = this.showHidden ? [...this.entries] : this.entries.filter((e) => !e.name.startsWith('.'));
+    if (this.filter) v = v.filter((e) => e.name.toLowerCase().includes(this.filter));
     v.sort((a, b) => {
       const g = dirs(a) - dirs(b);
       if (g) return g; // folders always first
@@ -282,6 +350,16 @@ export class Explorer {
   }
 
   private updateStatus(): void {
+    if (this.hooks.compact) {
+      // like a classic file manager: what is selected of what is in the folder
+      const rows = this.view.filter((e) => e.name !== UP);
+      const isDir = (e: DirEntry) => isDirLike(e);
+      const sel = rows.filter((e) => this.selected.has(e.name));
+      const bytes = (l: DirEntry[]) => l.filter((e) => !isDir(e)).reduce((a, e) => a + e.size, 0);
+      const n = (v: number) => v.toLocaleString(locale());
+      this.status.textContent = t('Selected: {0} of {1} bytes · files: {2} of {3} · folders: {4} of {5}', n(bytes(sel)), n(bytes(rows)), n(sel.filter((e) => !isDir(e)).length), n(rows.filter((e) => !isDir(e)).length), n(sel.filter(isDir).length), n(rows.filter(isDir).length));
+      return;
+    }
     const real = this.view.filter((e) => e.name !== UP).length;
     const hidden = this.entries.length - real;
     let txt = t('Objects: {0}', real);
@@ -316,7 +394,7 @@ export class Explorer {
     const el = h(
       'div',
       {
-        class: 'vrow' + (this.selected.has(e.name) ? ' selected' : '') + (i === this.cursor ? ' cursor' : '') + (e.name_lossy ? ' lossy' : ''),
+        class: 'vrow' + (this.selected.has(e.name) ? ' selected' : '') + (i === this.cursor ? ' cursor' : '') + (e.name_lossy ? ' lossy' : '') + (this.marks.has(e.name) ? ' mark-' + this.marks.get(e.name) : ''),
         'data-testid': 'explorer-row',
         'data-name': e.name,
         'data-kind': e.kind,
@@ -403,7 +481,29 @@ export class Explorer {
   }
 
   private onKey(e: KeyboardEvent): void {
+    if (this.hooks.compact && !e.ctrlKey && !e.altKey && !e.metaKey && e.key.length === 1 && e.key !== ' ' && e.key !== '+' && e.key !== '-') {
+      // type-ahead: the first letters of a name jump to it
+      const now = Date.now();
+      this.typed = now - this.typedAt > 900 ? e.key : this.typed + e.key;
+      this.typedAt = now;
+      const q = this.typed.toLowerCase();
+      const i = this.view.findIndex((v) => v.name !== UP && v.name.toLowerCase().startsWith(q));
+      if (i >= 0) this.move(i, false);
+      e.preventDefault();
+      return;
+    }
     switch (e.key) {
+      case 'Insert': {
+        // select / unselect the row under the cursor and go down (the classic way to pick several files)
+        const v = this.cursor >= 0 ? this.view[this.cursor] : null;
+        if (v && v.name !== UP) {
+          if (!this.selected.delete(v.name)) this.selected.add(v.name);
+        }
+        this.cursor = Math.min(this.view.length - 1, this.cursor + 1);
+        this.render();
+        this.updateStatus();
+        break;
+      }
       case 'ArrowDown':
         this.move(this.cursor + 1, e.shiftKey);
         break;
@@ -534,11 +634,12 @@ export class Explorer {
     if (!c) return;
     const examples = list.slice(0, 5).map((e) => paths[list.indexOf(e)]).join('\n') + (list.length > 5 ? t('\n… plus {0}', list.length - 5) : '');
     const stat = `${c.files} ${c.files === 1 ? 'file' : 'files'}${c.dirs ? `, ${c.dirs} ${c.dirs === 1 ? 'folder' : 'folders'}` : ''}`;
-    const text = t('Permanently deleted on the server: {0}.\n\n{1}', stat, examples);
+    const text = this.local ? t('Moved to the trash: {0}.\n\n{1}', stat, examples) : t('Permanently deleted on the server: {0}.\n\n{1}', stat, examples);
     if (!(await confirmDialog(t('Delete?'), text, t('Delete'), true))) return;
-    const r = await this.run(() => this.fsx<BatchResult>('delete', { paths }));
+    const r = await this.run(() => this.fsx<BatchResult>(this.local ? 'trash' : 'delete', { paths }));
     if (r) {
       this.report(t('Deleting'), r);
+      if (r.done.length) this.hooks.onLog?.(this.local ? t('Moved to the trash: {0} objects', r.done.length) : t('Deleted on the server: {0} objects', r.done.length));
       await this.load(this.path);
     }
   }
@@ -630,8 +731,13 @@ export class Explorer {
       const dirOne = one && isDirLike(sel[0]);
       if (dirOne) items.push([t('Open'), 'Enter', 'folder', true, () => this.open(sel[0])]);
       if (isFile) items.push([t('Edit'), 'Enter', 'edit', true, () => this.open(sel[0])]);
-      if (!this.local) items.push([t('Download…'), '', 'download', true, () => void this.downloadSelected()]);
-      if (dirOne && !this.local) items.push([t('Upload here…'), '', 'upload', true, () => void this.uploadHere('files', this.join(sel[0].name))]);
+      if (this.hooks.compact) {
+        items.push([t('Copy to the other pane'), 'F5', 'copy', true, () => this.hooks.onCopy?.()]);
+        items.push([t('Move to the other pane'), 'F6', 'cut', true, () => this.hooks.onMove?.()]);
+      } else {
+        if (!this.local) items.push([t('Download…'), '', 'download', true, () => void this.downloadSelected()]);
+        if (dirOne && !this.local) items.push([t('Upload here…'), '', 'upload', true, () => void this.uploadHere('files', this.join(sel[0].name))]);
+      }
       items.push(null);
       items.push([t('Copy'), 'Ctrl+C', 'copy', true, () => this.copySelected(false)]);
       items.push([t('Cut'), 'Ctrl+X', 'cut', true, () => this.copySelected(true)]);
@@ -646,8 +752,8 @@ export class Explorer {
     } else {
       items.push([t('New folder'), 'Ctrl+Shift+N', 'folder-plus', true, () => void this.newFolder()]);
       items.push([t('New file'), 'Ctrl+N', 'file-plus', true, () => void this.newFile()]);
-      if (!this.local) items.push([t('Upload files…'), '', 'upload', true, () => void this.uploadHere('files')]);
-      if (!this.local) items.push([t('Upload folder…'), '', 'upload', true, () => void this.uploadHere('folder')]);
+      if (!this.local && !this.hooks.compact) items.push([t('Upload files…'), '', 'upload', true, () => void this.uploadHere('files')]);
+      if (!this.local && !this.hooks.compact) items.push([t('Upload folder…'), '', 'upload', true, () => void this.uploadHere('folder')]);
       items.push([t('Paste'), 'Ctrl+V', 'paste', hasClip, () => void this.paste()]);
       items.push(null);
       items.push([t('Copy path'), '', 'link', true, () => void this.copyPath()]);
@@ -688,14 +794,19 @@ export class Explorer {
 
   async upload(paths: string[], dest: string): Promise<void> {
     const id = await startTransfer(this.sessionId, 'upload', paths, dest);
-    if (id) this.xfer.kick();
+    if (id) this.queued(id);
+  }
+
+  private queued(id: string): void {
+    if (this.hooks.onTransfer) this.hooks.onTransfer(id);
+    else this.xfer.kick();
   }
 
   async downloadPaths(remote: string[]): Promise<void> {
     const [dir] = await native.pick('folder');
     if (!dir) return;
     const id = await startTransfer(this.sessionId, 'download', remote, dir);
-    if (id) this.xfer.kick();
+    if (id) this.queued(id);
   }
 
   async downloadSelected(): Promise<void> {
