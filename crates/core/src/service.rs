@@ -54,6 +54,8 @@ pub struct ServerView {
     pub host: String,
     pub port: u16,
     pub username: String,
+    /// "ssh" or "sftp" (files only).
+    pub kind: String,
     pub initial_dir: Option<String>,
     pub ssh_extra_args: Option<String>,
     pub has_password: bool,
@@ -69,6 +71,7 @@ impl From<&Server> for ServerView {
             host: s.host.clone(),
             port: s.port,
             username: s.username.clone(),
+            kind: s.kind.clone(),
             initial_dir: s.initial_dir.clone(),
             ssh_extra_args: s.ssh_extra_args.clone(),
             has_password: !s.password.is_empty(),
@@ -87,6 +90,8 @@ struct ServerInput {
     username: String,
     /// `None` keeps the stored password (edit), `Some("")` clears it.
     password: Option<String>,
+    /// "ssh" or "sftp"; only used for a new server (a saved one keeps its kind).
+    kind: Option<String>,
     initial_dir: Option<String>,
     ssh_extra_args: Option<String>,
     /// Private key file for key login; empty / None = no key (and the saved passphrase is dropped).
@@ -412,6 +417,11 @@ impl Service {
                         port: input.port,
                         username: input.username,
                         password,
+                        kind: match idx {
+                            Some(i) => v.data.servers[i].kind.clone(),
+                            None if input.kind.as_deref() == Some("sftp") => "sftp".into(),
+                            None => "ssh".into(),
+                        },
                         initial_dir: norm(input.initial_dir),
                         ssh_extra_args: norm(input.ssh_extra_args),
                         key_path,

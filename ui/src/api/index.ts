@@ -78,6 +78,8 @@ export interface ServerView {
   host: string;
   port: number;
   username: string;
+  /** "ssh" (terminal and files) or "sftp" (files only). */
+  kind: 'ssh' | 'sftp';
   initial_dir: string | null;
   ssh_extra_args: string | null;
   has_password: boolean;
@@ -92,6 +94,8 @@ export interface ServerInput {
   port: number;
   username: string;
   password?: string; // omitted = keep stored password
+  /** Only for a new server. */
+  kind?: 'ssh' | 'sftp';
   initial_dir?: string;
   ssh_extra_args?: string;
   /** Private key file for key login; empty = no key. */

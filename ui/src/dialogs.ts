@@ -9,7 +9,9 @@ import { pwField, errText } from './util';
 import { applyLanguage, LANGUAGES, t, tm } from './i18n';
 import { fetchLatest, openRelease } from './updates';
 
-export async function serverForm(existing?: ServerView): Promise<boolean> {
+export async function serverForm(existing?: ServerView, kind: 'ssh' | 'sftp' = 'ssh'): Promise<boolean> {
+  /** A connection for files only: no terminal, no ssh arguments. */
+  const sftpOnly = (existing?.kind ?? kind) === 'sftp';
   const f = (id: string, label: string, value = '', type = 'text') =>
     h('label', {}, label, h('input', { id, type, value, 'data-testid': id, autocomplete: 'off' }));
   const val = (id: string) => (document.getElementById(id) as HTMLInputElement).value;
@@ -70,8 +72,9 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
           username: val('f-user').trim(),
           // empty field while editing => keep the stored password
           password: existing && password === '' ? undefined : password,
+          kind: existing ? undefined : sftpOnly ? 'sftp' : 'ssh',
           initial_dir: val('f-dir'),
-          ssh_extra_args: val('f-args'),
+          ssh_extra_args: sftpOnly ? '' : val('f-args'),
           // unchecked = no key (the saved passphrase is dropped by the backend)
           key_path: useKey.checked ? keyPath.value.trim() : '',
           key_passphrase: useKey.checked && keyPass.value !== '' ? keyPass.value : undefined,
@@ -84,7 +87,7 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
     return h(
       'form',
       { 'data-testid': 'server-form', onsubmit: (e) => (e.preventDefault(), void save()) },
-      h('h3', {}, existing ? t('Edit server') : t('New server')),
+      h('h3', {}, sftpOnly ? (existing ? t('Edit SFTP connection') : t('New SFTP connection')) : existing ? t('Edit server') : t('New server')),
       f('f-name', t('Name'), existing?.name),
       h('div', { class: 'row' }, f('f-host', t('Address'), existing?.host), f('f-port', t('Port'), String(existing?.port ?? 22), 'number')),
       f('f-user', t('User'), existing?.username),
@@ -92,7 +95,8 @@ export async function serverForm(existing?: ServerView): Promise<boolean> {
       h('label', { class: 'check' }, useKey, ' ' + t('Use a private key')),
       keyBox,
       f('f-dir', t('Start folder (optional)'), existing?.initial_dir ?? ''),
-      f('f-args', t('Extra ssh arguments (optional)'), existing?.ssh_extra_args ?? ''),
+      sftpOnly ? null : f('f-args', t('Extra ssh arguments (optional)'), existing?.ssh_extra_args ?? ''),
+      sftpOnly ? h('p', { class: 'muted small', 'data-testid': 'sftp-only-note' }, t('Files only: no terminal is opened for this connection.')) : null,
       err,
       h(
         'div',

@@ -274,3 +274,55 @@ test('the server password stays encrypted: nowhere in the data folder in plain t
   expect(files.some((f) => f.endsWith('vault.bin'))).toBe(true); // the password lives here, encrypted
   for (const f of files) expect(readFileSync(f).includes(Buffer.from(PASS)), `${f} must not contain the password`).toBe(false);
 });
+
+test('SFTP only: its own section in the left rail, a connection without a terminal that opens the manager', async ({ page }) => {
+  bridge = await startBridge();
+  await page.goto(bridge.url);
+  await createVault(page);
+  // the SFTP section is the fifth icon of the rail; it starts empty
+  await page.getByTestId('rail-sftp').click();
+  await expect(page.getByTestId('section-sftp')).toBeVisible();
+  await expect(page.getByTestId('sftp-list')).toContainText('No SFTP connections yet');
+  await page.getByTestId('sftp-new').click();
+  await expect(page.getByTestId('server-form')).toContainText('New SFTP connection');
+  await expect(page.getByTestId('f-args')).toHaveCount(0); // ssh arguments make no sense here
+  await expect(page.getByTestId('sftp-only-note')).toBeVisible();
+  await page.getByTestId('f-name').fill('Files of the box');
+  await page.getByTestId('f-host').fill('sshd-password');
+  await page.getByTestId('f-user').fill('tester');
+  await page.getByTestId('f-password').fill(PASS);
+  await page.screenshot({ path: 'screenshots/94-sftp-only-form.png' });
+  await page.getByTestId('form-save').click();
+  await expect(page.getByTestId('sftp-item').filter({ hasText: 'Files of the box' })).toBeVisible();
+  await page.screenshot({ path: 'screenshots/95-sftp-section.png' });
+  // not among the sessions
+  await page.getByTestId('rail-sessions').click();
+  await expect(page.getByTestId('server-item')).toHaveCount(0);
+  await expect(page.getByTestId('server-list')).toContainText('No sessions yet');
+  expect(((await rpc(bridge.url, 'list_servers')) as { kind: string; name: string }[]).map((s) => `${s.name}:${s.kind}`)).toEqual(['Files of the box:sftp']);
+  // opening it: the host key question, then the manager; no SSH tab, no terminal
+  await page.getByTestId('rail-sftp').click();
+  await page.getByTestId('sftp-item').first().dblclick();
+  await acceptHostKey(page);
+  await expect(page.getByTestId('tab-sftp1')).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId('pane-remote').getByTestId('path-input')).toHaveValue('/home/tester');
+  await expect(page.getByTestId('tab-s1')).toHaveCount(0); // no SSH tab was opened
+  await expect(page.getByTestId('terminal')).toHaveCount(0);
+  // F9 on the server side explains instead of opening a terminal
+  await page.getByTestId('pane-remote').locator('[data-testid="explorer-row"]').first().click();
+  await page.keyboard.press('F9');
+  await expect(page.getByText('This is an SFTP-only connection: it has no terminal.')).toBeVisible();
+  // the "+" of the toolbar adds an SFTP connection while the SFTP section is open
+  await page.getByTestId('tab-home').click();
+  await expect(page.getByTestId('sftp-card')).toBeVisible(); // the SFTP section is still the open one
+  if (!(await page.getByTestId('sidebar').isVisible())) await page.getByTestId('toggle-sidebar').click();
+  await page.getByTestId('add').click();
+  await expect(page.getByTestId('server-form')).toContainText('New SFTP connection');
+  await page.getByTestId('form-cancel').click();
+  // edit keeps the kind; the password stays encrypted in the vault
+  await page.getByTestId('sftp-item').first().hover();
+  await page.getByTestId('sftp-item').first().getByTestId('edit').click();
+  await expect(page.getByTestId('server-form')).toContainText('Edit SFTP connection');
+  await page.getByTestId('form-save').click();
+  expect(((await rpc(bridge.url, 'list_servers')) as { kind: string }[])[0].kind).toBe('sftp');
+});

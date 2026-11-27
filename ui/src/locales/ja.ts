@@ -735,5 +735,14 @@ const catalog: Record<string, string> = {
   "SFTP · {0}": "SFTP · {0}",
   "Select a server in the list or open an SSH tab first.": "先にリストでサーバーを選択するか、SSH タブを開いてください。",
   "SFTP": "SFTP",
+  "Edit SFTP connection": "SFTP 接続を編集",
+  "New SFTP connection": "新しい SFTP 接続",
+  "Files only: no terminal is opened for this connection.": "ファイルのみ：この接続ではターミナルは開きません。",
+  "This is an SFTP-only connection: it has no terminal.": "これは SFTP のみの接続です。ターミナルはありません。",
+  "Open (Enter)": "開く（Enter）",
+  "No SFTP connections yet. Click “New SFTP connection”.": "SFTP 接続はまだありません。「新しい SFTP 接続」を押してください。",
+  "SFTP connections": "SFTP 接続",
+  "Files only: no terminal is opened for these connections. The password is kept in the encrypted vault.": "ファイルのみ：これらの接続ではターミナルは開きません。パスワードは暗号化された保管庫に保存されます。",
+  "Your SFTP connections will appear here.": "ここに SFTP 接続が表示されます。",
 };
 export default catalog;

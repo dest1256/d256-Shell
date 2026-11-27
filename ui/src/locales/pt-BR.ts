@@ -735,5 +735,14 @@ const catalog: Record<string, string> = {
   "SFTP · {0}": "SFTP · {0}",
   "Select a server in the list or open an SSH tab first.": "Selecione um servidor na lista ou abra antes uma aba SSH.",
   "SFTP": "SFTP",
+  "Edit SFTP connection": "Editar conexão SFTP",
+  "New SFTP connection": "Nova conexão SFTP",
+  "Files only: no terminal is opened for this connection.": "Somente arquivos: nenhum terminal é aberto para esta conexão.",
+  "This is an SFTP-only connection: it has no terminal.": "Esta é uma conexão somente SFTP: ela não tem terminal.",
+  "Open (Enter)": "Abrir (Enter)",
+  "No SFTP connections yet. Click “New SFTP connection”.": "Ainda não há conexões SFTP. Clique em “Nova conexão SFTP”.",
+  "SFTP connections": "Conexões SFTP",
+  "Files only: no terminal is opened for these connections. The password is kept in the encrypted vault.": "Somente arquivos: nenhum terminal é aberto para estas conexões. A senha fica no cofre criptografado.",
+  "Your SFTP connections will appear here.": "Suas conexões SFTP aparecerão aqui.",
 };
 export default catalog;

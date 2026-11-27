@@ -255,3 +255,7 @@ Author: dest1256.
 - The tab owns its session (`connectFlow` with the options of the SSH tab, `Tab.connect`); a saved server shares the live connection since 1.4.1, so there is no second login.
 - `localfs::trash_entry` (op `trash` of `lfs`): Windows `SHFileOperationW` with `FOF_ALLOWUNDO` (feature `Win32_UI_Shell` of windows-sys; compile-checked only), elsewhere the freedesktop.org trash (`files/` + `info/*.trashinfo`, UTC time, copy + remove across volumes). The local explorer uses it for Delete too.
 - Settings: `sftp_log`, `sftp_trees`, `sftp_keys`. The settings dialog groups the same fields in tabs (all stay in one form, saved together).
+
+## 1.6.1: SFTP-only connections
+
+- `Server.kind` ("ssh" | "sftp", serde default "ssh", skipped when "ssh" so vaults of sessions stay byte-compatible in shape); `ServerView.kind`; `save_server` takes `kind` only for a new server (an edit keeps the kind). UI: rail section `sftp` (`SectionName`), its own list / home page in `shell.ts`, `serverForm(existing, kind)` hides the ssh arguments, `connectServer` opens the manager for a `sftp` server (`openSftpManager(..., sftpOnly)`), the toolbar "+" follows the open section.

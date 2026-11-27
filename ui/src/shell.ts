@@ -74,12 +74,13 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   let servers: ServerView[] = [];
   let selected: string | null = null;
   const tabs: Tab[] = [];
-  type SectionName = 'sessions' | 'terminals' | 'scripts' | 'notes';
+  type SectionName = 'sessions' | 'terminals' | 'scripts' | 'notes' | 'sftp';
   let section: SectionName = 'sessions';
   let activeId = 'home';
   let counter = 0;
 
   const list = h('ul', { class: 'servers', 'data-testid': 'server-list', role: 'listbox' });
+  const sftpList = h('ul', { class: 'servers', 'data-testid': 'sftp-list', role: 'listbox' });
   const search = h('input', { type: 'search', placeholder: t('Search sessions'), 'data-testid': 'search', 'aria-label': t('Search sessions') }) as HTMLInputElement;
   const quick = h('input', { type: 'text', placeholder: t('user@host:port: quick connect'), 'data-testid': 'quick', 'aria-label': t('Quick connect'), spellcheck: 'false' }) as HTMLInputElement;
   const home = h('div', { class: 'home', 'data-testid': 'home' });
@@ -690,7 +691,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   /** The SFTP manager of a server in a tab of its own: it logs in again (a saved server shares the live connection, so no
    * second password or code is asked) and owns its session; closing the tab closes only that session. */
   let sftpCounter = 0;
-  async function openSftpManager(opts: ConnectOpts, initialDir?: string | null, from?: Tab): Promise<void> {
+  async function openSftpManager(opts: ConnectOpts, initialDir?: string | null, from?: Tab, sftpOnly = false): Promise<void> {
     const info = await connectFlow(opts);
     if (!info) return;
     if (info.sftp_error) {
@@ -719,6 +720,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
           });
           return;
         }
+        if (sftpOnly) return void toast(t('This is an SFTP-only connection: it has no terminal.'));
         // the terminal of the server: the SSH tab it came from, else a new one
         const ssh = (from && tabs.includes(from) ? from : undefined) ?? tabs.find((x) => x.connect && x.connect.opts.serverId === opts.serverId && opts.serverId);
         if (ssh) return activate(ssh.id);
@@ -739,11 +741,13 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     const tab = tabs.find((x) => x.id === activeId);
     if (tab?.connect) return openSftpManager(tab.connect.opts, tab.connect.initialDir, tab);
     const sv = servers.find((x) => x.id === selected);
-    if (sv) return openSftpManager({ label: sv.name, serverId: sv.id }, sv.initial_dir);
+    if (sv) return openSftpManager({ label: sv.name, serverId: sv.id }, sv.initial_dir, undefined, sv.kind === 'sftp');
     toast(t('Select a server in the list or open an SSH tab first.'));
   }
 
   async function connectServer(s: ServerView): Promise<void> {
+    // a connection for files only opens the SFTP manager, never a terminal
+    if (s.kind === 'sftp') return openSftpManager({ label: s.name, serverId: s.id }, s.initial_dir, undefined, true);
     const opts: ConnectOpts = { label: s.name, serverId: s.id };
     const info = await connectFlow(opts);
     if (info) await openSession(opts, info, s.initial_dir);
@@ -767,9 +771,10 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     if (selected && !servers.some((s) => s.id === selected)) selected = null;
     renderList();
     renderHome();
-    statusCount.textContent = t('Sessions: {0}', servers.length);
+    statusCount.textContent = t('Sessions: {0}', servers.filter((x) => x.kind !== 'sftp').length);
   };
-  const add = async () => (await serverForm()) && (await reload());
+  /** The "+" adds what the open section lists: an SFTP connection in the SFTP section, else a session. */
+  const add = async () => (await serverForm(undefined, section === 'sftp' ? 'sftp' : 'ssh')) && (await reload());
   const edit = async (s: ServerView) => (await serverForm(s)) && (await reload());
   const dup = async (s: ServerView) => {
     await api.duplicateServer(s.id);
@@ -793,54 +798,78 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   const iconBtn = (name: string, title: string, testid: string, fn: () => void) =>
     h('button', { class: 'icon-btn', title, 'aria-label': title, 'data-testid': testid, onclick: (e) => (e.stopPropagation(), fn()) }, icon(name, 14));
 
+  function serverRow(s: ServerView): HTMLElement {
+    const files = s.kind === 'sftp';
+    return h(
+      'li',
+      {
+        class: 'srv' + (s.id === selected ? ' selected' : ''),
+        role: 'option',
+        tabindex: '0',
+        'data-testid': files ? 'sftp-item' : 'server-item',
+        'data-id': s.id,
+        onclick: () => {
+          selected = s.id;
+          renderList();
+        },
+        ondblclick: () => void connectServer(s),
+        onkeydown: (e) => {
+          const k = (e as KeyboardEvent).key;
+          if (k === 'Enter') void connectServer(s);
+          if (k === 'F2') void edit(s);
+          if (k === 'Delete') void del(s);
+        },
+      },
+      h('span', { class: 'srv-ico' }, iconFor(iconKey('server', s.id), files ? 'upload' : 'terminal', 16)),
+      h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, s.name), h('div', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? ' ' + t('· key') : ''}`)),
+      h(
+        'div',
+        { class: 'srv-actions' },
+        iconBtn(files ? 'upload' : 'plug', files ? t('Open (Enter)') : t('Connect (Enter)'), 'connect', () => void connectServer(s)),
+        iconBtn('edit', t('Edit (F2)'), 'edit', () => void edit(s)),
+        iconBtn('copy', t('Duplicate'), 'dup', () => void dup(s)),
+        iconBtn('image', t('Change icon…'), 'server-icon', () => void pickIcon(iconKey('server', s.id), files ? 'upload' : 'terminal').then((c) => c && (renderList(), renderHome()))),
+        iconBtn('trash', t('Delete (Del)'), 'delete', () => void del(s)),
+      ),
+    );
+  }
+
   function renderList(): void {
     clear(list);
+    clear(sftpList);
     const q = search.value.trim().toLowerCase();
-    const shown = servers.filter((s) => !q || s.name.toLowerCase().includes(q) || s.host.toLowerCase().includes(q));
-    if (!shown.length) {
-      list.append(h('li', { class: 'empty' }, servers.length ? t('Nothing found.') : t('No sessions yet. Click Session on the toolbar.')));
-      return;
-    }
-    for (const s of shown) {
-      list.append(
-        h(
-          'li',
-          {
-            class: 'srv' + (s.id === selected ? ' selected' : ''),
-            role: 'option',
-            tabindex: '0',
-            'data-testid': 'server-item',
-            'data-id': s.id,
-            onclick: () => {
-              selected = s.id;
-              renderList();
-            },
-            ondblclick: () => void connectServer(s),
-            onkeydown: (e) => {
-              const k = (e as KeyboardEvent).key;
-              if (k === 'Enter') void connectServer(s);
-              if (k === 'F2') void edit(s);
-              if (k === 'Delete') void del(s);
-            },
-          },
-          h('span', { class: 'srv-ico' }, iconFor(iconKey('server', s.id), 'terminal', 16)),
-          h('div', { class: 'grow' }, h('div', { class: 'srv-name' }, s.name), h('div', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? " " + t("· key") : ""}`)),
-          h(
-            'div',
-            { class: 'srv-actions' },
-            iconBtn('plug', t('Connect (Enter)'), 'connect', () => void connectServer(s)),
-            iconBtn('edit', t('Edit (F2)'), 'edit', () => void edit(s)),
-            iconBtn('copy', t('Duplicate'), 'dup', () => void dup(s)),
-            iconBtn('image', t('Change icon…'), 'server-icon', () => void pickIcon(iconKey('server', s.id), 'terminal').then((c) => c && (renderList(), renderHome()))),
-            iconBtn('trash', t('Delete (Del)'), 'delete', () => void del(s)),
-          ),
-        ),
-      );
-    }
+    const match = (s: ServerView) => !q || s.name.toLowerCase().includes(q) || s.host.toLowerCase().includes(q);
+    const ssh = servers.filter((s) => s.kind !== 'sftp');
+    const files = servers.filter((s) => s.kind === 'sftp');
+    const shown = ssh.filter(match);
+    if (!shown.length) list.append(h('li', { class: 'empty' }, ssh.length ? t('Nothing found.') : t('No sessions yet. Click Session on the toolbar.')));
+    for (const s of shown) list.append(serverRow(s));
+    if (!files.length) sftpList.append(h('li', { class: 'empty' }, t('No SFTP connections yet. Click “New SFTP connection”.')));
+    for (const s of files.filter(match)) sftpList.append(serverRow(s));
   }
 
   function renderHome(): void {
     clear(home);
+    if (section === 'sftp') {
+      home.append(
+        h('div', { class: 'home-head' }, h('h1', {}, t('SFTP connections')), h('p', {}, t('Files only: no terminal is opened for these connections. The password is kept in the encrypted vault.')), h('div', { class: 'row' }, h('button', { class: 'primary', 'data-testid': 'home-add-sftp', onclick: () => void add() }, icon('plus', 14), t('New SFTP connection')))),
+      );
+      const files = servers.filter((x) => x.kind === 'sftp');
+      if (!files.length) return void home.append(h('div', { class: 'home-empty' }, t('Your SFTP connections will appear here.')));
+      const cards = h('div', { class: 'cards' });
+      for (const s of files) {
+        cards.append(
+          h(
+            'button',
+            { class: 'card-srv', 'data-testid': 'sftp-card', ondblclick: () => void connectServer(s), onclick: () => ((selected = s.id), renderList()) },
+            h('span', { class: 'srv-ico big' }, iconFor(iconKey('server', s.id), 'upload', 20)),
+            h('span', { class: 'grow left' }, h('strong', {}, s.name), h('span', { class: 'sub' }, `${s.username}@${s.host}:${s.port}${s.key_path ? ' ' + t('· key') : ''}`)),
+          ),
+        );
+      }
+      home.append(cards);
+      return;
+    }
     if (section !== 'sessions') {
       home.append(sections[section].home());
       return;
@@ -855,12 +884,13 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
       ),
       h('h2', { class: 'section' }, t('Sessions')),
     );
-    if (!servers.length) {
+    const sshServers = servers.filter((x) => x.kind !== 'sftp');
+    if (!sshServers.length) {
       home.append(h('div', { class: 'home-empty' }, t('Your servers will appear here. Add the first one: its password will be kept in the encrypted vault.')));
       return;
     }
     const grid = h('div', { class: 'cards' });
-    for (const s of servers) {
+    for (const s of sshServers) {
       grid.append(
         h(
           'button',
@@ -921,6 +951,7 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
   railBtn('terminals', t('Terminals'), 'terminal');
   railBtn('scripts', t('Scripts'), 'script');
   railBtn('notes', t('Notes'), 'note');
+  railBtn('sftp', t('SFTP'), 'upload');
   const sessionsSide = h(
     'div',
     { class: 'side-section', 'data-testid': 'section-sessions' },
@@ -929,6 +960,13 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     h('div', { class: 'search' }, icon('search', 14), search),
     list,
   );
+  const sftpSide = h(
+    'div',
+    { class: 'side-section', 'data-testid': 'section-sftp' },
+    h('div', { class: 'side-head' }, h('span', {}, t('SFTP'))),
+    h('div', { class: 'side-tools' }, h('button', { class: 'tool-sm primary', type: 'button', 'data-testid': 'sftp-new', onclick: () => void add() }, icon('plus', 13), ' ' + t('New SFTP connection'))),
+    sftpList,
+  );
   const sideBody = h('div', { class: 'side-body' });
   const openTabsEl = h('div', { class: 'open-tabs', 'data-testid': 'open-tabs' });
   sidebar.append(sideBody, openTabsEl);
@@ -936,8 +974,8 @@ export async function showShell({ screen, titlebar, onLock }: ShellDeps): Promis
     section = name;
     for (const [n, b] of railBtns) b.classList.toggle('active', n === name);
     clear(sideBody);
-    sideBody.append(name === 'sessions' ? sessionsSide : sections[name].side);
-    if (name !== 'sessions') void sections[name].refresh().then(renderHome);
+    sideBody.append(name === 'sessions' ? sessionsSide : name === 'sftp' ? sftpSide : sections[name].side);
+    if (name !== 'sessions' && name !== 'sftp') void sections[name].refresh().then(renderHome);
     if (activeId !== 'home') activate('home');
     else renderHome();
     if (sidebar.classList.contains('hidden') && activeId === 'home') toggleSidebar();

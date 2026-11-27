@@ -99,6 +99,9 @@ pub struct Server {
     pub port: u16,
     pub username: String,
     pub password: String,
+    /// "ssh" (terminal + files, the default) or "sftp" (files only: no terminal is ever started for it).
+    #[serde(default = "default_kind", skip_serializing_if = "is_ssh")]
+    pub kind: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub initial_dir: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -111,6 +114,14 @@ pub struct Server {
     pub key_passphrase: String,
     pub created: u64,
     pub updated: u64,
+}
+
+fn default_kind() -> String {
+    "ssh".into()
+}
+
+fn is_ssh(k: &String) -> bool {
+    k == "ssh"
 }
 
 impl Drop for Server {
@@ -439,6 +450,7 @@ mod tests {
             port: 22,
             username: "u".into(),
             password: pw.into(),
+            kind: "ssh".into(),
             initial_dir: Some("/srv".into()),
             ssh_extra_args: None,
             key_path: None,
@@ -446,6 +458,24 @@ mod tests {
             created: 1,
             updated: 2,
         }
+    }
+
+    #[test]
+    fn the_kind_of_a_server_is_stored_only_when_it_is_sftp_and_old_vaults_are_ssh() {
+        let ssh = serde_json::to_string(&server("a", "p")).unwrap();
+        assert!(
+            !ssh.contains("kind"),
+            "an ssh server is written as before: {ssh}"
+        );
+        let mut files = server("b", "p");
+        files.kind = "sftp".into();
+        let j = serde_json::to_string(&files).unwrap();
+        assert!(j.contains(r#""kind":"sftp""#), "{j}");
+        let back: Server = serde_json::from_str(&j).unwrap();
+        assert_eq!(back.kind, "sftp");
+        // a vault written before 1.6.1 has no kind at all
+        let old: Server = serde_json::from_str(&ssh).unwrap();
+        assert_eq!(old.kind, "ssh");
     }
 
     #[test]

@@ -2,6 +2,13 @@
 
 The versioning scheme is described in [VERSIONING.md](VERSIONING.md).
 
+## 1.6.1 — 2026-11-27
+**Added**
+- **SFTP-only connections.** A new section **SFTP** in the left rail (the fifth icon, an arrow up) lists connections made for files only: address, port, user, password or key and a start folder, like a session, but **no terminal is ever opened** for them and they do not appear among the sessions. A double click (or Enter, or the “Open” button) opens the SFTP manager of that server directly; “New SFTP connection” adds one (the “+” of the toolbar adds an SFTP connection while the SFTP section is open). Edit, duplicate, change icon and delete work as for sessions. The password is kept in the encrypted vault like every other one, and the host key is verified as always. In the manager F9 on the server side explains that there is no terminal.
+
+**Compatibility**
+- The kind of a connection is stored in `vault.bin` (`kind`; sessions are written exactly as before). Versions before 1.6.1 ignore it and would show an SFTP-only connection as a session (and drop the kind the next time they save the vault): use 1.6.1 or newer everywhere the same `data` folder is used.
+
 ## 1.6.0 — 2026-11-27
 The SFTP manager: a two-pane file manager for a server, in a tab of its own.
 

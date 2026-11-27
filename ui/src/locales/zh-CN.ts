@@ -735,5 +735,14 @@ const catalog: Record<string, string> = {
   "SFTP · {0}": "SFTP · {0}",
   "Select a server in the list or open an SSH tab first.": "请先在列表中选择服务器，或打开一个 SSH 标签页。",
   "SFTP": "SFTP",
+  "Edit SFTP connection": "编辑 SFTP 连接",
+  "New SFTP connection": "新建 SFTP 连接",
+  "Files only: no terminal is opened for this connection.": "仅文件：此连接不会打开终端。",
+  "This is an SFTP-only connection: it has no terminal.": "这是仅 SFTP 的连接：没有终端。",
+  "Open (Enter)": "打开（Enter）",
+  "No SFTP connections yet. Click “New SFTP connection”.": "还没有 SFTP 连接。请点击“新建 SFTP 连接”。",
+  "SFTP connections": "SFTP 连接",
+  "Files only: no terminal is opened for these connections. The password is kept in the encrypted vault.": "仅文件：这些连接不会打开终端。密码保存在加密的保险库中。",
+  "Your SFTP connections will appear here.": "您的 SFTP 连接将显示在这里。",
 };
 export default catalog;
